@@ -1,0 +1,46 @@
+# SM_Wall_Straight_400_300h.obj
+# Modular kit: straight wall segment
+# Dimensions: 400 UU wide x 300 UU tall x 20 UU deep
+# Pivot: bottom-left-front corner at origin
+# Units: Unreal Units (1 UU = 1 cm — import at scale 1.0, no conversion needed)
+# Y-up coordinate system (standard OBJ). UE5 will convert to Z-up on import.
+# After import: front face (the visible wall face) should point toward -Y in UE5.
+# If orientation is wrong, rotate 90 deg on Z in the Import Options or in-editor.
+
+# Vertices
+v 0.0 0.0 0.0
+v 400.0 0.0 0.0
+v 400.0 300.0 0.0
+v 0.0 300.0 0.0
+v 0.0 0.0 20.0
+v 400.0 0.0 20.0
+v 400.0 300.0 20.0
+v 0.0 300.0 20.0
+
+# UV coordinates (0-1 normalized per face; tiling handled by material)
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+
+# Vertex normals
+vn 0.0 0.0 -1.0
+vn 0.0 0.0 1.0
+vn -1.0 0.0 0.0
+vn 1.0 0.0 0.0
+vn 0.0 1.0 0.0
+vn 0.0 -1.0 0.0
+
+# Faces (v/vt/vn)
+# Front face (Z=0, primary visible face, normal 0,0,-1)
+f 1/1/1 2/2/1 3/3/1 4/4/1
+# Back face (Z=20, normal 0,0,1)
+f 6/1/2 5/2/2 8/3/2 7/4/2
+# Left face (X=0, normal -1,0,0)
+f 5/1/3 1/2/3 4/3/3 8/4/3
+# Right face (X=400, normal 1,0,0)
+f 2/1/4 6/2/4 7/3/4 3/4/4
+# Top face (Y=300, normal 0,1,0)
+f 4/1/5 3/2/5 7/3/5 8/4/5
+# Bottom face (Y=0, normal 0,-1,0)
+f 2/1/6 1/2/6 5/3/6 6/4/6

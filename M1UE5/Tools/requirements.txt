@@ -1,0 +1,4 @@
+# Python tooling for the Marathon UE5 port.
+# Extraction/conversion of M1 data files is handled by the published package:
+#   https://pypi.org/project/py-marathon-utils/  (https://github.com/dmang-dev/py-marathon-utils)
+py-marathon-utils[images]>=0.1.0
