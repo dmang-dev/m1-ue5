@@ -15,6 +15,7 @@ writes mrq_result.json, and quits when done.
 """
 import json
 import os
+import time
 import traceback
 
 import unreal
@@ -116,6 +117,41 @@ def _make_sequence():
     return SEQ_PKG
 
 
+def _quit():
+    h = _cam_holder.get("tick")
+    if h is not None:
+        try:
+            unreal.unregister_slate_post_tick_callback(h)
+        except Exception:  # noqa: BLE001
+            pass
+        _cam_holder["tick"] = None
+    try:
+        unreal.SystemLibrary.quit_editor()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _arm_watchdog():
+    """Force the editor to quit once the async render reports done, or after a
+    hard timeout — a belt-and-suspenders backup to the finished delegate."""
+    _cam_holder["start"] = time.time()
+
+    def _tick(_delta):
+        if result.get("mrq_success") is not None:
+            unreal.log("[mrq] watchdog: render done, quitting")
+            _quit()
+            return
+        if time.time() - _cam_holder["start"] > 240.0:
+            png = os.path.join(OUT_DIR, "arrival_topdown.png")
+            result["mrq_timeout"] = True
+            result["mrq_png_exists"] = os.path.isfile(png)
+            _write()
+            unreal.log_error("[mrq] watchdog: timeout, force quitting")
+            _quit()
+
+    _cam_holder["tick"] = unreal.register_slate_post_tick_callback(_tick)
+
+
 def _render():
     sub = unreal.get_editor_subsystem(unreal.MoviePipelineQueueSubsystem)
     queue = sub.get_queue()
@@ -139,13 +175,15 @@ def _render():
         result["steps"]["render"] = "finished"
         _write()
         unreal.log(f"[mrq] render finished success={success}")
-        try:
-            unreal.SystemLibrary.quit_editor()
-        except Exception:  # noqa: BLE001
-            pass
 
     executor.on_executor_finished_delegate.add_callable(_on_finished)
     sub.render_queue_with_executor_instance(executor)
+    # CRITICAL: keep a live reference to the executor. If it's only a local, the
+    # Python wrapper (and its bound finished-delegate) can be GC'd before the
+    # async render completes, so the callback never fires and the editor hangs
+    # open forever (observed: 20 min idle after the PNG was already written).
+    _cam_holder["executor"] = executor
+    _arm_watchdog()
     return "render armed (async)"
 
 

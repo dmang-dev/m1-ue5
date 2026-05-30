@@ -37,35 +37,56 @@ class ObjBuilder:
 
     def __init__(self) -> None:
         self.verts: list[tuple[float, float, float]] = []
-        self.faces: list[tuple[int, int, int]] = []
-        self.groups: list[tuple[str, int]] = []  # (name, first-face-index)
+        self.uvs: list[tuple[float, float]] = []          # parallel to verts (1:1)
+        self.faces: list[tuple[int, int, int, str]] = []  # (a, b, c, material)
+        # material name -> texture path relative to the .obj (or None = default)
+        self.materials: dict[str, str | None] = {}
 
-    def vert(self, x: float, y: float, z: float) -> int:
+    def vert(self, x: float, y: float, z: float, u: float = 0.0, v: float = 0.0) -> int:
         self.verts.append((x, y, z))
-        return len(self.verts)  # OBJ indices are 1-based
+        self.uvs.append((u, v))
+        return len(self.verts)  # OBJ indices are 1-based (shared for v and vt)
 
-    def tri(self, a: int, b: int, c: int) -> None:
-        self.faces.append((a, b, c))
+    def material(self, name: str, texture: str | None) -> None:
+        self.materials.setdefault(name, texture)
 
-    def group(self, name: str) -> None:
-        self.groups.append((name, len(self.faces)))
+    def tri(self, a: int, b: int, c: int, mat: str = "default") -> None:
+        self.faces.append((a, b, c, mat))
 
-    def quad(self, a: int, b: int, c: int, d: int) -> None:
-        # a-b-c-d as a planar quad → two triangles
-        self.tri(a, b, c)
-        self.tri(a, c, d)
+    def quad(self, a: int, b: int, c: int, d: int, mat: str = "default") -> None:
+        self.tri(a, b, c, mat)
+        self.tri(a, c, d, mat)
 
     def write(self, path: Path) -> None:
+        mtl_name = path.stem + ".mtl"
         lines = [f"# py-marathon-utils sector geometry - {len(self.verts)} verts, "
-                 f"{len(self.faces)} tris"]
+                 f"{len(self.faces)} tris",
+                 f"mtllib {mtl_name}"]
         for x, y, z in self.verts:
             lines.append(f"v {x:.2f} {y:.2f} {z:.2f}")
-        gi = 0
-        for fi, (a, b, c) in enumerate(self.faces):
-            while gi < len(self.groups) and self.groups[gi][1] == fi:
-                lines.append(f"g {self.groups[gi][0]}")
-                gi += 1
-            lines.append(f"f {a} {b} {c}")
+        for u, v in self.uvs:
+            lines.append(f"vt {u:.4f} {v:.4f}")
+        # Emit faces grouped by material (one usemtl block per material).
+        by_mat: dict[str, list[tuple[int, int, int]]] = {}
+        for a, b, c, mat in self.faces:
+            by_mat.setdefault(mat, []).append((a, b, c))
+        for mat, tris in by_mat.items():
+            lines.append(f"usemtl {mat}")
+            for a, b, c in tris:
+                lines.append(f"f {a}/{a} {b}/{b} {c}/{c}")
+        path.write_text("\n".join(lines) + "\n", encoding="ascii")
+        self._write_mtl(path.with_suffix(".mtl"))
+
+    def _write_mtl(self, path: Path) -> None:
+        lines = ["# py-marathon-utils materials"]
+        for name, tex in self.materials.items():
+            lines.append(f"newmtl {name}")
+            lines.append("Ka 1.0 1.0 1.0")
+            lines.append("Kd 1.0 1.0 1.0")
+            if tex:
+                lines.append(f"map_Kd {tex}")
+            else:
+                lines.append("Kd 0.6 0.6 0.6")
         path.write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
@@ -94,10 +115,26 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) ->
     def py(e: int) -> float:
         return epnt[e]["y"] * S * fy
 
+    sids = data.get("SIDS") or []
     obj = ObjBuilder()
 
+    # Marathon tiles a 128px texture once per World-Unit (1024 internal units),
+    # so UV = marathon_units / 1024.  Texture PNGs live in ../Shapes/Coll_NN/.
+    def mat_for(descriptor: int) -> str:
+        """Register + return a material name for a packed shape_descriptor."""
+        if descriptor == 0xFFFF:
+            obj.material("default", None)
+            return "default"
+        coll = (descriptor >> 8) & 0x1F
+        shape = descriptor & 0xFF
+        name = f"tex_{coll}_{shape}"
+        obj.material(name, f"../Shapes/Coll_{coll:02d}/bitmaps/{shape:03d}.png")
+        return name
+
+    def uv_e(e: int) -> tuple[float, float]:
+        return (epnt[e]["x"] / 1024.0, epnt[e]["y"] / 1024.0)
+
     # ---- Floors + ceilings -------------------------------------------------
-    obj.group("floors_ceilings")
     for poly in polys:
         n = poly["vertex_count"]
         if n < 3:
@@ -107,51 +144,58 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) ->
         cz = poly["ceiling_height"] * S
         ring2d = [(px(e), py(e)) for e in eids]
         ccw = _signed_area(ring2d) > 0
+        fmat = mat_for(poly["floor_shape"])
+        cmat = mat_for(poly["ceiling_shape"])
 
-        floor_ids = [obj.vert(px(e), py(e), fz) for e in eids]
-        ceil_ids = [obj.vert(px(e), py(e), cz) for e in eids]
+        floor_ids = [obj.vert(px(e), py(e), fz, *uv_e(e)) for e in eids]
+        ceil_ids = [obj.vert(px(e), py(e), cz, *uv_e(e)) for e in eids]
 
-        # Fan-triangulate (Marathon polygons are convex). Floor normal up (+Z):
-        # emit CCW when viewed from above. Reverse the ring if it's CW.
+        # Fan-triangulate (Marathon polygons are convex). Floor normal up (+Z).
         order = list(range(n)) if ccw else list(range(n - 1, -1, -1))
         for i in range(1, n - 1):
-            obj.tri(floor_ids[order[0]], floor_ids[order[i]], floor_ids[order[i + 1]])
-        # Ceiling normal down (−Z): opposite winding.
+            obj.tri(floor_ids[order[0]], floor_ids[order[i]], floor_ids[order[i + 1]], fmat)
         rorder = order[::-1]
         for i in range(1, n - 1):
-            obj.tri(ceil_ids[rorder[0]], ceil_ids[rorder[i]], ceil_ids[rorder[i + 1]])
+            obj.tri(ceil_ids[rorder[0]], ceil_ids[rorder[i]], ceil_ids[rorder[i + 1]], cmat)
 
     # ---- Walls -------------------------------------------------------------
-    obj.group("walls")
     for line in lins:
         e1, e2 = line["endpoint1"], line["endpoint2"]
         cwp, ccwp = line["cw_poly"], line["ccw_poly"]
         a = (px(e1), py(e1))
         b = (px(e2), py(e2))
+        length_wu = ((epnt[e2]["x"] - epnt[e1]["x"]) ** 2
+                     + (epnt[e2]["y"] - epnt[e1]["y"]) ** 2) ** 0.5 / 1024.0
+        # Wall texture from the line's side (primary shape descriptor).
+        wmat = "default"
+        obj.material("default", None)
+        for side_key in ("cw_side", "ccw_side"):
+            si = line[side_key]
+            if 0 <= si < len(sids):
+                wmat = mat_for(sids[si]["primary"]["shape"])
+                break
 
-        def wall(z_bot: float, z_top: float) -> None:
+        def wall(z_bot: float, z_top: float, mat: str = wmat) -> None:
             if z_top - z_bot <= 0.01:
                 return
-            v1 = obj.vert(a[0], a[1], z_bot)
-            v2 = obj.vert(b[0], b[1], z_bot)
-            v3 = obj.vert(b[0], b[1], z_top)
-            v4 = obj.vert(a[0], a[1], z_top)
-            obj.quad(v1, v2, v3, v4)
-            # Two-sided: emit the reverse winding so walls are visible (and
-            # block the view) from inside the sector too.
-            obj.quad(v1, v4, v3, v2)
+            v_bot = z_bot / S / 1024.0   # marathon WU for V coord
+            v_top = z_top / S / 1024.0
+            v1 = obj.vert(a[0], a[1], z_bot, 0.0, v_bot)
+            v2 = obj.vert(b[0], b[1], z_bot, length_wu, v_bot)
+            v3 = obj.vert(b[0], b[1], z_top, length_wu, v_top)
+            v4 = obj.vert(a[0], a[1], z_top, 0.0, v_top)
+            obj.quad(v1, v2, v3, v4, mat)
+            obj.quad(v1, v4, v3, v2, mat)  # two-sided
 
         cw = polys[cwp] if 0 <= cwp < len(polys) else None
         ccw = polys[ccwp] if 0 <= ccwp < len(polys) else None
 
         if cw and ccw:
-            # Shared line between two sectors: fill the floor + ceiling steps.
             wall(min(cw["floor_height"], ccw["floor_height"]) * S,
                  max(cw["floor_height"], ccw["floor_height"]) * S)
             wall(min(cw["ceiling_height"], ccw["ceiling_height"]) * S,
                  max(cw["ceiling_height"], ccw["ceiling_height"]) * S)
         else:
-            # Solid wall bordering the void: full height of the real sector.
             solid = cw or ccw
             if solid:
                 wall(solid["floor_height"] * S, solid["ceiling_height"] * S)
