@@ -20,10 +20,16 @@ import traceback
 
 import unreal
 
-LEVEL_PKG = "/Game/Levels/Chapter01_Tau_Ceti/L_TC1_Arrival_Auto"
-SEQ_PKG = "/Game/Cinematics/SeqArrivalTopDown"
+# Which level to render. Env M1_LEVEL is the UE-safe level name (e.g.
+# "00_Arrival", "05_The_Rose") under /Game/Levels/M1/L_<name>. Defaults to the
+# first level. The batch build labels every level's mesh actor "Sector".
+LEVEL = os.environ.get("M1_LEVEL", "00_Arrival")
+LEVEL_PKG = f"/Game/Levels/M1/L_{LEVEL}"
+SEQ_PKG = f"/Game/Cinematics/Seq_{LEVEL}"
 OUT_DIR = r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq"
 RESULT = r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq_result.json"
+SECTOR_LABEL = "Sector"
+OUT_NAME = f"{LEVEL}_topdown"
 
 result = {"steps": {}, "errors": {}}
 
@@ -64,9 +70,9 @@ def _place_camera():
         if a.get_actor_label() == "MRQ_TopDown":
             eas.destroy_actor(a)
     sector = next((a for a in eas.get_all_level_actors()
-                   if a.get_actor_label() == "Sector_Arrival"), None)
+                   if a.get_actor_label() == SECTOR_LABEL), None)
     if sector is None:
-        raise RuntimeError("Sector_Arrival actor not found in level")
+        raise RuntimeError(f"{SECTOR_LABEL} actor not found in level")
     origin, extent = sector.get_actor_bounds(False)
     half_span = max(extent.x, extent.y)
     # Angled bird's-eye (not straight-down): a ~50-degree overhead view shows
@@ -103,7 +109,7 @@ def _make_sequence():
     if unreal.EditorAssetLibrary.does_asset_exist(SEQ_PKG):
         unreal.EditorAssetLibrary.delete_asset(SEQ_PKG)
     seq = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
-        "SeqArrivalTopDown", "/Game/Cinematics", unreal.LevelSequence,
+        f"Seq_{LEVEL}", "/Game/Cinematics", unreal.LevelSequence,
         unreal.LevelSequenceFactoryNew())
     seq.set_display_rate(unreal.FrameRate(24, 1))
     seq.set_playback_start(0)
@@ -142,7 +148,7 @@ def _arm_watchdog():
             _quit()
             return
         if time.time() - _cam_holder["start"] > 240.0:
-            png = os.path.join(OUT_DIR, "arrival_topdown.png")
+            png = os.path.join(OUT_DIR, OUT_NAME + ".png")
             result["mrq_timeout"] = True
             result["mrq_png_exists"] = os.path.isfile(png)
             _write()
@@ -166,7 +172,7 @@ def _render():
     out = config.find_or_add_setting_by_class(unreal.MoviePipelineOutputSetting)
     out.set_editor_property("output_directory", unreal.DirectoryPath(OUT_DIR))
     out.set_editor_property("output_resolution", unreal.IntPoint(1280, 720))
-    out.set_editor_property("file_name_format", "arrival_topdown")
+    out.set_editor_property("file_name_format", OUT_NAME)
 
     executor = unreal.MoviePipelinePIEExecutor()
 
