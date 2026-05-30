@@ -15,7 +15,11 @@
 # committing binary .uasset/.umap churn). Re-create via Tools/ue5_*.py.
 # ==============================================================================
 /M1UE5/Content/Levels/Chapter01_Tau_Ceti/L_TC1_Arrival_Auto.umap
+/M1UE5/Content/Levels/M1/
 /M1UE5/Content/Meshes/Sectors/
+/M1UE5/Content/Meshes/M1/
+/M1UE5/Content/Textures/
+/M1UE5/Content/Materials/
 /M1UE5/Content/Cinematics/
 
 # ==============================================================================
