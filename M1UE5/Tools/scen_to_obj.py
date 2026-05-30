@@ -137,6 +137,9 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) ->
             v3 = obj.vert(b[0], b[1], z_top)
             v4 = obj.vert(a[0], a[1], z_top)
             obj.quad(v1, v2, v3, v4)
+            # Two-sided: emit the reverse winding so walls are visible (and
+            # block the view) from inside the sector too.
+            obj.quad(v1, v4, v3, v2)
 
         cw = polys[cwp] if 0 <= cwp < len(polys) else None
         ccw = polys[ccwp] if 0 <= ccwp < len(polys) else None

@@ -11,6 +11,14 @@
 /M1UE5/Reference/
 
 # ==============================================================================
+# Auto-generated UE content from the headless pipeline (regenerable; avoid
+# committing binary .uasset/.umap churn). Re-create via Tools/ue5_*.py.
+# ==============================================================================
+/M1UE5/Content/Levels/Chapter01_Tau_Ceti/L_TC1_Arrival_Auto.umap
+/M1UE5/Content/Meshes/Sectors/
+/M1UE5/Content/Cinematics/
+
+# ==============================================================================
 # Unreal Engine 5 — build artifacts and derived data
 # ==============================================================================
 /M1UE5/Binaries/
