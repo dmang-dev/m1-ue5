@@ -312,16 +312,22 @@ material in your `vendor/` directory.
 
 ## Current build status
 
+See **`docs/PROJECT_STATUS.md`** for the full handoff (pipeline commands,
+headless-loop internals, gotchas). Summary table:
+
 | System              | Status       | Notes |
 |---------------------|--------------|-------|
 | Asset extraction    | ✅ Done | via py-marathon-utils (maps/sounds/shapes/physics/terminals) |
-| `.scen` → UE5 converter | 🟡 In progress | `Tools/scen_to_obj.py` builds OBJ + placements for all 37 levels; UE5 import script + guide done; needs PIE validation |
-| Sprite billboard pipeline | 🔲 Not started | Shapes extraction available via package |
+| `.scen` → UE5 converter | ✅ Done | `Tools/scen_to_obj.py` — textured OBJ (UVs + .mtl) for all 37 levels |
+| Headless UE5 import loop | ✅ Done | `Tools/ue5_headless_build.py` — all 37 levels + shared material library, 0 errors, no manual editor steps |
+| Headless render (MRQ) | ✅ Done | `Tools/ue5_mrq_render.py` — top-down PNG of any level (`M1_LEVEL` env) |
+| Sprite billboard pipeline | 🔲 Not started | Shapes extracted; placements in `Reference/Geometry/*_placements.json` |
 | Level geometry kit  | ⛔ Superseded | Replaced by procedural sectors |
+| Walkable level (collision + real spawn + FP) | 🟡 Next | collision-as-complex + real PlayerStart from placements + first-person verify |
 | Player movement     | 🔲 Not started ||
 | Weapons             | 🔲 Not started ||
 | Enemy AI            | 🔲 Not started ||
-| Terminal system     | 🔲 Not started | Source text already extracted in Maps JSON |
+| Terminal system     | 🔲 Not started | Source text already extracted in Maps JSON; renderer exists in py-marathon-utils |
 | HUD                 | 🔲 Not started ||
 | Audio               | 🟡 Source extracted | Need UE import + cue setup |
 | Save system         | 🔲 Not started ||
