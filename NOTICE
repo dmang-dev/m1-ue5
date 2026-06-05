@@ -1,0 +1,19 @@
+Marathon 1 → UE5 remake
+=======================
+
+The MIT license in LICENSE applies to the ORIGINAL work in this repository:
+the Python tooling, the UE5 project scaffolding, and the documentation.
+
+It does NOT grant any rights to Bungie's Marathon intellectual property.
+
+  * The Marathon data files (the gitignored M1SOURCE/, M2SOURCE/, MISOURCE/
+    folders) and anything extracted from them into Reference/ are Bungie IP,
+    used here as internal development reference only. They are not committed
+    to this repository and are not redistributable.
+  * Bungie's limited grant for Aleph One does not transfer to derivative
+    projects. Any publicly released build must ship original, rebuilt art,
+    audio, and music — see the "License / distribution policy" section of
+    M1UE5/CLAUDE.md.
+
+Asset extraction/conversion is handled by the separately published, MIT-licensed
+package py-marathon-utils (https://github.com/dmang-dev/py-marathon-utils).
