@@ -38,6 +38,10 @@ LEVEL_DIR = "/Game/Levels/M1"   # per-level: <LEVEL_DIR>/L_<safe>
 _LIMIT = os.environ.get("M1_LIMIT")
 LIMIT = int(_LIMIT) if _LIMIT else None
 
+# Player spawn placement (real Marathon start from <stem>_placements.json).
+PLAYER_CAPSULE_HALF = 96.0  # UE PlayerStart capsule half-height (cm)
+SPAWN_GAP = 4.0             # rest the capsule just above the floor
+
 result = {"version": None, "shared": {}, "levels": {}, "errors": {}}
 
 
@@ -140,6 +144,54 @@ def _find_mesh(paths):
     return None, None
 
 
+def _set_complex_collision(mesh):
+    """Use the sector's render triangles as collision so the player can walk on
+    floors and bump walls (complex-as-simple — no convex hulls needed for static
+    level geometry). Returns True if the trace flag was set."""
+    bs = mesh.get_editor_property("body_setup")
+    if bs is None:
+        return False
+    bs.set_editor_property(
+        "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+    unreal.EditorAssetLibrary.save_asset(mesh.get_path_name())
+    return True
+
+
+def _load_placements(stem):
+    """Load <stem>_placements.json (sidecar from scen_to_obj.py). Its coords are
+    already in the UE-cm frame of the mesh (same scale + y-flip)."""
+    path = os.path.join(GEO, stem + "_placements.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _spawn_player_start(eas, mesh, stem, box):
+    """Place a PlayerStart at the real Marathon spawn (the OBJS player object).
+    Falls back to a high top-down overview vantage for levels with no player
+    object. The actor is labelled so the FP render can find it."""
+    ps = (_load_placements(stem) or {}).get("player_start")
+    if ps:
+        loc = unreal.Vector(ps["x"], ps["y"],
+                            ps["z"] + PLAYER_CAPSULE_HALF + SPAWN_GAP)
+        rot = unreal.Rotator(roll=0.0, pitch=0.0, yaw=ps.get("facing_deg", 0.0))
+        actor = eas.spawn_actor_from_class(unreal.PlayerStart, loc, rot)
+        actor.set_actor_label("PlayerStart_M1")
+        return {"mode": "real",
+                "loc": [round(loc.x, 2), round(loc.y, 2), round(loc.z, 2)],
+                "facing_deg": ps.get("facing_deg", 0.0), "floor_z": ps["z"]}
+    cx = (box.min.x + box.max.x) / 2.0
+    cy = (box.min.y + box.max.y) / 2.0
+    span = max(box.max.x - box.min.x, box.max.y - box.min.y)
+    overview = unreal.Vector(cx, cy, box.max.z + span * 1.2)
+    actor = eas.spawn_actor_from_class(
+        unreal.PlayerStart, overview, unreal.Rotator(roll=0.0, pitch=-90.0, yaw=0.0))
+    actor.set_actor_label("PlayerStart_Overview")
+    return {"mode": "overview",
+            "loc": [round(overview.x, 2), round(overview.y, 2), round(overview.z, 2)]}
+
+
 def _build_one(obj_path, lib):
     stem = os.path.splitext(os.path.basename(obj_path))[0]
     safe = _safe(stem)
@@ -175,6 +227,8 @@ def _build_one(obj_path, lib):
         else:
             missing.append(slot)
     mesh.set_editor_property("static_materials", static_mats)
+    # Walk on it: render triangles double as collision (floors + walls).
+    collision_ok = _set_complex_collision(mesh)
     unreal.EditorAssetLibrary.save_asset(mesh.get_path_name())
 
     # Build the level map (idempotent: load+wipe if it already exists).
@@ -190,15 +244,11 @@ def _build_one(obj_path, lib):
     sector = eas.spawn_actor_from_object(mesh, unreal.Vector(0, 0, 0))
     sector.set_actor_label("Sector")
     eas.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1500),
-                               unreal.Rotator(-50.0, 0.0, 45.0))
+                               unreal.Rotator(roll=0.0, pitch=-50.0, yaw=45.0))
     eas.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 1500))
 
     box = mesh.get_bounding_box()
-    cx = (box.min.x + box.max.x) / 2.0
-    cy = (box.min.y + box.max.y) / 2.0
-    span = max(box.max.x - box.min.x, box.max.y - box.min.y)
-    overview = unreal.Vector(cx, cy, box.max.z + span * 1.2)
-    eas.spawn_actor_from_class(unreal.PlayerStart, overview, unreal.Rotator(-90.0, 0.0, 0.0))
+    ps_info = _spawn_player_start(eas, mesh, stem, box)
     les.save_current_level()
 
     return {
@@ -208,6 +258,8 @@ def _build_one(obj_path, lib):
         "slots": len(static_mats),
         "assigned": assigned,
         "missing": missing,
+        "collision_complex_as_simple": collision_ok,
+        "player_start": ps_info,
         "bounds_min": [box.min.x, box.min.y, box.min.z],
         "bounds_max": [box.max.x, box.max.y, box.max.z],
     }

@@ -24,12 +24,18 @@ import unreal
 # "00_Arrival", "05_The_Rose") under /Game/Levels/M1/L_<name>. Defaults to the
 # first level. The batch build labels every level's mesh actor "Sector".
 LEVEL = os.environ.get("M1_LEVEL", "00_Arrival")
+# View mode: "topdown" (default — angled bird's-eye overview) or "fp" (first-
+# person eye-level verification render from the real PlayerStart, with a
+# straight-down collision probe / drop-test).
+VIEW = os.environ.get("M1_VIEW", "topdown").lower()
 LEVEL_PKG = f"/Game/Levels/M1/L_{LEVEL}"
 SEQ_PKG = f"/Game/Cinematics/Seq_{LEVEL}"
 OUT_DIR = r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq"
-RESULT = r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq_result.json"
+RESULT = (r"C:\m1-ue5\M1UE5\Reference\Geometry\fp_verify_result.json" if VIEW == "fp"
+          else r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq_result.json")
 SECTOR_LABEL = "Sector"
-OUT_NAME = f"{LEVEL}_topdown"
+EYE_OFFSET = 40.0    # FP eye height above the PlayerStart capsule center (cm)
+OUT_NAME = f"{LEVEL}_{'fp' if VIEW == 'fp' else 'topdown'}"
 
 result = {"steps": {}, "errors": {}}
 
@@ -89,6 +95,64 @@ def _place_camera():
     _cam_holder["cam"] = cam  # actor kept out of `result` (not JSON-serializable)
     return {"label": "MRQ_TopDown", "loc": [cam_loc.x, cam_loc.y, cam_loc.z],
             "rot": [cam_rot.pitch, cam_rot.yaw, cam_rot.roll]}
+
+
+def _collision_check(eas):
+    """Headless 'drop test' (config assertion). Editor-world line traces don't
+    function in headless -ExecCmds (no physics query scene), so instead of
+    raycasting we assert the Sector's collision is set up so a player capsule WILL
+    stand on it: component QueryAndPhysics + the mesh's complex-as-simple flag.
+    A true runtime physics settle-test belongs with the PIE/pawn step."""
+    sector = next((a for a in eas.get_all_level_actors()
+                   if a.get_actor_label() == SECTOR_LABEL), None)
+    out = {"method": "collision-config-assert", "walkable": False}
+    if sector is None:
+        out["error"] = f"{SECTOR_LABEL} actor not found"
+        return out
+    comp = sector.get_component_by_class(unreal.StaticMeshComponent)
+    if comp is None:
+        out["error"] = "Sector has no StaticMeshComponent"
+        return out
+    ce = comp.get_collision_enabled()
+    mesh = comp.get_editor_property("static_mesh")
+    bs = mesh.get_editor_property("body_setup") if mesh else None
+    tf = bs.get_editor_property("collision_trace_flag") if bs else None
+    out["collision_enabled"] = str(ce)
+    out["profile"] = str(comp.get_collision_profile_name())
+    out["mesh_trace_flag"] = str(tf) if tf is not None else None
+    query_ok = ce in (unreal.CollisionEnabled.QUERY_AND_PHYSICS,
+                      unreal.CollisionEnabled.QUERY_ONLY)
+    complex_ok = tf == unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE
+    out["walkable"] = bool(query_ok and complex_ok)
+    return out
+
+
+def _place_camera_fp():
+    """First-person eye-level camera at the real PlayerStart, looking along the
+    Marathon facing. Asserts walkable collision before rendering."""
+    eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    for a in eas.get_all_level_actors():
+        if a.get_actor_label() == "MRQ_FP":
+            eas.destroy_actor(a)
+    ps = next((a for a in eas.get_all_level_actors()
+               if a.get_actor_label() == "PlayerStart_M1"), None)
+    if ps is None:
+        raise RuntimeError(
+            "PlayerStart_M1 not found — rebuild this level with the walkable "
+            "ue5_headless_build.py (real spawn + collision)")
+    ps_loc = ps.get_actor_location()
+    ps_rot = ps.get_actor_rotation()
+    check = _collision_check(eas)
+    result["collision_check"] = check
+    eye = unreal.Vector(ps_loc.x, ps_loc.y, ps_loc.z + EYE_OFFSET)
+    cam_rot = unreal.Rotator(roll=0.0, pitch=0.0, yaw=ps_rot.yaw)  # level gaze along facing
+    cam = eas.spawn_actor_from_class(unreal.CameraActor, eye, cam_rot)
+    cam.set_actor_label("MRQ_FP")
+    cam.camera_component.set_editor_property("field_of_view", 90.0)
+    unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
+    _cam_holder["cam"] = cam
+    return {"label": "MRQ_FP", "eye": [eye.x, eye.y, eye.z], "yaw": ps_rot.yaw,
+            "collision_check": check}
 
 
 def _binding_id(seq, binding):
@@ -194,7 +258,8 @@ def _render():
 
 
 step("load_level", _load_level)
-step("place_camera", _place_camera)
+unreal.log(f"[mrq] view mode: {VIEW}")
+step("place_camera", _place_camera_fp if VIEW == "fp" else _place_camera)
 if _cam_holder.get("cam") is not None:
     seq = step("make_sequence", _make_sequence)
     if seq is not None:

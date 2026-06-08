@@ -1,6 +1,6 @@
 # Project Status & Handoff — Marathon 1 → UE5
 
-_Last updated: 2026-06-05_
+_Last updated: 2026-06-08_
 
 This is the **single source of truth for where the port stands** and how to drive
 it. Read this plus `M1UE5/CLAUDE.md` (conventions) before continuing.
@@ -121,14 +121,22 @@ Asset pipeline is the published package **`py-marathon-utils`**
   manual editor steps.
 - **All 37 levels imported** with textures + shared material library (0 errors).
 - Parameterized render (any level via `M1_LEVEL`).
+- **Walkable geometry (all 37):** sector meshes carry complex-as-simple
+  collision (component `QueryAndPhysics` + `BlockAll`), and each level gets a
+  real `PlayerStart` (`PlayerStart_M1`) at the Marathon spawn with the correct
+  facing, read from `<level>_placements.json`. Headless verify:
+  `M1_VIEW=fp M1_LEVEL=<safe> ue5_mrq_render.py` renders a first-person eye-level
+  frame from the spawn and asserts the collision config (`fp_verify_result.json`).
 
 ## Open items / next up 🔲
 
-- **Walkable level (next milestone, in progress design):** add collision
-  (complex-as-simple) to the sector meshes, place a PlayerStart at the *real*
-  Marathon spawn (from `_placements.json`, currently using a top-down overview
-  vantage instead), add a first-person view render + physics drop-test for
-  headless verification, then a playable pawn/GameMode.
+- **Playable pawn / GameMode (next milestone):** a `BP_PlayerCharacter` +
+  GameMode so the spawn is actually walkable in PIE, plus a *runtime* physics
+  settle-test. NOTE: the **headless editor world can't raycast** — line/shape
+  traces return `None` under `-ExecutePythonScript`/`-ExecCmds` (no physics query
+  scene), so the headless "drop test" is a collision-config assertion; a real
+  settle-test needs PIE/game. (`unreal.Rotator` positional order is
+  `(roll, pitch, yaw)` — use keyword args.)
 - Enemy **sprite billboards** from Shapes (placements already extracted).
 - Doors / platforms / elevators from polygon+platform data.
 - Liquids (lava/water media), audio import + cues, terminals (renderer exists in

@@ -323,7 +323,8 @@ headless-loop internals, gotchas). Summary table:
 | Headless render (MRQ) | ✅ Done | `Tools/ue5_mrq_render.py` — top-down PNG of any level (`M1_LEVEL` env) |
 | Sprite billboard pipeline | 🔲 Not started | Shapes extracted; placements in `Reference/Geometry/*_placements.json` |
 | Level geometry kit  | ⛔ Superseded | Replaced by procedural sectors |
-| Walkable level (collision + real spawn + FP) | 🟡 Next | collision-as-complex + real PlayerStart from placements + first-person verify |
+| Walkable level (collision + real spawn + FP) | ✅ Done | All 37: complex-as-simple collision + real PlayerStart (correct facing) from placements; first-person verify render + collision-config assert via `ue5_mrq_render.py` with `M1_VIEW=fp` |
+| Playable pawn / GameMode (+ runtime physics drop-test) | 🟡 Next | Pawn + GameMode so the spawn is walkable in PIE; real physics settle-test (the headless editor world can't raycast — see `ue5_mrq_render.py`) |
 | Player movement     | 🔲 Not started ||
 | Weapons             | 🔲 Not started ||
 | Enemy AI            | 🔲 Not started ||
