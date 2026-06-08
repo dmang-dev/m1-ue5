@@ -1,0 +1,4 @@
+# Stop the UE editor's re-saves from churning git on line endings alone.
+# The editor rewrites these as CRLF on Windows; normalize so diffs are real.
+*.uproject text=auto
+*.ini      text=auto
