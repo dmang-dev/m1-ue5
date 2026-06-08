@@ -214,14 +214,21 @@ def _placements(data: dict, polys: list, S: float, fy: float) -> dict:
         # OBJS x/y are absolute world coords; z is height above the polygon floor.
         poly = polys[o["polygon_index"]] if 0 <= o["polygon_index"] < len(polys) else None
         base = poly["floor_height"] if poly else 0
+        # UE's OBJ importer negates Y *on top of* scen_to_obj's flip_y, so the
+        # imported sector mesh ends up at y = +epnt_y*S. Placements must live in
+        # that final imported frame (mesh_fy = -fy). Using `fy` here mirrors every
+        # spawn out of the geometry, so the player starts beside the level and
+        # falls forever.
+        mesh_fy = -fy
         pos = {
             "x": round(o["x"] * S, 2),
-            "y": round(o["y"] * S * fy, 2),
+            "y": round(o["y"] * S * mesh_fy, 2),
             "z": round((base + o["z"]) * S, 2),
         }
-        # Marathon facing: 512 units == 360°. UE yaw, flipped to match flip_y.
+        # Marathon facing: 512 units == 360°. The net Marathon->UE transform is a
+        # pure scale (no reflection), so the heading maps straight through.
         yaw = (o["facing"] / 512.0) * 360.0
-        if fy < 0:
+        if mesh_fy < 0:
             yaw = -yaw
         rec = {"type": o["type"], "object_index": o["object_index"],
                "facing_deg": round(yaw, 1), **pos}
