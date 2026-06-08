@@ -20,11 +20,18 @@ class M1UE5_API AM1Character : public ACharacter
 public:
 	AM1Character();
 
+	virtual void BeginPlay() override;
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	void MoveForward(float Value);
 	void MoveRight(float Value);
+
+	/** Roam the campaign: jump to the next/previous Marathon level ([ and ]). */
+	void NextLevel();
+	void PrevLevel();
+	void CycleLevel(int32 Direction);
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Camera")

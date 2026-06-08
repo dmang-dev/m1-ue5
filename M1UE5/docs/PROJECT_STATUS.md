@@ -149,10 +149,15 @@ Asset pipeline is the published package **`py-marathon-utils`**
 
 ## Open items / next up 🔲
 
-- **Cook all 37 / level transitions (next milestone):** the package currently
-  contains only `L_00_Arrival`; add a level-select menu or campaign transitions
-  (or cook all maps). Movement polish (sprint, crouch, head-bob) can layer onto
-  `AM1Character`. NOTE: the **headless editor world can't raycast** — line/shape
+- **Campaign flow + movement polish (next milestone):** all 37 levels are now
+  cooked into the build and reachable in-game via the `[` / `]` (or PageUp/Dn)
+  level switcher (`AM1Character::CycleLevel` → `UGameplayStatics::OpenLevel`, with
+  an on-screen level name); the `L_00_Arrival` default loads on launch. Replace
+  free-roam cycling with real story progression (terminals, level exits), and
+  layer movement polish (sprint, crouch, head-bob, mouse sensitivity) onto
+  `AM1Character`. (Cook all maps via the quoted array arg
+  `"-map=$maps"` — a bare `-map=$maps` does NOT expand in PowerShell 5.1.)
+  NOTE: the **headless editor world can't raycast** — line/shape
   traces return `None` under `-ExecutePythonScript`/`-ExecCmds` (no physics query
   scene), so a headless "drop test" is a collision-config assertion; a real
   settle-test needs PIE/game. (`unreal.Rotator` positional order is

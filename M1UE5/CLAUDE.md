@@ -325,7 +325,8 @@ headless-loop internals, gotchas). Summary table:
 | Level geometry kit  | ⛔ Superseded | Replaced by procedural sectors |
 | Walkable level (collision + real spawn + FP) | ✅ Done | All 37: complex-as-simple collision + real PlayerStart (correct facing) from placements; first-person verify render + collision-config assert via `ue5_mrq_render.py` with `M1_VIEW=fp` |
 | Playable walking build (C++ pawn + GameMode + double-click .exe) | ✅ Done | `Source/M1UE5`: `AM1Character` (first-person — WASD walk, mouse look, Space jump, gravity + collision vs the sector meshes) + `AM1GameMode`; legacy input maps in `DefaultInput.ini`. `RunUAT BuildCookRun` → `Build/Windows/M1UE5.exe` (cooks `L_00_Arrival`); boots with `M1GameMode`, 0 errors. Project is now a C++/Blueprint hybrid. |
-| Cook all 37 levels / level transitions | 🟡 Next | The build packs only `L_00_Arrival`; add a level-select or campaign transitions |
+| Roam all 37 levels (cooked + in-game switcher) | ✅ Done | All 37 cooked into `M1UE5.exe`; `[` / `]` (or PageUp/Dn) cycle levels in-game via `AM1Character` + `UGameplayStatics::OpenLevel`, with an on-screen level name. Verified `L_30_Arena` loads on demand from the pak. |
+| Campaign flow (story order, terminals, transitions) | 🔲 Not started | Replace free-roam cycling with real progression + terminal gating |
 | Player movement / feel | 🔲 Not started ||
 | Weapons             | 🔲 Not started ||
 | Enemy AI            | 🔲 Not started ||
