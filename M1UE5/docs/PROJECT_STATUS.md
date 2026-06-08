@@ -127,16 +127,31 @@ Asset pipeline is the published package **`py-marathon-utils`**
   facing, read from `<level>_placements.json`. Headless verify:
   `M1_VIEW=fp M1_LEVEL=<safe> ue5_mrq_render.py` renders a first-person eye-level
   frame from the spawn and asserts the collision config (`fp_verify_result.json`).
+- **Double-clickable build:** `Tools/ue5_setup_player.py` creates `BP_GameMode`
+  (GameModeBase) + `BP_PlayerPawn` (DefaultPawn = built-in fly controls) and
+  `Config/DefaultEngine.ini` sets the default map (`L_00_Arrival`) + GameMode. A
+  Win64 Development package is produced by:
+  ```
+  "<UE>\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="<proj>\M1UE5.uproject" ^
+    -noP4 -platform=Win64 -clientconfig=Development -cook -map=L_00_Arrival ^
+    -stage -pak -archive -archivedirectory="<proj>\Build" -build -utf8output -unattended
+  ```
+  Output: `Build/Windows/M1UE5.exe` (double-click). Verified: boots, loads
+  `L_00_Arrival` with `BP_GameMode`, 0 errors. **Packaging gotchas:** (1) BP-only
+  needs no C++ from us but UAT *does* build the editor target — needs VS Build
+  Tools (present) and **fails if the editor is open holding Live Coding** (close
+  all `UnrealEditor.exe` first). (2) Do **not** pass `-nocompileeditor` — the cook
+  needs the `M1UE5Editor.target` receipt.
 
 ## Open items / next up 🔲
 
-- **Playable pawn / GameMode (next milestone):** a `BP_PlayerCharacter` +
-  GameMode so the spawn is actually walkable in PIE, plus a *runtime* physics
-  settle-test. NOTE: the **headless editor world can't raycast** — line/shape
-  traces return `None` under `-ExecutePythonScript`/`-ExecCmds` (no physics query
-  scene), so the headless "drop test" is a collision-config assertion; a real
-  settle-test needs PIE/game. (`unreal.Rotator` positional order is
-  `(roll, pitch, yaw)` — use keyword args.)
+- **Walking character (next milestone):** a `BP_PlayerCharacter` (ACharacter) +
+  Enhanced Input for *ground* movement against the sector collision (the packaged
+  pawn currently *flies*). Then a *runtime* physics settle-test in PIE. NOTE: the
+  **headless editor world can't raycast** — line/shape traces return `None` under
+  `-ExecutePythonScript`/`-ExecCmds` (no physics query scene), so the headless
+  "drop test" is a collision-config assertion; a real settle-test needs PIE/game.
+  (`unreal.Rotator` positional order is `(roll, pitch, yaw)` — use keyword args.)
 - Enemy **sprite billboards** from Shapes (placements already extracted).
 - Doors / platforms / elevators from polygon+platform data.
 - Liquids (lava/water media), audio import + cues, terminals (renderer exists in
