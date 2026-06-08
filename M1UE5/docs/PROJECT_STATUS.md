@@ -127,31 +127,36 @@ Asset pipeline is the published package **`py-marathon-utils`**
   facing, read from `<level>_placements.json`. Headless verify:
   `M1_VIEW=fp M1_LEVEL=<safe> ue5_mrq_render.py` renders a first-person eye-level
   frame from the spawn and asserts the collision config (`fp_verify_result.json`).
-- **Double-clickable build:** `Tools/ue5_setup_player.py` creates `BP_GameMode`
-  (GameModeBase) + `BP_PlayerPawn` (DefaultPawn = built-in fly controls) and
-  `Config/DefaultEngine.ini` sets the default map (`L_00_Arrival`) + GameMode. A
-  Win64 Development package is produced by:
+- **Double-clickable WALKING build:** C++ `Source/M1UE5` provides `AM1Character`
+  (first-person — WASD walk, mouse look, Space jump, gravity + collision against
+  the sector meshes) + `AM1GameMode`; legacy input maps are in
+  `Config/DefaultInput.ini`, and `Config/DefaultEngine.ini` sets the default map
+  (`L_00_Arrival`) + GameMode (`/Script/M1UE5.M1GameMode`). The project is now a
+  C++/Blueprint hybrid (needs VS Build Tools to compile, present on this machine).
+  A Win64 Development package is produced by:
   ```
   "<UE>\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun -project="<proj>\M1UE5.uproject" ^
     -noP4 -platform=Win64 -clientconfig=Development -cook -map=L_00_Arrival ^
     -stage -pak -archive -archivedirectory="<proj>\Build" -build -utf8output -unattended
   ```
   Output: `Build/Windows/M1UE5.exe` (double-click). Verified: boots, loads
-  `L_00_Arrival` with `BP_GameMode`, 0 errors. **Packaging gotchas:** (1) BP-only
-  needs no C++ from us but UAT *does* build the editor target — needs VS Build
-  Tools (present) and **fails if the editor is open holding Live Coding** (close
-  all `UnrealEditor.exe` first). (2) Do **not** pass `-nocompileeditor` — the cook
-  needs the `M1UE5Editor.target` receipt.
+  `L_00_Arrival` with `M1GameMode`, 0 errors. **Packaging gotchas:** (1) UAT builds
+  the editor target — **fails if any `UnrealEditor.exe` is open holding Live
+  Coding** (close them all first, incl. the Project Browser). (2) Do **not** pass
+  `-nocompileeditor` — the cook needs the `M1UE5Editor.target` receipt. (3) Target
+  rules must use `DefaultBuildSettings = BuildSettingsVersion.V6` to match the
+  installed engine's shared build environment (V5 → `UndefinedIdentifier` mismatch).
 
 ## Open items / next up 🔲
 
-- **Walking character (next milestone):** a `BP_PlayerCharacter` (ACharacter) +
-  Enhanced Input for *ground* movement against the sector collision (the packaged
-  pawn currently *flies*). Then a *runtime* physics settle-test in PIE. NOTE: the
-  **headless editor world can't raycast** — line/shape traces return `None` under
-  `-ExecutePythonScript`/`-ExecCmds` (no physics query scene), so the headless
-  "drop test" is a collision-config assertion; a real settle-test needs PIE/game.
-  (`unreal.Rotator` positional order is `(roll, pitch, yaw)` — use keyword args.)
+- **Cook all 37 / level transitions (next milestone):** the package currently
+  contains only `L_00_Arrival`; add a level-select menu or campaign transitions
+  (or cook all maps). Movement polish (sprint, crouch, head-bob) can layer onto
+  `AM1Character`. NOTE: the **headless editor world can't raycast** — line/shape
+  traces return `None` under `-ExecutePythonScript`/`-ExecCmds` (no physics query
+  scene), so a headless "drop test" is a collision-config assertion; a real
+  settle-test needs PIE/game. (`unreal.Rotator` positional order is
+  `(roll, pitch, yaw)` — use keyword args.)
 - Enemy **sprite billboards** from Shapes (placements already extracted).
 - Doors / platforms / elevators from polygon+platform data.
 - Liquids (lava/water media), audio import + cues, terminals (renderer exists in

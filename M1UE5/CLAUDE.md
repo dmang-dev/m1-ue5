@@ -324,8 +324,8 @@ headless-loop internals, gotchas). Summary table:
 | Sprite billboard pipeline | 🔲 Not started | Shapes extracted; placements in `Reference/Geometry/*_placements.json` |
 | Level geometry kit  | ⛔ Superseded | Replaced by procedural sectors |
 | Walkable level (collision + real spawn + FP) | ✅ Done | All 37: complex-as-simple collision + real PlayerStart (correct facing) from placements; first-person verify render + collision-config assert via `ue5_mrq_render.py` with `M1_VIEW=fp` |
-| Playable build (GameMode + pawn + double-click .exe) | ✅ Done | `Tools/ue5_setup_player.py` makes `BP_GameMode` + `BP_PlayerPawn` (DefaultPawn = built-in **fly** controls); `RunUAT BuildCookRun` → `Build/Windows/M1UE5.exe` (cooks `L_00_Arrival`). Boots + loads map + `BP_GameMode`, 0 errors. |
-| Walking character + Enhanced Input (+ PIE physics drop-test) | 🟡 Next | `BP_PlayerCharacter` (ACharacter) + Enhanced Input for **ground** movement against the sector collision; runtime settle-test in PIE |
+| Playable walking build (C++ pawn + GameMode + double-click .exe) | ✅ Done | `Source/M1UE5`: `AM1Character` (first-person — WASD walk, mouse look, Space jump, gravity + collision vs the sector meshes) + `AM1GameMode`; legacy input maps in `DefaultInput.ini`. `RunUAT BuildCookRun` → `Build/Windows/M1UE5.exe` (cooks `L_00_Arrival`); boots with `M1GameMode`, 0 errors. Project is now a C++/Blueprint hybrid. |
+| Cook all 37 levels / level transitions | 🟡 Next | The build packs only `L_00_Arrival`; add a level-select or campaign transitions |
 | Player movement / feel | 🔲 Not started ||
 | Weapons             | 🔲 Not started ||
 | Enemy AI            | 🔲 Not started ||
