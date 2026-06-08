@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Misc/Paths.h"
+#include "Engine/EngineTypes.h"
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -62,9 +63,16 @@ AM1Character::AM1Character()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 
+	// Marathon corridors/rooms are tight: the default capsule (r=34, hh=88, ~1.8m)
+	// encroaches the start rooms, so the engine rejects the spawn and drops the
+	// player to world origin (the void). A smaller capsule fits, and always
+	// spawning lets the pawn settle onto the floor even if it starts touching.
+	GetCapsuleComponent()->InitCapsuleSize(24.0f, 56.0f);
+	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
-	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 64.0f)); // eye height
+	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 40.0f)); // eye height
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())

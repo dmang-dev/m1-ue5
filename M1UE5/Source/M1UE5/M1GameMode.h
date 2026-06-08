@@ -12,4 +12,8 @@ class M1UE5_API AM1GameMode : public AGameModeBase
 
 public:
 	AM1GameMode();
+
+	/** Use the level's PlayerStart unconditionally (the default rating rejects
+	 *  Marathon's tight spawn rooms and the engine falls back to world origin). */
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 };
