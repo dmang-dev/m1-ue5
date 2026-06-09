@@ -80,8 +80,9 @@ void AM1PlayerController::PresentMenu(TSharedRef<SWidget> Menu, bool bPause)
 		GEngine->GameViewport->AddViewportWidgetContent(Menu, 100);
 	}
 	bShowMouseCursor = true;
+	// NB: do NOT SetWidgetToFocus(the SOverlay) — it isn't focusable and logs an
+	// error; mouse input reaches the buttons fine without it.
 	FInputModeUIOnly Mode;
-	Mode.SetWidgetToFocus(Menu);
 	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 	SetInputMode(Mode);
 	if (bPause)
@@ -106,17 +107,22 @@ void AM1PlayerController::CloseMenu()
 
 void AM1PlayerController::OnNewGame()
 {
+	// Tear the menu down BEFORE travelling — otherwise the widget lingers in the
+	// viewport into the next level and its button lambdas dereference this (now
+	// destroyed) controller on the next input event -> crash.
+	CloseMenu();
 	UGameplayStatics::OpenLevel(this, FName("/Game/Levels/M1/L_00_Arrival"));
 }
 
 void AM1PlayerController::OnQuitGame()
 {
+	CloseMenu();
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
 }
 
 void AM1PlayerController::OnReturnToMenu()
 {
-	UGameplayStatics::SetGamePaused(this, false);
+	CloseMenu();
 	UGameplayStatics::OpenLevel(this, FName("/Game/Levels/M1/L_MainMenu"));
 }
 
