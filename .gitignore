@@ -53,6 +53,14 @@ Thumbs.db
 .DS_Store
 
 # ==============================================================================
+# Aleph One source — GPL reference only, NEVER redistribute (format docs, not
+# code we ship). Local read-only reference for faithful conversion.
+# ==============================================================================
+/AlephOne-20250829/
+/alephone-release-20250829/
+/alephone-windows-symbols-x64/
+
+# ==============================================================================
 # Stray files
 # ==============================================================================
 /_nul
