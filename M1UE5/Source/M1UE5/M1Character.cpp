@@ -110,6 +110,10 @@ void AM1Character::BeginPlay()
 	if (GEngine && GetWorld())
 	{
 		const FString MapName = GetWorld()->GetMapName();
+		// Persistent build stamp (compile timestamp) so the running build is
+		// unmistakable in-game — confirms a fresh package vs a stale cached .exe.
+		GEngine->AddOnScreenDebugMessage(0, 3600.0f, FColor::Yellow,
+			FString::Printf(TEXT("M1UE5 BUILD  %s  %s"), TEXT(__DATE__), TEXT(__TIME__)));
 		GEngine->AddOnScreenDebugMessage(1, 8.0f, FColor::Green,
 			FString::Printf(TEXT("Marathon UE5  -  %s"), *MapName));
 		GEngine->AddOnScreenDebugMessage(2, 8.0f, FColor::Silver,

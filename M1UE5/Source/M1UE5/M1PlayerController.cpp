@@ -144,9 +144,17 @@ TSharedRef<SWidget> AM1PlayerController::BuildMenu(const FText& Title, bool bPau
 	};
 
 	TSharedRef<SVerticalBox> Stack = SNew(SVerticalBox);
-	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 0.0f, 0.0f, 36.0f))
+	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 0.0f, 0.0f, 8.0f))
 	[
 		SNew(STextBlock).Text(Title).Font(MenuFont(54)).ColorAndOpacity(FSlateColor(M1Green))
+	];
+	// Build identifier (compile timestamp) — proves a freshly packaged .exe is the
+	// one actually running, vs a stale cached build. Auto-bumps on every recompile.
+	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 0.0f, 0.0f, 30.0f))
+	[
+		SNew(STextBlock)
+		.Text(FText::FromString(FString::Printf(TEXT("BUILD  %s  %s"), TEXT(__DATE__), TEXT(__TIME__))))
+		.Font(MenuFont(15)).ColorAndOpacity(FSlateColor(FLinearColor(0.55f, 0.80f, 0.55f, 1.0f)))
 	];
 
 	if (bPauseMenu)

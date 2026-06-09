@@ -14,6 +14,7 @@ It builds a 1-frame top-down sequence, renders a PNG to Reference/Geometry/mrq/,
 writes mrq_result.json, and quits when done.
 """
 import json
+import math
 import os
 import time
 import traceback
@@ -144,7 +145,15 @@ def _place_camera_fp():
     ps_rot = ps.get_actor_rotation()
     check = _collision_check(eas)
     result["collision_check"] = check
-    eye = unreal.Vector(ps_loc.x, ps_loc.y, ps_loc.z + EYE_OFFSET)
+    # Optional dolly: M1_FWD cm forward along the gaze (to close in on a wall for
+    # texture inspection); M1_EYEZ overrides the eye height (absolute world cm).
+    fwd = float(os.environ.get("M1_FWD", "0") or 0)
+    yaw_rad = math.radians(ps_rot.yaw)
+    ex = ps_loc.x + math.cos(yaw_rad) * fwd
+    ey = ps_loc.y + math.sin(yaw_rad) * fwd
+    eyez = os.environ.get("M1_EYEZ")
+    ez = float(eyez) if eyez else ps_loc.z + EYE_OFFSET
+    eye = unreal.Vector(ex, ey, ez)
     cam_rot = unreal.Rotator(roll=0.0, pitch=0.0, yaw=ps_rot.yaw)  # level gaze along facing
     cam = eas.spawn_actor_from_class(unreal.CameraActor, eye, cam_rot)
     cam.set_actor_label("MRQ_FP")
