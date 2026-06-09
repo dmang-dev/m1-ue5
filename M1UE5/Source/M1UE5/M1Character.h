@@ -22,6 +22,10 @@ public:
 
 	virtual void BeginPlay() override;
 
+	/** Single source of truth for the build stamp (this TU's compile time), so the
+	 *  menu and HUD always show the SAME value instead of per-file compile times. */
+	static FString GetBuildStamp();
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 

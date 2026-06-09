@@ -1,4 +1,5 @@
 #include "M1PlayerController.h"
+#include "M1Character.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SBox.h"
@@ -153,7 +154,7 @@ TSharedRef<SWidget> AM1PlayerController::BuildMenu(const FText& Title, bool bPau
 	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 0.0f, 0.0f, 30.0f))
 	[
 		SNew(STextBlock)
-		.Text(FText::FromString(FString::Printf(TEXT("BUILD  %s  %s"), TEXT(__DATE__), TEXT(__TIME__))))
+		.Text(FText::FromString(FString::Printf(TEXT("BUILD  %s"), *AM1Character::GetBuildStamp())))
 		.Font(MenuFont(15)).ColorAndOpacity(FSlateColor(FLinearColor(0.55f, 0.80f, 0.55f, 1.0f)))
 	];
 

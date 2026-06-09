@@ -112,18 +112,33 @@ void AM1Character::BeginPlay()
 	// seeing through a wall when the player is pressed right against it.
 	GNearClippingPlane = 5.0f;
 
+	// Re-assert the narrow FOV at runtime. Setting it only in the constructor does
+	// NOT stick — the PlayerCameraManager's 90 default wins, which badly sheared
+	// off-axis wall terminals. Applying it in BeginPlay makes it actually take.
+	if (FirstPersonCamera)
+	{
+		FirstPersonCamera->SetFieldOfView(75.0f);
+	}
+
 	if (GEngine && GetWorld())
 	{
 		const FString MapName = GetWorld()->GetMapName();
-		// Persistent build stamp (compile timestamp) so the running build is
-		// unmistakable in-game — confirms a fresh package vs a stale cached .exe.
+		// Persistent build stamp (single shared value via GetBuildStamp) so the
+		// running build is unmistakable in-game and matches the menu exactly.
 		GEngine->AddOnScreenDebugMessage(0, 3600.0f, FColor::Yellow,
-			FString::Printf(TEXT("M1UE5 BUILD  %s  %s"), TEXT(__DATE__), TEXT(__TIME__)));
+			FString::Printf(TEXT("M1UE5 BUILD  %s"), *GetBuildStamp()));
 		GEngine->AddOnScreenDebugMessage(1, 8.0f, FColor::Green,
 			FString::Printf(TEXT("Marathon UE5  -  %s"), *MapName));
 		GEngine->AddOnScreenDebugMessage(2, 8.0f, FColor::Silver,
 			TEXT("WASD move | mouse look | Space jump | [ and ] cycle levels"));
 	}
+}
+
+FString AM1Character::GetBuildStamp()
+{
+	// __DATE__/__TIME__ are this translation unit's compile time. Routing the menu
+	// through this one function makes the menu + HUD stamps identical.
+	return FString(TEXT(__DATE__)) + TEXT("  ") + TEXT(__TIME__);
 }
 
 void AM1Character::NextLevel()
