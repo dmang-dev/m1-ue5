@@ -8,6 +8,7 @@
 #include "Engine/Engine.h"
 #include "Misc/Paths.h"
 #include "Engine/EngineTypes.h"
+#include "SceneView.h"  // GNearClippingPlane
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -67,7 +68,7 @@ AM1Character::AM1Character()
 	// so the player must be short — Marathon's own eye height is ~0.5 WU. A tall
 	// default capsule pokes through every ceiling ("stuck in the ceiling") and
 	// can't spawn in the start rooms. Size to fit a 90cm room and always spawn.
-	GetCapsuleComponent()->InitCapsuleSize(18.0f, 32.0f);  // r=18, hh=32 (64cm tall)
+	GetCapsuleComponent()->InitCapsuleSize(22.0f, 32.0f);  // r=22, hh=32 (64cm tall)
 	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
@@ -101,6 +102,10 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 void AM1Character::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Tight Marathon spaces (~1m rooms): a small near-clip stops the camera from
+	// seeing through a wall when the player is pressed right against it.
+	GNearClippingPlane = 5.0f;
 
 	if (GEngine && GetWorld())
 	{

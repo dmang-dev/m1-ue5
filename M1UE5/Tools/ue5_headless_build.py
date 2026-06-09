@@ -102,6 +102,7 @@ def _make_material(name, tex, dest):
     mat = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
         name, dest, unreal.Material, unreal.MaterialFactoryNew())
     mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("two_sided", True)  # walls are single-sided geometry now
     mel = unreal.MaterialEditingLibrary
     if tex is not None:
         node = mel.create_material_expression(

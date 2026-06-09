@@ -34,7 +34,7 @@ OUT_DIR = r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq"
 RESULT = (r"C:\m1-ue5\M1UE5\Reference\Geometry\fp_verify_result.json" if VIEW == "fp"
           else r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq_result.json")
 SECTOR_LABEL = "Sector"
-EYE_OFFSET = 40.0    # FP eye height above the PlayerStart capsule center (cm)
+EYE_OFFSET = 14.0    # FP eye above the PlayerStart spawn (floor+36) -> ~floor+50, matches the pawn
 OUT_NAME = f"{LEVEL}_{'fp' if VIEW == 'fp' else 'topdown'}"
 
 result = {"steps": {}, "errors": {}}
