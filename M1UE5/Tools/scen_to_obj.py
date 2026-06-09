@@ -158,52 +158,77 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) ->
         for i in range(1, n - 1):
             obj.tri(ceil_ids[rorder[0]], ceil_ids[rorder[i]], ceil_ids[rorder[i + 1]], cmat)
 
-    # ---- Walls -------------------------------------------------------------
-    for line in lins:
-        e1, e2 = line["endpoint1"], line["endpoint2"]
-        cwp, ccwp = line["cw_poly"], line["ccw_poly"]
-        a = (px(e1), py(e1))
-        b = (px(e2), py(e2))
-        length_wu = ((epnt[e2]["x"] - epnt[e1]["x"]) ** 2
-                     + (epnt[e2]["y"] - epnt[e1]["y"]) ** 2) ** 0.5 / 1024.0
-        # Wall texture from the line's side (primary shape descriptor). NOTE:
-        # Marathon also stores a per-side primary.x/y texture offset, but the
-        # correct mapping (which side faces the viewer, U direction, V reference)
-        # is subtle and an additive application looked worse — left for a proper
-        # Aleph-One-convention pass. UVs here tile from the wall's endpoint.
-        wmat = "default"
-        obj.material("default", None)
-        for side_key in ("cw_side", "ccw_side"):
-            si = line[side_key]
-            if 0 <= si < len(sids):
-                wmat = mat_for(sids[si]["primary"]["shape"])
-                break
+    # ---- Walls (per-polygon side, faithful to Aleph One's renderer) --------
+    # Each side is textured facing INTO its polygon, so the two sides of a line
+    # are coplanar but face opposite ways -> single-sided geometry back-face-culls
+    # the far one (no z-fighting). Side types (map.h): full=0 high=1 low=2
+    # composite=3 split=4. Texture UVs (RenderRasterize_Shader render_node_side):
+    #   U = (x0 + dist_from_endpoint_i) / WORLD_ONE   along the wall
+    #   V (Marathon, +down from the surface top h1) = (h1 + y0 - z)/WORLD_ONE
+    # UE's OBJ importer flips V, so we emit V_obj = (z - h1 - y0)/WORLD_ONE which
+    # is right-side-up after the flip and carries the per-side offset. x0/y0 are
+    # taken mod WORLD_ONE (the offset's fractional tile, as the engine does).
+    def emit_wall(e0: int, e1: int, h0_i: float, h1_i: float,
+                  texdef: dict, length_i: float) -> None:
+        shape = texdef.get("shape", 0xFFFF)
+        if shape == 0xFFFF or h1_i - h0_i <= 0.5:
+            return
+        mat = mat_for(shape)
+        x0 = texdef.get("x", 0) % 1024
+        y0 = texdef.get("y", 0) % 1024
+        u0 = x0 / 1024.0
+        u1 = (x0 + length_i) / 1024.0
+        vb = (h0_i - h1_i - y0) / 1024.0      # V at bottom (z=h0)
+        vt = (-y0) / 1024.0                   # V at top    (z=h1)
+        ax, ay, zb = px(e0), py(e0), h0_i * S
+        bx, by, zt = px(e1), py(e1), h1_i * S
+        q0 = obj.vert(ax, ay, zb, u0, vb)
+        q1 = obj.vert(bx, by, zb, u1, vb)
+        q2 = obj.vert(bx, by, zt, u1, vt)
+        q3 = obj.vert(ax, ay, zt, u0, vt)
+        obj.quad(q0, q1, q2, q3, mat)         # faces into the polygon
 
-        def wall(z_bot: float, z_top: float, mat: str = wmat) -> None:
-            if z_top - z_bot <= 0.01:
-                return
-            v_bot = z_bot / S / 1024.0   # marathon WU for V coord
-            v_top = z_top / S / 1024.0
-            v1 = obj.vert(a[0], a[1], z_bot, 0.0, v_bot)
-            v2 = obj.vert(b[0], b[1], z_bot, length_wu, v_bot)
-            v3 = obj.vert(b[0], b[1], z_top, length_wu, v_top)
-            v4 = obj.vert(a[0], a[1], z_top, 0.0, v_top)
-            # Single-sided geometry; the UE material is two-sided (duplicating the
-            # quad here produced coplanar z-fighting at close/grazing angles).
-            obj.quad(v1, v2, v3, v4, mat)
-
-        cw = polys[cwp] if 0 <= cwp < len(polys) else None
-        ccw = polys[ccwp] if 0 <= ccwp < len(polys) else None
-
-        if cw and ccw:
-            wall(min(cw["floor_height"], ccw["floor_height"]) * S,
-                 max(cw["floor_height"], ccw["floor_height"]) * S)
-            wall(min(cw["ceiling_height"], ccw["ceiling_height"]) * S,
-                 max(cw["ceiling_height"], ccw["ceiling_height"]) * S)
-        else:
-            solid = cw or ccw
-            if solid:
-                wall(solid["floor_height"] * S, solid["ceiling_height"] * S)
+    obj.material("default", None)
+    for poly in polys:
+        n = poly["vertex_count"]
+        if n < 3:
+            continue
+        eids = poly["endpoints"][:n]
+        sides_i = (poly.get("sides") or [])[:n]
+        lines_i = (poly.get("lines") or [])[:n]
+        floor_i = poly["floor_height"]
+        ceil_i = poly["ceiling_height"]
+        for i in range(n):
+            si = sides_i[i] if i < len(sides_i) else -1
+            if not (0 <= si < len(sids)):
+                continue
+            side = sids[si]
+            li = lines_i[i] if i < len(lines_i) else -1
+            line = lins[li] if 0 <= li < len(lins) else {}
+            e0, e1 = eids[i], eids[(i + 1) % n]
+            length_i = line.get("length") or int((
+                (epnt[e1]["x"] - epnt[e0]["x"]) ** 2
+                + (epnt[e1]["y"] - epnt[e0]["y"]) ** 2) ** 0.5)
+            hi_floor = line.get("highest_floor", floor_i)
+            lo_ceil = line.get("lowest_ceiling", ceil_i)
+            stype = side.get("type", 0)
+            prim = side.get("primary", {})
+            sec = side.get("secondary", {})
+            trans = side.get("transparent", {})
+            if stype == 1:          # high: primary panel down from the ceiling
+                emit_wall(e0, e1, min(lo_ceil, ceil_i), ceil_i, prim, length_i)
+            elif stype == 2:        # low: primary panel up from the floor
+                emit_wall(e0, e1, floor_i, max(hi_floor, floor_i), prim, length_i)
+            elif stype == 4:        # split: secondary low + primary high
+                emit_wall(e0, e1, floor_i, max(hi_floor, floor_i), sec, length_i)
+                emit_wall(e0, e1, min(lo_ceil, ceil_i), ceil_i, prim, length_i)
+            else:                   # full (0) / composite (3): primary floor->ceiling
+                emit_wall(e0, e1, floor_i, ceil_i, prim, length_i)
+                if stype == 3:
+                    emit_wall(e0, e1, floor_i, ceil_i, sec, length_i)
+            # transparent texture mounted in the opening (e.g. a window/panel)
+            if trans.get("shape", 0xFFFF) != 0xFFFF:
+                emit_wall(e0, e1, max(hi_floor, floor_i), lo_ceil, trans, length_i)
 
     # ---- Placements sidecar ------------------------------------------------
     placements = _placements(data, polys, S, fy)
