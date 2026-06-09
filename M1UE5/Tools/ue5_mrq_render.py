@@ -164,6 +164,27 @@ def _place_camera_fp():
             "collision_check": check}
 
 
+def _place_camera_free():
+    """Free camera from absolute world coords: M1_CAMPOS / M1_LOOKAT = 'x,y,z' (UE cm).
+    Used to frame a specific wall head-on for faithfulness comparisons."""
+    eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    for a in eas.get_all_level_actors():
+        if a.get_actor_label() in ("MRQ_FP", "MRQ_TopDown"):
+            eas.destroy_actor(a)
+    cp = [float(v) for v in os.environ["M1_CAMPOS"].split(",")]
+    lk = [float(v) for v in os.environ["M1_LOOKAT"].split(",")]
+    pos = unreal.Vector(cp[0], cp[1], cp[2])
+    tgt = unreal.Vector(lk[0], lk[1], lk[2])
+    rot = unreal.MathLibrary.find_look_at_rotation(pos, tgt)
+    cam = eas.spawn_actor_from_class(unreal.CameraActor, pos, rot)
+    cam.set_actor_label("MRQ_FP")
+    cam.camera_component.set_editor_property("field_of_view",
+                                             float(os.environ.get("M1_FOV", "90")))
+    unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
+    _cam_holder["cam"] = cam
+    return {"label": "MRQ_FP", "pos": cp, "lookat": lk}
+
+
 def _binding_id(seq, binding):
     """Build a MovieSceneObjectBindingID for a camera-cut, across UE5 API spellings."""
     # SequencerBindingProxy exposes its GUID as `binding_id` in UE5.
@@ -268,7 +289,8 @@ def _render():
 
 step("load_level", _load_level)
 unreal.log(f"[mrq] view mode: {VIEW}")
-step("place_camera", _place_camera_fp if VIEW == "fp" else _place_camera)
+_cam_fn = {"fp": _place_camera_fp, "free": _place_camera_free}.get(VIEW, _place_camera)
+step("place_camera", _cam_fn)
 if _cam_holder.get("cam") is not None:
     seq = step("make_sequence", _make_sequence)
     if seq is not None:

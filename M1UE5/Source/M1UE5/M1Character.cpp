@@ -76,6 +76,11 @@ AM1Character::AM1Character()
 	// Eye ~50cm above the floor (capsule centre floor+32, +18) ~ Marathon's 0.5 WU.
 	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 18.0f));
 	FirstPersonCamera->bUsePawnControlRotation = true;
+	// Marathon rendered a narrower FOV than UE's 90 default. The wide default
+	// badly exaggerates perspective shear on off-axis surfaces (wall terminals
+	// look "slanted" until you square up). 75 reads closer to the original and
+	// keeps inset panels readable; tune to taste.
+	FirstPersonCamera->SetFieldOfView(75.0f);
 
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
