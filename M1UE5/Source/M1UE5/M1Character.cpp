@@ -51,6 +51,7 @@ namespace
 		TEXT("/Game/Levels/M1/L_34_Waldo_World_Arena"),
 		TEXT("/Game/Levels/M1/L_35_What_Goes_Up_Must_Come_Down"),
 		TEXT("/Game/Levels/M1/L_36_You_don_t_need_to_see_my_I_D"),
+		TEXT("/Game/Levels/M1/L_TEST_Terminal"),  // debug: isolated terminal geometry (flat-lit, untextured)
 	};
 	static constexpr int32 GM1LevelCount = UE_ARRAY_COUNT(GM1Levels);
 }

@@ -101,8 +101,20 @@ def _make_material(name, tex, dest):
         unreal.EditorAssetLibrary.delete_asset(asset_path)
     mat = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
         name, dest, unreal.Material, unreal.MaterialFactoryNew())
-    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     mel = unreal.MaterialEditingLibrary
+    if name == "flat":
+        # Geometry-inspection material: LIT flat-gray so the level's existing
+        # DirectionalLight + SkyLight shade each face by its angle -> every wall,
+        # reveal, floor and ceiling reads as a distinct tone (no texture noise).
+        mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_DEFAULT_LIT)
+        base = mel.create_material_expression(
+            mat, unreal.MaterialExpressionConstant3Vector, -380, 0)
+        base.set_editor_property("constant", unreal.LinearColor(0.62, 0.63, 0.66, 1.0))
+        mel.connect_material_property(base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+        mel.recompile_material(mat)
+        unreal.EditorAssetLibrary.save_asset(mat.get_path_name())
+        return mat
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     if tex is not None:
         node = mel.create_material_expression(
             mat, unreal.MaterialExpressionTextureSample, -380, 0)
@@ -283,6 +295,9 @@ except Exception as e:  # noqa: BLE001
 _write()
 
 objs = sorted(glob.glob(os.path.join(GEO, "*.obj")))
+_only = os.environ.get("M1_ONLY")          # build only the OBJ whose stem matches
+if _only:
+    objs = [o for o in objs if os.path.splitext(os.path.basename(o))[0] == _only]
 if LIMIT:
     objs = objs[:LIMIT]
 unreal.log(f"[headless] building {len(objs)} levels")

@@ -101,10 +101,15 @@ def _signed_area(ring: list[tuple[float, float]]) -> float:
     return s * 0.5
 
 
-def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) -> tuple[ObjBuilder, dict]:
+def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
+            poly_subset: set | None = None, flat: bool = False) -> tuple[ObjBuilder, dict]:
     data = level["data"]
     epnt = data["EPNT"]
     polys = data["POLY"]
+    # Micro-slice mode: emit only the listed polygons (walls facing excluded
+    # polys still seal as exterior). Used to isolate the terminal for debugging.
+    if poly_subset is not None:
+        polys = [pp for i, pp in enumerate(data["POLY"]) if i in poly_subset]
     lins = data["LINS"]
     S = scale_cm_per_wu / 1024.0
     fy = -1.0 if flip_y else 1.0
@@ -122,6 +127,9 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) ->
     # so UV = marathon_units / 1024.  Texture PNGs live in ../Shapes/Coll_NN/.
     def mat_for(descriptor: int) -> str:
         """Register + return a material name for a packed shape_descriptor."""
+        if flat:
+            obj.material("flat", None)   # one material, no textures (geometry-only test level)
+            return "flat"
         if descriptor == 0xFFFF:
             obj.material("default", None)
             return "default"
@@ -280,7 +288,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scale", type=float, default=100.0, help="cm per World Unit")
     p.add_argument("--no-flip-y", action="store_true",
                    help="don't flip Marathon's +y-down (use if the level imports mirrored)")
+    p.add_argument("--polys", default=None,
+                   help="comma list of polygon indices to emit (micro-slice test level)")
+    p.add_argument("--flat", action="store_true",
+                   help="emit a single texture-less 'flat' material (geometry-only)")
+    p.add_argument("--out-name", default=None,
+                   help="override the output stem (e.g. TEST_Terminal -> L_TEST_Terminal)")
     args = p.parse_args(argv)
+    subset = {int(x) for x in args.polys.split(",") if x.strip()} if args.polys else None
 
     if args.all:
         files = sorted(p for p in args.all.glob("*.json") if not p.name.endswith("manifest.json"))
@@ -293,16 +308,20 @@ def main(argv: list[str] | None = None) -> int:
     if not args.level_json:
         p.error("provide a level_json file or --all <maps-dir>")
     out_dir = args.out or (args.level_json.resolve().parents[1] / "Geometry")
-    _convert_one(args.level_json, out_dir, args.scale, not args.no_flip_y)
+    _convert_one(args.level_json, out_dir, args.scale, not args.no_flip_y,
+                 poly_subset=subset, flat=args.flat, out_name=args.out_name)
     return 0
 
 
-def _convert_one(level_json: Path, out_dir: Path, scale: float, flip_y: bool) -> None:
+def _convert_one(level_json: Path, out_dir: Path, scale: float, flip_y: bool,
+                 poly_subset: set | None = None, flat: bool = False,
+                 out_name: str | None = None) -> None:
     level = json.loads(Path(level_json).read_text(encoding="utf-8"))
-    obj, placements = convert(level, scale_cm_per_wu=scale, flip_y=flip_y)
+    obj, placements = convert(level, scale_cm_per_wu=scale, flip_y=flip_y,
+                              poly_subset=poly_subset, flat=flat)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = level_json.stem
+    stem = out_name or level_json.stem
     obj_path = out_dir / f"{stem}.obj"
     json_path = out_dir / f"{stem}_placements.json"
     obj.write(obj_path)
