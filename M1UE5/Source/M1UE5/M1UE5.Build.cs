@@ -11,7 +11,9 @@ public class M1UE5 : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"InputCore"
+			"InputCore",
+			"Slate",
+			"SlateCore"
 		});
 	}
 }

@@ -1,5 +1,6 @@
 #include "M1GameMode.h"
 #include "M1Character.h"
+#include "M1PlayerController.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
@@ -7,6 +8,7 @@
 AM1GameMode::AM1GameMode()
 {
 	DefaultPawnClass = AM1Character::StaticClass();
+	PlayerControllerClass = AM1PlayerController::StaticClass();
 }
 
 AActor* AM1GameMode::ChoosePlayerStart_Implementation(AController* Player)

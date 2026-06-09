@@ -39,7 +39,9 @@ _LIMIT = os.environ.get("M1_LIMIT")
 LIMIT = int(_LIMIT) if _LIMIT else None
 
 # Player spawn placement (real Marathon start from <stem>_placements.json).
-PLAYER_CAPSULE_HALF = 96.0  # UE PlayerStart capsule half-height (cm)
+# Must match AM1Character's capsule half-height (32) so the spawn sits just above
+# the floor and does NOT straddle Marathon's low (~1m) ceilings.
+PLAYER_CAPSULE_HALF = 32.0  # UE PlayerStart spawn height above floor (cm)
 SPAWN_GAP = 4.0             # rest the capsule just above the floor
 
 result = {"version": None, "shared": {}, "levels": {}, "errors": {}}

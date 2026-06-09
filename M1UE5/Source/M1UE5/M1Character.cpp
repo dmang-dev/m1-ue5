@@ -63,16 +63,17 @@ AM1Character::AM1Character()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
 
-	// Marathon corridors/rooms are tight: the default capsule (r=34, hh=88, ~1.8m)
-	// encroaches the start rooms, so the engine rejects the spawn and drops the
-	// player to world origin (the void). A smaller capsule fits, and always
-	// spawning lets the pawn settle onto the floor even if it starts touching.
-	GetCapsuleComponent()->InitCapsuleSize(24.0f, 56.0f);
+	// Marathon at 100cm/World-Unit has ~1m ceilings (tightest start room is 90cm),
+	// so the player must be short — Marathon's own eye height is ~0.5 WU. A tall
+	// default capsule pokes through every ceiling ("stuck in the ceiling") and
+	// can't spawn in the start rooms. Size to fit a 90cm room and always spawn.
+	GetCapsuleComponent()->InitCapsuleSize(18.0f, 32.0f);  // r=18, hh=32 (64cm tall)
 	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
-	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 40.0f)); // eye height
+	// Eye ~50cm above the floor (capsule centre floor+32, +18) ~ Marathon's 0.5 WU.
+	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 18.0f));
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
