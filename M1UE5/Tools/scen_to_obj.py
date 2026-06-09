@@ -166,32 +166,28 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True) ->
         b = (px(e2), py(e2))
         length_wu = ((epnt[e2]["x"] - epnt[e1]["x"]) ** 2
                      + (epnt[e2]["y"] - epnt[e1]["y"]) ** 2) ** 0.5 / 1024.0
-        # Wall texture + per-side texture offset (Marathon stores an x/y texture
-        # offset per side, in 1/1024 WU; without it terminals/switches sit wrong).
+        # Wall texture from the line's side (primary shape descriptor). NOTE:
+        # Marathon also stores a per-side primary.x/y texture offset, but the
+        # correct mapping (which side faces the viewer, U direction, V reference)
+        # is subtle and an additive application looked worse — left for a proper
+        # Aleph-One-convention pass. UVs here tile from the wall's endpoint.
         wmat = "default"
-        tex_u = 0.0
-        tex_v = 0.0
         obj.material("default", None)
         for side_key in ("cw_side", "ccw_side"):
             si = line[side_key]
             if 0 <= si < len(sids):
-                prim = sids[si]["primary"]
-                wmat = mat_for(prim["shape"])
-                tex_u = prim.get("x", 0) / 1024.0
-                tex_v = prim.get("y", 0) / 1024.0
+                wmat = mat_for(sids[si]["primary"]["shape"])
                 break
 
         def wall(z_bot: float, z_top: float, mat: str = wmat) -> None:
             if z_top - z_bot <= 0.01:
                 return
-            # V is the Marathon height in WU; U runs along the wall. Both carry the
-            # side's texture offset so the texture lands where Marathon placed it.
-            v_bot = z_bot / S / 1024.0 + tex_v
-            v_top = z_top / S / 1024.0 + tex_v
-            v1 = obj.vert(a[0], a[1], z_bot, tex_u, v_bot)
-            v2 = obj.vert(b[0], b[1], z_bot, tex_u + length_wu, v_bot)
-            v3 = obj.vert(b[0], b[1], z_top, tex_u + length_wu, v_top)
-            v4 = obj.vert(a[0], a[1], z_top, tex_u, v_top)
+            v_bot = z_bot / S / 1024.0   # marathon WU for V coord
+            v_top = z_top / S / 1024.0
+            v1 = obj.vert(a[0], a[1], z_bot, 0.0, v_bot)
+            v2 = obj.vert(b[0], b[1], z_bot, length_wu, v_bot)
+            v3 = obj.vert(b[0], b[1], z_top, length_wu, v_top)
+            v4 = obj.vert(a[0], a[1], z_top, 0.0, v_top)
             # Single-sided geometry; the UE material is two-sided (duplicating the
             # quad here produced coplanar z-fighting at close/grazing angles).
             obj.quad(v1, v2, v3, v4, mat)
