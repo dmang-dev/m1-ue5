@@ -273,6 +273,18 @@ def _build_one(obj_path, lib):
     if mesh is None:
         raise RuntimeError(f"no static mesh imported for {stem}")
 
+    if os.environ.get("M1_NOCOLLAPSE"):
+        # Keep every triangle: the mesh build's degenerate-removal drops ~19% of
+        # Arrival's faces (sliver tris from the floor/ceiling fan triangulation).
+        try:
+            sms = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+            bs = sms.get_lod_build_settings(mesh, 0)
+            bs.set_editor_property("remove_degenerates", False)
+            bs.set_editor_property("use_full_precision_uvs", True)
+            sms.set_lod_build_settings(mesh, 0, bs)  # rebuilds the LOD
+        except Exception:  # noqa: BLE001
+            pass
+
     # Reassign slots to shared materials by slot name.
     static_mats = list(mesh.get_editor_property("static_materials"))
     assigned = 0
@@ -345,6 +357,16 @@ def _build_one(obj_path, lib):
 
 
 # ---------------------------------------------------------------- driver
+
+# Route OBJ import through the LEGACY UStaticMeshFactory path, not Interchange.
+# UE5's Interchange OBJ translator silently culls ~17% of Arrival's triangles
+# at the translate stage ("nearly zero normals" weld/degenerate removal that no
+# import or build flag disables), which punches holes around the terminal
+# niches and in other levels' terminals. The legacy importer keeps every real
+# face (2738 -> 2678; only the ~60 genuinely zero-area tris are dropped, which
+# is correct). Verified: Interchange=2208 tris, legacy=2678 tris on ARR_Fix.
+unreal.SystemLibrary.execute_console_command(
+    None, "Interchange.FeatureFlags.Import.OBJ 0")
 
 result["version"] = unreal.SystemLibrary.get_engine_version()
 _write()

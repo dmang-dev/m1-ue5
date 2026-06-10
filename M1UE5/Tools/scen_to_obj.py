@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 # Marathon OBJS class ids
@@ -66,7 +67,10 @@ class ObjBuilder:
             lines.append(f"v {x:.2f} {y:.2f} {z:.2f}")
         for u, v in self.uvs:
             lines.append(f"vt {u:.4f} {v:.4f}")
-        # Emit faces grouped by material (one usemtl block per material).
+        # Faces grouped by material. Normals are intentionally omitted: the build's
+        # importer derives them. (We route OBJ import through UE's LEGACY importer,
+        # not Interchange -- Interchange's OBJ translator silently culls ~17% of our
+        # triangles, punching holes around terminals. See ue5_headless_build.py.)
         by_mat: dict[str, list[tuple[int, int, int]]] = {}
         for a, b, c, mat in self.faces:
             by_mat.setdefault(mat, []).append((a, b, c))
@@ -321,7 +325,12 @@ def _convert_one(level_json: Path, out_dir: Path, scale: float, flip_y: bool,
                               poly_subset=poly_subset, flat=flat)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = out_name or level_json.stem
+    # Space-free stem: an OBJ `mtllib` line is whitespace-delimited, so UE's
+    # legacy OBJ importer reads only the first token of a spaced filename, fails
+    # to find the .mtl, and falls back to a single 'defaultMat' slot instead of
+    # the real per-texture slots. Underscores keep obj/mtl/placements consistent
+    # and match the build's _safe() level-name normalization.
+    stem = out_name or re.sub(r"\s+", "_", level_json.stem)
     obj_path = out_dir / f"{stem}.obj"
     json_path = out_dir / f"{stem}_placements.json"
     obj.write(obj_path)

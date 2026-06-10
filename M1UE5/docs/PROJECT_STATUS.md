@@ -169,6 +169,23 @@ Asset pipeline is the published package **`py-marathon-utils`**
 
 ## Known issues / gotchas ⚠️
 
+- **OBJ import MUST use the LEGACY importer, not Interchange.** UE5's Interchange
+  OBJ translator silently culls ~17% of each level's triangles at the *translate*
+  stage (Arrival 2738→2208), punching holes around every terminal niche. No
+  import/build flag stops it: `remove_degenerates` is already off, and explicit
+  `vn` normals + `s off` smoothing groups are both ignored. Fix:
+  `Interchange.FeatureFlags.Import.OBJ=0` — set in `Config/DefaultEngine.ini`
+  `[ConsoleVariables]` AND executed at the top of `ue5_headless_build.py`'s
+  driver — routes import through the legacy `UStaticMeshFactory`, which keeps
+  every real face (Arrival 2208→2678; only ~60 genuinely zero-area tris drop).
+- **Per-level OBJ/MTL filenames MUST be space-free.** Corollary of the above: the
+  legacy importer's `mtllib` line is whitespace-delimited, so a spaced filename
+  (`01_Bigger Guns Nearby.mtl`) only reads the first token, fails to load the
+  `.mtl`, and collapses the mesh to one `defaultMat` slot. `scen_to_obj` now emits
+  underscore stems (obj/mtl/mtllib/placements all consistent); keep it that way.
+- **Headless builds need `-RenderOffScreen`** in the `UnrealEditor-Cmd` args, or
+  an editor window pops up during level generation. (`-nullrhi` is the harder
+  fallback if a window still appears.)
 - **`L_TC1_Arrival.umap` shows perpetually "modified" in git.** It's the legacy
   hand-made single-level map (pre-batch), and the editor re-saves it on open.
   Superseded by `/Game/Levels/M1/L_00_Arrival`. Safe to ignore, or
