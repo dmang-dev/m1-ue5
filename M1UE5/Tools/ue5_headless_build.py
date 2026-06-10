@@ -31,7 +31,13 @@ GEO = os.path.join(REPO, "Reference", "Geometry")
 RESULT = os.path.join(GEO, "ue5_build_result.json")
 
 TEX_LIB = "/Game/Textures"      # shared Texture2D assets  (T_<coll>_<shape>)
-MAT_LIB = "/Game/Materials"     # shared Material assets   (slot name)
+# M1_MATMODE picks the terminal look-test treatment + a mode-specific material
+# folder so the variants don't share assets:
+#   emissive (default) = unlit, texture -> emissive (faithful flat M1 look)
+#   lit                = lit, texture -> base color + partial emissive (depth + faint glow)
+#   hybrid             = screen textures (coll 8) stay unlit-emissive; structural -> lit
+MATMODE = os.environ.get("M1_MATMODE", "emissive")
+MAT_LIB = "/Game/Materials" + ("" if MATMODE == "emissive" else "_" + MATMODE)
 MESH_DIR = "/Game/Meshes/M1"    # per-level: <MESH_DIR>/<safe>/<safe>
 LEVEL_DIR = "/Game/Levels/M1"   # per-level: <LEVEL_DIR>/L_<safe>
 
@@ -61,9 +67,12 @@ def _safe(stem):
 # ---------------------------------------------------------------- shared library
 
 def _scan_materials():
-    """Union of material-name -> absolute texture path across every level .mtl."""
+    """Union of material-name -> absolute texture path across every level .mtl.
+    Honors M1_ONLY so a single-level test build only imports that slice's textures."""
     mats = {}
-    for mtl in sorted(glob.glob(os.path.join(GEO, "*.mtl"))):
+    _only = os.environ.get("M1_ONLY")
+    pattern = f"{_only}.mtl" if _only else "*.mtl"
+    for mtl in sorted(glob.glob(os.path.join(GEO, pattern))):
         base = os.path.dirname(mtl)
         cur = None
         with open(mtl, encoding="utf-8") as fh:
@@ -114,17 +123,38 @@ def _make_material(name, tex, dest):
         mel.recompile_material(mat)
         unreal.EditorAssetLibrary.save_asset(mat.get_path_name())
         return mat
-    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    # Treatment per M1_MATMODE. coll 8 = computer/terminal panels (glowing CRTs).
+    coll = -1
+    m = re.match(r"tex_(\d+)_", name)
+    if m:
+        coll = int(m.group(1))
+    is_screen = (coll == 8)
+    use_lit = (MATMODE == "lit") or (MATMODE == "hybrid" and not is_screen)
+    mat.set_editor_property("shading_model",
+                            unreal.MaterialShadingModel.MSM_DEFAULT_LIT if use_lit
+                            else unreal.MaterialShadingModel.MSM_UNLIT)
     if tex is not None:
         node = mel.create_material_expression(
             mat, unreal.MaterialExpressionTextureSample, -380, 0)
         node.set_editor_property("texture", tex)
-        mel.connect_material_property(node, "RGB", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        if use_lit:
+            mel.connect_material_property(node, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
+            if MATMODE == "lit":
+                # faint emissive so bright pixels (screens) still glow under light
+                mul = mel.create_material_expression(
+                    mat, unreal.MaterialExpressionMultiply, -140, 150)
+                mul.set_editor_property("const_b", 0.5)
+                mel.connect_material_expressions(node, "RGB", mul, "A")
+                mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        else:
+            mel.connect_material_property(node, "RGB", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     else:
         node = mel.create_material_expression(
             mat, unreal.MaterialExpressionConstant3Vector, -380, 0)
         node.set_editor_property("constant", unreal.LinearColor(0.5, 0.5, 0.5, 1.0))
-        mel.connect_material_property(node, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        mel.connect_material_property(
+            node, "", unreal.MaterialProperty.MP_BASE_COLOR if use_lit
+            else unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     mel.recompile_material(mat)
     unreal.EditorAssetLibrary.save_asset(mat.get_path_name())
     return mat
@@ -257,9 +287,16 @@ def _build_one(obj_path, lib):
 
     sector = eas.spawn_actor_from_object(mesh, unreal.Vector(0, 0, 0))
     sector.set_actor_label("Sector")
-    eas.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1500),
-                               unreal.Rotator(roll=0.0, pitch=-50.0, yaw=45.0))
-    eas.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 1500))
+    dl = eas.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 1500),
+                                    unreal.Rotator(roll=0.0, pitch=-50.0, yaw=45.0))
+    sl = eas.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0, 0, 1500))
+    if MATMODE in ("lit", "hybrid"):
+        # brighter key + ambient so the lit (darker) textures read cleanly
+        try:
+            dl.directional_light_component.set_intensity(6.0)
+            sl.sky_light_component.set_intensity(3.0)
+        except Exception:  # noqa: BLE001
+            pass
 
     box = mesh.get_bounding_box()
     ps_info = _spawn_player_start(eas, mesh, stem, box)

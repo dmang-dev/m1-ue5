@@ -51,7 +51,10 @@ namespace
 		TEXT("/Game/Levels/M1/L_34_Waldo_World_Arena"),
 		TEXT("/Game/Levels/M1/L_35_What_Goes_Up_Must_Come_Down"),
 		TEXT("/Game/Levels/M1/L_36_You_don_t_need_to_see_my_I_D"),
-		TEXT("/Game/Levels/M1/L_TEST_Terminal"),  // debug: isolated terminal geometry (flat-lit, untextured)
+		TEXT("/Game/Levels/M1/L_TEST_Terminal"),     // debug: untextured flat-gray control
+		TEXT("/Game/Levels/M1/L_TEST_Term_Flat"),    // debug: faithful flat (unlit emissive)
+		TEXT("/Game/Levels/M1/L_TEST_Term_Lit"),     // debug: polished lit (+ faint glow)
+		TEXT("/Game/Levels/M1/L_TEST_Term_Hybrid"),  // debug: hybrid (lit walls, glowing screens)
 	};
 	static constexpr int32 GM1LevelCount = UE_ARRAY_COUNT(GM1Levels);
 }
