@@ -57,6 +57,12 @@ namespace
 		TEXT("/Game/Levels/M1/L_TEST_Term_Hybrid"),  // debug: hybrid (lit walls, glowing screens)
 		TEXT("/Game/Levels/M1/L_TEST_Term_Exp"),     // debug: hybrid + fixed exposure (no eye-adapt)
 		TEXT("/Game/Levels/M1/L_TEST_Term_Fix"),     // debug: hybrid + fixed exposure + crisp textures
+		// Full Arrival rebuilt with each look (press [ from Arrival to reach these):
+		TEXT("/Game/Levels/M1/L_ARR_Flat"),          // full Arrival - faithful flat (current look)
+		TEXT("/Game/Levels/M1/L_ARR_Lit"),           // full Arrival - lit + faint glow
+		TEXT("/Game/Levels/M1/L_ARR_Hybrid"),        // full Arrival - hybrid (lit walls, glowing screens)
+		TEXT("/Game/Levels/M1/L_ARR_Exp"),           // full Arrival - hybrid + fixed exposure
+		TEXT("/Game/Levels/M1/L_ARR_Fix"),           // full Arrival - hybrid + fixed exposure + crisp textures
 	};
 	static constexpr int32 GM1LevelCount = UE_ARRAY_COUNT(GM1Levels);
 }
