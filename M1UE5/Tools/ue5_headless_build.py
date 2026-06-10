@@ -30,14 +30,17 @@ REPO = r"C:\m1-ue5\M1UE5"
 GEO = os.path.join(REPO, "Reference", "Geometry")
 RESULT = os.path.join(GEO, "ue5_build_result.json")
 
-TEX_LIB = "/Game/Textures"      # shared Texture2D assets  (T_<coll>_<shape>)
-# M1_MATMODE picks the terminal look-test treatment + a mode-specific material
-# folder so the variants don't share assets:
-#   emissive (default) = unlit, texture -> emissive (faithful flat M1 look)
-#   lit                = lit, texture -> base color + partial emissive (depth + faint glow)
-#   hybrid             = screen textures (coll 8) stay unlit-emissive; structural -> lit
+# Terminal look-test knobs:
+#   M1_MATMODE = emissive(default) / lit / hybrid  -> material treatment
+#   M1_CRISP   = textures imported uncompressed + no mipmaps (crisp pixel art)
+#   M1_FIXEXP  = drop a PostProcessVolume that locks auto-exposure (eye adaptation)
+# CRISP gets its own texture+material folders so it doesn't share assets.
 MATMODE = os.environ.get("M1_MATMODE", "emissive")
-MAT_LIB = "/Game/Materials" + ("" if MATMODE == "emissive" else "_" + MATMODE)
+CRISP = bool(os.environ.get("M1_CRISP"))
+FIXEXP = bool(os.environ.get("M1_FIXEXP"))
+_csfx = "_crisp" if CRISP else ""
+TEX_LIB = "/Game/Textures" + _csfx        # shared Texture2D assets (T_<coll>_<shape>)
+MAT_LIB = "/Game/Materials" + ("" if MATMODE == "emissive" else "_" + MATMODE) + _csfx
 MESH_DIR = "/Game/Meshes/M1"    # per-level: <MESH_DIR>/<safe>/<safe>
 LEVEL_DIR = "/Game/Levels/M1"   # per-level: <LEVEL_DIR>/L_<safe>
 
@@ -100,6 +103,17 @@ def _import_texture(abs_png, asset_name, dest):
     tex = unreal.load_asset(paths[0]) if paths else None
     if isinstance(tex, unreal.Texture2D):
         tex.set_editor_property("filter", unreal.TextureFilter.TF_NEAREST)
+        if CRISP:
+            # keep the M1 pixel art crisp: uncompressed (UI group = no BC blocks,
+            # sRGB color) + no mip blur.
+            try:
+                tex.set_editor_property("compression_settings",
+                                        unreal.TextureCompressionSettings.TC_EDITOR_ICON)
+                tex.set_editor_property("mip_gen_settings",
+                                        unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+                unreal.EditorAssetLibrary.save_asset(tex.get_path_name())
+            except Exception:  # noqa: BLE001
+                pass
         return tex
     return None
 
@@ -295,6 +309,20 @@ def _build_one(obj_path, lib):
         try:
             dl.directional_light_component.set_intensity(6.0)
             sl.sky_light_component.set_intensity(3.0)
+        except Exception:  # noqa: BLE001
+            pass
+    if FIXEXP:
+        # Lock auto-exposure (eye adaptation) so the terminal renders at a constant
+        # brightness regardless of what else is in view (min==max == no adaptation).
+        try:
+            ppv = eas.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 200))
+            ppv.set_editor_property("unbound", True)
+            s = ppv.get_editor_property("settings")
+            s.set_editor_property("override_auto_exposure_min_brightness", True)
+            s.set_editor_property("auto_exposure_min_brightness", 1.0)
+            s.set_editor_property("override_auto_exposure_max_brightness", True)
+            s.set_editor_property("auto_exposure_max_brightness", 1.0)
+            ppv.set_editor_property("settings", s)
         except Exception:  # noqa: BLE001
             pass
 

@@ -55,6 +55,8 @@ namespace
 		TEXT("/Game/Levels/M1/L_TEST_Term_Flat"),    // debug: faithful flat (unlit emissive)
 		TEXT("/Game/Levels/M1/L_TEST_Term_Lit"),     // debug: polished lit (+ faint glow)
 		TEXT("/Game/Levels/M1/L_TEST_Term_Hybrid"),  // debug: hybrid (lit walls, glowing screens)
+		TEXT("/Game/Levels/M1/L_TEST_Term_Exp"),     // debug: hybrid + fixed exposure (no eye-adapt)
+		TEXT("/Game/Levels/M1/L_TEST_Term_Fix"),     // debug: hybrid + fixed exposure + crisp textures
 	};
 	static constexpr int32 GM1LevelCount = UE_ARRAY_COUNT(GM1Levels);
 }
