@@ -5,6 +5,7 @@
 #include "M1Character.generated.h"
 
 class UCameraComponent;
+class USoundBase;
 
 /**
  * First-person walking pawn for the Marathon levels: WASD to walk, mouse to
@@ -40,4 +41,9 @@ protected:
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	UCameraComponent* FirstPersonCamera;
+
+	/** Marathon teleport SFX, played on level arrival (BeginPlay) so cycling
+	 *  levels feels like Marathon's inter-level teleport. */
+	UPROPERTY()
+	USoundBase* TeleportSound = nullptr;
 };

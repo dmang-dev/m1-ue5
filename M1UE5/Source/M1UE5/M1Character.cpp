@@ -9,6 +9,8 @@
 #include "Misc/Paths.h"
 #include "Engine/EngineTypes.h"
 #include "SceneView.h"  // GNearClippingPlane
+#include "Sound/SoundBase.h"
+#include "UObject/ConstructorHelpers.h"
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -93,6 +95,18 @@ AM1Character::AM1Character()
 		Move->AirControl = 0.5f;
 		Move->MaxWalkSpeed = 600.0f;
 	}
+
+	// Canonical Marathon teleport-in (sound code 1, 'snd ' resource id 2020),
+	// played on level arrival so cycling levels with [ / ] reads as Marathon's
+	// inter-level teleport. The "Weapon" folder is just py-marathon-utils'
+	// cosmetic id//1000 bucket, not a real category. (Departure sound -- code 2,
+	// resource 2010 / A_02010 -- is available if we later add a teleport-out.)
+	static ConstructorHelpers::FObjectFinder<USoundBase> TeleportFinder(
+		TEXT("/Game/Audio/Weapon/A_teleport_in.A_teleport_in"));
+	if (TeleportFinder.Succeeded())
+	{
+		TeleportSound = TeleportFinder.Object;
+	}
 }
 
 void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -123,6 +137,14 @@ void AM1Character::BeginPlay()
 	if (FirstPersonCamera)
 	{
 		FirstPersonCamera->SetFieldOfView(75.0f);
+	}
+
+	// Teleport-in SFX on level arrival (incl. [ / ] cycling). M1's atmosphere is
+	// event-driven rather than an ambient bed, so this is the cue that fits the
+	// current pre-combat state; monster/weapon/door SFX arrive with those systems.
+	if (TeleportSound)
+	{
+		UGameplayStatics::SpawnSound2D(this, TeleportSound);
 	}
 
 	if (GEngine && GetWorld())
