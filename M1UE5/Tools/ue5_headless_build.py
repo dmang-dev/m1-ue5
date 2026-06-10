@@ -385,6 +385,12 @@ objs = sorted(glob.glob(os.path.join(GEO, "*.obj")))
 _only = os.environ.get("M1_ONLY")          # build only the OBJ whose stem matches
 if _only:
     objs = [o for o in objs if os.path.splitext(os.path.basename(o))[0] == _only]
+elif not os.environ.get("M1_INCLUDE_TEST"):
+    # Default: ship only the numbered campaign levels (NN_*). The L_TEST_* look
+    # rooms and L_ARR_* full-Arrival look variants stay out of the build/cook;
+    # their OBJs remain in Reference/Geometry for ad-hoc rebuilds via M1_ONLY=<stem>.
+    objs = [o for o in objs
+            if re.match(r"\d\d_", os.path.splitext(os.path.basename(o))[0])]
 if LIMIT:
     objs = objs[:LIMIT]
 unreal.log(f"[headless] building {len(objs)} levels")

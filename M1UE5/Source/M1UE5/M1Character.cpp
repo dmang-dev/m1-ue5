@@ -51,18 +51,11 @@ namespace
 		TEXT("/Game/Levels/M1/L_34_Waldo_World_Arena"),
 		TEXT("/Game/Levels/M1/L_35_What_Goes_Up_Must_Come_Down"),
 		TEXT("/Game/Levels/M1/L_36_You_don_t_need_to_see_my_I_D"),
-		TEXT("/Game/Levels/M1/L_TEST_Terminal"),     // debug: untextured flat-gray control
-		TEXT("/Game/Levels/M1/L_TEST_Term_Flat"),    // debug: faithful flat (unlit emissive)
-		TEXT("/Game/Levels/M1/L_TEST_Term_Lit"),     // debug: polished lit (+ faint glow)
-		TEXT("/Game/Levels/M1/L_TEST_Term_Hybrid"),  // debug: hybrid (lit walls, glowing screens)
-		TEXT("/Game/Levels/M1/L_TEST_Term_Exp"),     // debug: hybrid + fixed exposure (no eye-adapt)
-		TEXT("/Game/Levels/M1/L_TEST_Term_Fix"),     // debug: hybrid + fixed exposure + crisp textures
-		// Full Arrival rebuilt with each look (press [ from Arrival to reach these):
-		TEXT("/Game/Levels/M1/L_ARR_Flat"),          // full Arrival - faithful flat (current look)
-		TEXT("/Game/Levels/M1/L_ARR_Lit"),           // full Arrival - lit + faint glow
-		TEXT("/Game/Levels/M1/L_ARR_Hybrid"),        // full Arrival - hybrid (lit walls, glowing screens)
-		TEXT("/Game/Levels/M1/L_ARR_Exp"),           // full Arrival - hybrid + fixed exposure
-		TEXT("/Game/Levels/M1/L_ARR_Fix"),           // full Arrival - hybrid + fixed exposure + crisp textures
+		// Debug terminal-look test rooms (L_TEST_*) and full-Arrival look variants
+		// (L_ARR_*) are intentionally NOT shipped in the cycler or cooked into the
+		// build. Their source OBJs are kept in Reference/Geometry for posterity;
+		// rebuild any one for testing with e.g. M1_ONLY=ARR_Hybrid (or
+		// M1_INCLUDE_TEST=1 to build them all) on ue5_headless_build.py.
 	};
 	static constexpr int32 GM1LevelCount = UE_ARRAY_COUNT(GM1Levels);
 }
