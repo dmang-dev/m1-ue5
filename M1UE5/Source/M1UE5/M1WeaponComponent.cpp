@@ -428,6 +428,10 @@ void UM1WeaponComponent::FireSecondaryShot()
 					UGameplayStatics::SpawnSoundAtLocation(World, W.SecImpactSound, ImpactPoint);
 				}
 				DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Cyan, false, 2.0f);
+				if (AActor* HitActor = Hit.GetActor())
+				{
+					UGameplayStatics::ApplyPointDamage(HitActor, W.SecDamage, AimDir, Hit, Ctrl, Pawn, nullptr);
+				}
 			}
 			DrawDebugLine(World, ViewLoc, ImpactPoint, FColor::Cyan, false, 0.25f, 0, 0.5f);
 		}
@@ -515,8 +519,12 @@ void UM1WeaponComponent::FireShot()
 				UGameplayStatics::SpawnSoundAtLocation(World, W.ImpactSound, ImpactPoint);
 			}
 			DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Yellow, false, 2.0f);
-			// TODO: apply W.Damage to a health component once enemies exist;
-			// spawn an impact decal/particle in the visuals pass.
+			// Standard point-damage path: AM1Enemy (and anything else with a
+			// TakeDamage override) handles the rest.
+			if (AActor* HitActor = Hit.GetActor())
+			{
+				UGameplayStatics::ApplyPointDamage(HitActor, W.Damage, AimDir, Hit, Ctrl, Pawn, nullptr);
+			}
 		}
 		DrawDebugLine(World, ViewLoc, ImpactPoint, FColor::Red, false, 0.25f, 0, 0.5f);
 	}

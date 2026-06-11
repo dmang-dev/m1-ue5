@@ -22,6 +22,9 @@ AM1Projectile::AM1Projectile()
 	CollisionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	CollisionSphere->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
 	CollisionSphere->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Block);
+	// Pawns must block too, or rockets/bolts fly straight through enemies (and
+	// enemy bolts through the player). The instigator alone is ignored in Init.
+	CollisionSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	CollisionSphere->SetNotifyRigidBodyCollision(true);  // generate Hit events
 	RootComponent = CollisionSphere;
 
@@ -79,8 +82,19 @@ void AM1Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
 		DrawDebugSphere(World, ImpactPoint, BurstRadius, 12, FColor::Orange, false, 2.0f);
 	}
 
-	// TODO: apply Damage as area-of-effect over BlastRadius once enemies/health
-	// components exist (e.g. UGameplayStatics::ApplyRadialDamage).
+	if (World && BlastRadius > 0.0f)
+	{
+		// Empty ignore list on purpose: Marathon rockets hurt their shooter too
+		// (splash damage/rocket jumps), so the instigator is NOT exempt.
+		UGameplayStatics::ApplyRadialDamage(this, Damage, ImpactPoint, BlastRadius,
+			nullptr, TArray<AActor*>(), this, GetInstigatorController(), false,
+			ECC_Visibility);
+	}
+	else if (OtherActor && OtherActor != this)
+	{
+		UGameplayStatics::ApplyPointDamage(OtherActor, Damage,
+			GetVelocity().GetSafeNormal(), Hit, GetInstigatorController(), this, nullptr);
+	}
 
 	Destroy();
 }

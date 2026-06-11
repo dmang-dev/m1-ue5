@@ -10,6 +10,7 @@
 #include "Engine/EngineTypes.h"
 #include "SceneView.h"  // GNearClippingPlane
 #include "Sound/SoundBase.h"
+#include "Engine/DamageEvents.h"
 #include "UObject/ConstructorHelpers.h"
 #include "M1WeaponComponent.h"
 
@@ -241,6 +242,42 @@ void AM1Character::BeginPlay()
 			FString::Printf(TEXT("Marathon UE5  -  %s"), *MapName));
 		GEngine->AddOnScreenDebugMessage(2, 8.0f, FColor::Silver,
 			TEXT("WASD move | mouse look | Space jump | [ and ] cycle levels"));
+	}
+
+	ShowShields();
+}
+
+float AM1Character::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
+	AController* EventInstigator, AActor* DamageCauser)
+{
+	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	if (Health <= 0.0f || DamageAmount <= 0.0f)
+	{
+		return 0.0f;  // already dead (level restart pending) or a no-op hit
+	}
+
+	Health -= DamageAmount;
+	ShowShields();
+
+	if (Health <= 0.0f)
+	{
+		// Marathon restart-on-death v1: reload the current level (pattern
+		// buffers / saves are a later system).
+		if (UWorld* World = GetWorld())
+		{
+			UGameplayStatics::OpenLevel(this, FName(*World->GetName()));
+		}
+	}
+	return DamageAmount;
+}
+
+void AM1Character::ShowShields() const
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(11, 3600.0f, FColor::Cyan,
+			FString::Printf(TEXT("Shields  %d"), FMath::Max(0, FMath::CeilToInt(Health))));
 	}
 }
 

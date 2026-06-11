@@ -1,6 +1,8 @@
 #include "M1GameMode.h"
 #include "M1Character.h"
 #include "M1PlayerController.h"
+#include "M1Enemy.h"
+#include "M1SpawnTable.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
@@ -9,6 +11,54 @@ AM1GameMode::AM1GameMode()
 {
 	DefaultPawnClass = AM1Character::StaticClass();
 	PlayerControllerClass = AM1PlayerController::StaticClass();
+}
+
+void AM1GameMode::BeginPlay()
+{
+	Super::BeginPlay();
+	SpawnMonsters();
+}
+
+void AM1GameMode::SpawnMonsters()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// GetMapName() is the short package name, PIE-prefixed in-editor
+	// (UEDPIE_0_L_00_Arrival); M1SpawnsForLevel matches by contained stem.
+	const FString MapName = World->GetMapName();
+	const TArrayView<const FM1MonsterSpawn> Spawns = M1SpawnsForLevel(MapName);
+
+	int32 Spawned = 0;
+	for (const FM1MonsterSpawn& S : Spawns)
+	{
+		// Placement Z is floor-relative (usually 0): start the capsule a little
+		// above it; AM1Enemy::InitFromType snaps it down onto the sector mesh.
+		const FVector Location(S.X, S.Y, S.Z + 60.0f);
+		const FRotator Rotation(0.0f, S.FacingDeg, 0.0f);
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		AM1Enemy* Enemy = World->SpawnActor<AM1Enemy>(
+			AM1Enemy::StaticClass(), Location, Rotation, Params);
+		if (!Enemy)
+		{
+			continue;
+		}
+		if (!Enemy->InitFromType(S.MonsterType))
+		{
+			Enemy->Destroy();  // type not in the generated table
+			continue;
+		}
+		++Spawned;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d monsters for %s"),
+		Spawned, Spawns.Num(), *MapName);
 }
 
 AActor* AM1GameMode::ChoosePlayerStart_Implementation(AController* Player)

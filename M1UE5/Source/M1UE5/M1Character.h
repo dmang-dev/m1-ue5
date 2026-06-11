@@ -24,6 +24,10 @@ public:
 
 	virtual void BeginPlay() override;
 
+	/** Monster melee/projectile damage lands here (ApplyDamage and friends). */
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
+		AController* EventInstigator, AActor* DamageCauser) override;
+
 	/** Single source of truth for the build stamp (this TU's compile time), so the
 	 *  menu and HUD always show the SAME value instead of per-file compile times. */
 	static FString GetBuildStamp();
@@ -69,4 +73,12 @@ private:
 	/** First-person weapon (hitscan firing, ammo, reload). */
 	UPROPERTY(VisibleAnywhere, Category = "Weapon")
 	UM1WeaponComponent* Weapon;
+
+	/** Marathon "shields". No regeneration -- recharge canisters/chargers are a
+	 *  later system; v1 is a flat pool with restart-on-death. */
+	UPROPERTY(VisibleAnywhere, Category = "Health")
+	float Health = 100.0f;
+
+	/** HUD key 11: "Shields  NNN" readout (updated on BeginPlay + every hit). */
+	void ShowShields() const;
 };
