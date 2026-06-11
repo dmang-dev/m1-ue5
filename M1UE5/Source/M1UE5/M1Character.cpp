@@ -11,6 +11,7 @@
 #include "SceneView.h"  // GNearClippingPlane
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
+#include "M1WeaponComponent.h"
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -107,6 +108,8 @@ AM1Character::AM1Character()
 	{
 		TeleportSound = TeleportFinder.Object;
 	}
+
+	Weapon = CreateDefaultSubobject<UM1WeaponComponent>(TEXT("Weapon"));
 }
 
 void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -121,6 +124,68 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 	PlayerInputComponent->BindAction("NextLevel", IE_Pressed, this, &AM1Character::NextLevel);
 	PlayerInputComponent->BindAction("PrevLevel", IE_Pressed, this, &AM1Character::PrevLevel);
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AM1Character::OnFire);
+	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AM1Character::OnFireStop);
+	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &AM1Character::OnReload);
+
+	// Weapon selection: number keys 1-7 -> slots 0-6, scroll wheel cycles.
+	PlayerInputComponent->BindAction("Weapon1", IE_Pressed, this, &AM1Character::OnSelectWeapon1);
+	PlayerInputComponent->BindAction("Weapon2", IE_Pressed, this, &AM1Character::OnSelectWeapon2);
+	PlayerInputComponent->BindAction("Weapon3", IE_Pressed, this, &AM1Character::OnSelectWeapon3);
+	PlayerInputComponent->BindAction("Weapon4", IE_Pressed, this, &AM1Character::OnSelectWeapon4);
+	PlayerInputComponent->BindAction("Weapon5", IE_Pressed, this, &AM1Character::OnSelectWeapon5);
+	PlayerInputComponent->BindAction("Weapon6", IE_Pressed, this, &AM1Character::OnSelectWeapon6);
+	PlayerInputComponent->BindAction("Weapon7", IE_Pressed, this, &AM1Character::OnSelectWeapon7);
+	PlayerInputComponent->BindAction("NextWeapon", IE_Pressed, this, &AM1Character::OnNextWeapon);
+	PlayerInputComponent->BindAction("PrevWeapon", IE_Pressed, this, &AM1Character::OnPrevWeapon);
+}
+
+void AM1Character::OnFire()
+{
+	if (Weapon)
+	{
+		Weapon->StartFire();
+	}
+}
+
+void AM1Character::OnFireStop()
+{
+	if (Weapon)
+	{
+		Weapon->StopFire();
+	}
+}
+
+void AM1Character::OnReload()
+{
+	if (Weapon)
+	{
+		Weapon->Reload();
+	}
+}
+
+void AM1Character::OnSelectWeapon1() { if (Weapon) { Weapon->SelectWeapon(0); } }
+void AM1Character::OnSelectWeapon2() { if (Weapon) { Weapon->SelectWeapon(1); } }
+void AM1Character::OnSelectWeapon3() { if (Weapon) { Weapon->SelectWeapon(2); } }
+void AM1Character::OnSelectWeapon4() { if (Weapon) { Weapon->SelectWeapon(3); } }
+void AM1Character::OnSelectWeapon5() { if (Weapon) { Weapon->SelectWeapon(4); } }
+void AM1Character::OnSelectWeapon6() { if (Weapon) { Weapon->SelectWeapon(5); } }
+void AM1Character::OnSelectWeapon7() { if (Weapon) { Weapon->SelectWeapon(6); } }
+
+void AM1Character::OnNextWeapon()
+{
+	if (Weapon)
+	{
+		Weapon->NextWeapon();
+	}
+}
+
+void AM1Character::OnPrevWeapon()
+{
+	if (Weapon)
+	{
+		Weapon->PrevWeapon();
+	}
 }
 
 void AM1Character::BeginPlay()

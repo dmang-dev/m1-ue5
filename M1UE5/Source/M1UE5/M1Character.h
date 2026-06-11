@@ -6,6 +6,7 @@
 
 class UCameraComponent;
 class USoundBase;
+class UM1WeaponComponent;
 
 /**
  * First-person walking pawn for the Marathon levels: WASD to walk, mouse to
@@ -38,6 +39,22 @@ protected:
 	void PrevLevel();
 	void CycleLevel(int32 Direction);
 
+	/** Fire (LMB press/release) / reload (R) the current weapon. */
+	void OnFire();
+	void OnFireStop();
+	void OnReload();
+
+	/** Weapon selection: number keys 1-7 pick a slot; the scroll wheel cycles. */
+	void OnSelectWeapon1();
+	void OnSelectWeapon2();
+	void OnSelectWeapon3();
+	void OnSelectWeapon4();
+	void OnSelectWeapon5();
+	void OnSelectWeapon6();
+	void OnSelectWeapon7();
+	void OnNextWeapon();
+	void OnPrevWeapon();
+
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	UCameraComponent* FirstPersonCamera;
@@ -46,4 +63,8 @@ private:
 	 *  levels feels like Marathon's inter-level teleport. */
 	UPROPERTY()
 	USoundBase* TeleportSound = nullptr;
+
+	/** First-person weapon (hitscan firing, ammo, reload). */
+	UPROPERTY(VisibleAnywhere, Category = "Weapon")
+	UM1WeaponComponent* Weapon;
 };
