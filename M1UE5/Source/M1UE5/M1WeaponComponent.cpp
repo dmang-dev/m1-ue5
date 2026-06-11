@@ -50,6 +50,12 @@ UM1WeaponComponent::UM1WeaponComponent()
 		TEXT("/Game/Audio/Weapon/A_flamethrower.A_flamethrower"));
 	static ConstructorHelpers::FObjectFinder<USoundBase> EnforcerAttack(
 		TEXT("/Game/Audio/Weapon/A_enforcer_attack.A_enforcer_attack"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> GrenadeFire(
+		TEXT("/Game/Audio/Monster/A_grenade_launcher_firing.A_grenade_launcher_firing"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> GrenadeExplode(
+		TEXT("/Game/Audio/Weapon/A_grenade_exploding.A_grenade_exploding"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> FusionCharge(
+		TEXT("/Game/Audio/Weapon/A_fusion_charging.A_fusion_charging"));
 
 	USoundBase* const SndMagnumFire   = MagnumFire.Succeeded()      ? MagnumFire.Object      : nullptr;
 	USoundBase* const SndMagnumReload = MagnumReload.Succeeded()    ? MagnumReload.Object    : nullptr;
@@ -62,6 +68,9 @@ UM1WeaponComponent::UM1WeaponComponent()
 	USoundBase* const SndRocketExpl   = RocketExplode.Succeeded()   ? RocketExplode.Object   : nullptr;
 	USoundBase* const SndFlame        = FlamethrowerFire.Succeeded()? FlamethrowerFire.Object: nullptr;
 	USoundBase* const SndEnforcer     = EnforcerAttack.Succeeded()  ? EnforcerAttack.Object  : nullptr;
+	USoundBase* const SndGrenadeFire  = GrenadeFire.Succeeded()     ? GrenadeFire.Object     : nullptr;
+	USoundBase* const SndGrenadeExpl  = GrenadeExplode.Succeeded()  ? GrenadeExplode.Object  : nullptr;
+	USoundBase* const SndFusionCharge = FusionCharge.Succeeded()    ? FusionCharge.Object    : nullptr;
 
 	// --- The 7 M1 weapons (canonical stats), indices 0..6. ---
 	Weapons.Reserve(7);
@@ -118,6 +127,18 @@ UM1WeaponComponent::UM1WeaponComponent()
 		W.ReloadSound = SndMagnumReload;
 		W.EmptySound = SndEmpty;
 		W.ImpactSound = SndFusionExpl;
+		// Secondary: charged heavy bolt — hold RMB 0.5s (15 ticks), released bolt
+		// does 80 dmg at 999 cm/s. Shares the 20-cell magazine.
+		W.bHasSecondary = true;
+		W.SecDamage = 80.0f;
+		W.SecFireInterval = 0.333f;
+		W.SecMagSize = -1;
+		W.bSecProjectile = true;
+		W.SecProjectileSpeed = 999.0f;
+		W.SecChargeTime = 0.5f;
+		W.SecFireSound = SndFusionFire;
+		W.SecChargeSound = SndFusionCharge;
+		W.SecImpactSound = SndFusionExpl;
 		Weapons.Add(W);
 	}
 
@@ -135,6 +156,17 @@ UM1WeaponComponent::UM1WeaponComponent()
 		W.ReloadSound = SndMagnumReload;
 		W.EmptySound = SndEmpty;
 		W.ImpactSound = SndRicochet;
+		// Secondary: grenade launcher — its own 7-round magazine, 80 dmg with a
+		// 75cm blast, 750 cm/s, 0.167s (5 ticks) between grenades.
+		W.bHasSecondary = true;
+		W.SecDamage = 80.0f;
+		W.SecFireInterval = 0.167f;
+		W.SecMagSize = 7;
+		W.bSecProjectile = true;
+		W.SecProjectileSpeed = 750.0f;
+		W.SecBlastRadius = 75.0f;
+		W.SecFireSound = SndGrenadeFire;
+		W.SecImpactSound = SndGrenadeExpl;
 		Weapons.Add(W);
 	}
 
@@ -188,6 +220,18 @@ UM1WeaponComponent::UM1WeaponComponent()
 		W.FireSound = SndEnforcer;
 		W.EmptySound = SndEmpty;
 		W.ImpactSound = SndRicochet;
+		// Secondary: charged 15-bolt burst (burst_count 15, 10-tick charge),
+		// spraying from the shared 150-bolt pool.
+		W.bHasSecondary = true;
+		W.SecDamage = 10.0f;
+		W.SecFireInterval = 0.333f;
+		W.SecMagSize = -1;
+		W.bSecProjectile = false;
+		W.SecChargeTime = 0.333f;
+		W.SecBurstCount = 15;
+		W.SecRange = 2000.0f;
+		W.SecFireSound = SndEnforcer;
+		W.SecImpactSound = SndRicochet;
 		Weapons.Add(W);
 	}
 }
@@ -198,9 +242,11 @@ void UM1WeaponComponent::BeginPlay()
 
 	// Init per-weapon ammo: full mag, or the infinite sentinel for MagSize < 0.
 	Ammo.SetNum(Weapons.Num());
+	SecAmmo.SetNum(Weapons.Num());
 	for (int32 i = 0; i < Weapons.Num(); ++i)
 	{
 		Ammo[i] = Weapons[i].MagSize < 0 ? GM1InfiniteAmmo : Weapons[i].MagSize;
+		SecAmmo[i] = Weapons[i].SecMagSize < 0 ? 0 : Weapons[i].SecMagSize;
 	}
 
 	CurrentIndex = FMath::Clamp(CurrentIndex, 0, Weapons.Num() - 1);
@@ -245,6 +291,149 @@ void UM1WeaponComponent::StopFire()
 	{
 		World->GetTimerManager().ClearTimer(AutoFireTimerHandle);
 	}
+}
+
+int32& UM1WeaponComponent::SecondaryAmmoPool()
+{
+	return CurrentWeapon().SecMagSize >= 0 ? SecAmmo[CurrentIndex] : Ammo[CurrentIndex];
+}
+
+void UM1WeaponComponent::StartAltFire()
+{
+	UWorld* World = GetWorld();
+	const FM1WeaponDef& W = CurrentWeapon();
+	if (!World || bReloading || !W.bHasSecondary)
+	{
+		return;
+	}
+
+	if (W.SecChargeTime > 0.0f)
+	{
+		// Hold-to-charge (Fusion heavy bolt, Alien burst): the shot fires on
+		// release, from StopAltFire, once the charge time has elapsed.
+		if (!bCharging && SecondaryAmmoPool() > 0)
+		{
+			bCharging = true;
+			ChargeStartTime = World->GetTimeSeconds();
+			if (W.SecChargeSound)
+			{
+				UGameplayStatics::SpawnSound2D(this, W.SecChargeSound);
+			}
+			ShowAmmo();
+		}
+		return;
+	}
+
+	// Instant secondary (AR grenade): semi-auto on its own cooldown.
+	if (World->GetTimeSeconds() - LastSecFireTime < W.SecFireInterval)
+	{
+		return;
+	}
+	if (SecondaryAmmoPool() <= 0)
+	{
+		if (W.EmptySound)
+		{
+			UGameplayStatics::SpawnSound2D(this, W.EmptySound);
+		}
+		LastSecFireTime = World->GetTimeSeconds();
+		return;
+	}
+	FireSecondaryShot();
+}
+
+void UM1WeaponComponent::StopAltFire()
+{
+	UWorld* World = GetWorld();
+	if (!World || !bCharging)
+	{
+		return;
+	}
+	const FM1WeaponDef& W = CurrentWeapon();
+	const bool bCharged =
+		World->GetTimeSeconds() - ChargeStartTime >= W.SecChargeTime;
+	bCharging = false;
+
+	if (bCharged && !bReloading && SecondaryAmmoPool() > 0)
+	{
+		FireSecondaryShot();
+	}
+	else
+	{
+		ShowAmmo();  // clear the "(charging)" readout on an aborted charge
+	}
+}
+
+void UM1WeaponComponent::FireSecondaryShot()
+{
+	UWorld* World = GetWorld();
+	APawn* Pawn = Cast<APawn>(GetOwner());
+	AController* Ctrl = Pawn ? Pawn->GetController() : nullptr;
+	if (!World || !Ctrl)
+	{
+		return;
+	}
+	const FM1WeaponDef& W = CurrentWeapon();
+
+	LastSecFireTime = World->GetTimeSeconds();
+	if (W.SecFireSound)
+	{
+		UGameplayStatics::SpawnSound2D(this, W.SecFireSound);
+	}
+
+	FVector ViewLoc;
+	FRotator ViewRot;
+	Ctrl->GetPlayerViewPoint(ViewLoc, ViewRot);
+
+	// Burst secondaries (Alien: 15 bolts) spray with a small spread; everything
+	// else is a single shot. Each bolt draws from the pool until it runs dry.
+	const int32 Shots = FMath::Max(1, W.SecBurstCount);
+	for (int32 i = 0; i < Shots && SecondaryAmmoPool() > 0; ++i)
+	{
+		--SecondaryAmmoPool();
+
+		FRotator ShotRot = ViewRot;
+		if (Shots > 1)
+		{
+			ShotRot.Yaw += FMath::FRandRange(-4.0f, 4.0f);
+			ShotRot.Pitch += FMath::FRandRange(-3.0f, 3.0f);
+		}
+		const FVector AimDir = ShotRot.Vector();
+
+		if (W.bSecProjectile)
+		{
+			const FVector SpawnLoc = ViewLoc + AimDir * 60.0f;
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Owner = Pawn;
+			SpawnParams.Instigator = Pawn;
+			SpawnParams.SpawnCollisionHandlingOverride =
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			if (AM1Projectile* Proj = World->SpawnActor<AM1Projectile>(
+				AM1Projectile::StaticClass(), SpawnLoc, AimDir.Rotation(), SpawnParams))
+			{
+				Proj->Init(W.SecProjectileSpeed, W.SecDamage, W.SecBlastRadius, W.SecImpactSound);
+			}
+		}
+		else
+		{
+			const FVector End = ViewLoc + AimDir * W.SecRange;
+			FCollisionQueryParams Params;
+			Params.AddIgnoredActor(Pawn);
+			FHitResult Hit;
+			const bool bHit = World->LineTraceSingleByChannel(Hit, ViewLoc, End, ECC_Visibility, Params);
+			const FVector ImpactPoint = bHit ? Hit.ImpactPoint : End;
+			if (bHit)
+			{
+				if (W.SecImpactSound && i == 0)  // one impact sound per burst, not 15
+				{
+					UGameplayStatics::SpawnSoundAtLocation(World, W.SecImpactSound, ImpactPoint);
+				}
+				DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Cyan, false, 2.0f);
+			}
+			DrawDebugLine(World, ViewLoc, ImpactPoint, FColor::Cyan, false, 0.25f, 0, 0.5f);
+		}
+	}
+
+	ShowAmmo();
 }
 
 void UM1WeaponComponent::FireShot()
@@ -356,6 +545,10 @@ void UM1WeaponComponent::Reload()
 void UM1WeaponComponent::FinishReload()
 {
 	CurrentAmmo() = CurrentWeapon().MagSize;
+	if (CurrentWeapon().SecMagSize >= 0)
+	{
+		SecAmmo[CurrentIndex] = CurrentWeapon().SecMagSize;  // AR grenades reload too
+	}
 	bReloading = false;
 	ShowAmmo();
 }
@@ -381,9 +574,10 @@ void UM1WeaponComponent::SelectWeapon(int32 Index)
 	const int32 N = Weapons.Num();
 	const int32 Wrapped = ((Index % N) + N) % N;
 
-	// Switching always cancels in-flight fire/reload and resets the cooldown so
-	// the new weapon can fire immediately.
+	// Switching always cancels in-flight fire/reload/charge and resets the
+	// cooldowns so the new weapon can fire immediately.
 	StopFire();
+	bCharging = false;
 	if (bReloading)
 	{
 		if (UWorld* World = GetWorld())
@@ -394,6 +588,7 @@ void UM1WeaponComponent::SelectWeapon(int32 Index)
 	}
 	CurrentIndex = Wrapped;
 	LastFireTime = -1000.0f;
+	LastSecFireTime = -1000.0f;
 	ShowAmmo();
 }
 
@@ -416,10 +611,16 @@ void UM1WeaponComponent::ShowAmmo() const
 	{
 		AmmoText = FString::Printf(TEXT("%d / %d"), Cur, W.MagSize);
 	}
+	if (W.bHasSecondary && W.SecMagSize >= 0)
+	{
+		const int32 SecCur = SecAmmo.IsValidIndex(CurrentIndex) ? SecAmmo[CurrentIndex] : 0;
+		AmmoText += FString::Printf(TEXT("  |  GR %d / %d"), SecCur, W.SecMagSize);
+	}
 
 	GEngine->AddOnScreenDebugMessage(
 		10, 3600.0f, FColor::Orange,
-		FString::Printf(TEXT("%s   %s%s"),
+		FString::Printf(TEXT("%s   %s%s%s"),
 			*W.Name, *AmmoText,
-			bReloading ? TEXT("  (reloading)") : TEXT("")));
+			bReloading ? TEXT("  (reloading)") : TEXT(""),
+			bCharging ? TEXT("  (charging)") : TEXT("")));
 }

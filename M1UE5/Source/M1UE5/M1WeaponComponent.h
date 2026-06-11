@@ -63,6 +63,47 @@ struct FM1WeaponDef
 
 	UPROPERTY()
 	USoundBase* ImpactSound = nullptr;
+
+	// --- Secondary trigger (RMB), canonical M1 trigger[1] data. ---
+
+	UPROPERTY()
+	bool bHasSecondary = false;
+
+	UPROPERTY()
+	float SecDamage = 0.0f;
+
+	UPROPERTY()
+	float SecFireInterval = 0.5f;
+
+	UPROPERTY()
+	int32 SecMagSize = -1;         // -1 = shares the primary magazine
+
+	UPROPERTY()
+	bool bSecProjectile = false;
+
+	UPROPERTY()
+	float SecProjectileSpeed = 0.0f;
+
+	UPROPERTY()
+	float SecBlastRadius = 0.0f;
+
+	UPROPERTY()
+	float SecChargeTime = 0.0f;    // >0 = hold RMB to charge, fires on release
+
+	UPROPERTY()
+	int32 SecBurstCount = 1;       // bolts per (charged) trigger event (Alien = 15)
+
+	UPROPERTY()
+	float SecRange = 8000.0f;      // cm, for hitscan secondaries
+
+	UPROPERTY()
+	USoundBase* SecFireSound = nullptr;
+
+	UPROPERTY()
+	USoundBase* SecChargeSound = nullptr;
+
+	UPROPERTY()
+	USoundBase* SecImpactSound = nullptr;
 };
 
 /**
@@ -87,6 +128,13 @@ public:
 	/** Release the trigger: stop any automatic fire. */
 	void StopFire();
 
+	/** Pull the secondary trigger (RMB). Charging weapons (Fusion, Alien) begin
+	 *  charging; instant secondaries (AR grenade) fire immediately. */
+	void StartAltFire();
+
+	/** Release the secondary trigger: a fully-charged weapon fires on release. */
+	void StopAltFire();
+
 	/** Begin a reload (no-op if full, reloading, infinite, or a depleting weapon). */
 	void Reload();
 
@@ -103,8 +151,12 @@ protected:
 
 private:
 	void FireShot();
+	void FireSecondaryShot();
 	void FinishReload();
 	void ShowAmmo() const;
+
+	/** Secondary's ammo pool: its own mag (SecMagSize >= 0) or the primary's. */
+	int32& SecondaryAmmoPool();
 
 	/** Convenience accessors for the active weapon's def / ammo. */
 	const FM1WeaponDef& CurrentWeapon() const { return Weapons[CurrentIndex]; }
@@ -117,9 +169,16 @@ private:
 	 *  large sentinel so GetAmmo() stays meaningful but never empties. */
 	TArray<int32> Ammo;
 
+	/** Per-weapon secondary ammo (parallel; only meaningful when SecMagSize >= 0,
+	 *  e.g. the AR's 7-grenade magazine). */
+	TArray<int32> SecAmmo;
+
 	int32 CurrentIndex = 1;  // start on the Magnum
 	float LastFireTime = -1000.0f;
+	float LastSecFireTime = -1000.0f;
 	bool bReloading = false;
+	bool bCharging = false;
+	float ChargeStartTime = 0.0f;
 	FTimerHandle ReloadTimerHandle;
 	FTimerHandle AutoFireTimerHandle;
 };

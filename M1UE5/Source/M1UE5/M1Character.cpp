@@ -126,6 +126,8 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction("PrevLevel", IE_Pressed, this, &AM1Character::PrevLevel);
 	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AM1Character::OnFire);
 	PlayerInputComponent->BindAction("Fire", IE_Released, this, &AM1Character::OnFireStop);
+	PlayerInputComponent->BindAction("AltFire", IE_Pressed, this, &AM1Character::OnAltFire);
+	PlayerInputComponent->BindAction("AltFire", IE_Released, this, &AM1Character::OnAltFireStop);
 	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &AM1Character::OnReload);
 
 	// Weapon selection: number keys 1-7 -> slots 0-6, scroll wheel cycles.
@@ -153,6 +155,22 @@ void AM1Character::OnFireStop()
 	if (Weapon)
 	{
 		Weapon->StopFire();
+	}
+}
+
+void AM1Character::OnAltFire()
+{
+	if (Weapon)
+	{
+		Weapon->StartAltFire();
+	}
+}
+
+void AM1Character::OnAltFireStop()
+{
+	if (Weapon)
+	{
+		Weapon->StopAltFire();
 	}
 }
 

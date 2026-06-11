@@ -42,6 +42,8 @@ protected:
 	/** Fire (LMB press/release) / reload (R) the current weapon. */
 	void OnFire();
 	void OnFireStop();
+	void OnAltFire();
+	void OnAltFireStop();
 	void OnReload();
 
 	/** Weapon selection: number keys 1-7 pick a slot; the scroll wheel cycles. */
