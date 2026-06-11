@@ -321,18 +321,18 @@ headless-loop internals, gotchas). Summary table:
 | `.scen` → UE5 converter | ✅ Done | `Tools/scen_to_obj.py` — textured OBJ (UVs + .mtl) for all 37 levels |
 | Headless UE5 import loop | ✅ Done | `Tools/ue5_headless_build.py` — all 37 levels + shared material library, 0 errors, no manual editor steps |
 | Headless render (MRQ) | ✅ Done | `Tools/ue5_mrq_render.py` — top-down PNG of any level (`M1_LEVEL` env) |
-| Sprite billboard pipeline | 🔲 Not started | Shapes extracted; placements in `Reference/Geometry/*_placements.json` |
+| Sprite billboard pipeline | ✅ Done | `Tools/gen_monster_assets.py` + `Tools/ue5_import_sprites.py`: 160 monster frames + 31 weapon-in-hand frames + master unlit masked `M_M1Sprite` |
 | Level geometry kit  | ⛔ Superseded | Replaced by procedural sectors |
 | Walkable level (collision + real spawn + FP) | ✅ Done | All 37: complex-as-simple collision + real PlayerStart (correct facing) from placements; first-person verify render + collision-config assert via `ue5_mrq_render.py` with `M1_VIEW=fp` |
 | Playable walking build (C++ pawn + GameMode + double-click .exe) | ✅ Done | `Source/M1UE5`: `AM1Character` (first-person — WASD walk, mouse look, Space jump, gravity + collision vs the sector meshes) + `AM1GameMode`; legacy input maps in `DefaultInput.ini`. `RunUAT BuildCookRun` → `Build/Windows/M1UE5.exe` (cooks `L_00_Arrival`); boots with `M1GameMode`, 0 errors. Project is now a C++/Blueprint hybrid. |
 | Roam all 37 levels (cooked + in-game switcher) | ✅ Done | All 37 cooked into `M1UE5.exe`; `[` / `]` (or PageUp/Dn) cycle levels in-game via `AM1Character` + `UGameplayStatics::OpenLevel`, with an on-screen level name. Verified `L_30_Arena` loads on demand from the pak. |
 | Campaign flow (story order, terminals, transitions) | 🔲 Not started | Replace free-roam cycling with real progression + terminal gating |
 | Player movement / feel | 🔲 Not started ||
-| Weapons             | 🔲 Not started ||
-| Enemy AI            | 🔲 Not started ||
+| Weapons             | ✅ Done (v1) | Full 7-weapon M1 arsenal in `UM1WeaponComponent`, canonical Physics.phys stats + secondary triggers (AR grenade / Fusion charge / Alien burst); `AM1Projectile` for bolts/rockets/grenades. Visuals = HUD sprite viewmodel; muzzle flash/decals TBD |
+| Enemy AI            | ✅ Done (v1) | `AM1Enemy` billboards spawned from `M1SpawnTable.h` (2232 placements, 30 types); idle→activate→chase→melee, canonical vitality/speed/sounds, corpses persist. Ranged attacks + view-angle frames TBD |
 | Terminal system     | 🔲 Not started | Source text already extracted in Maps JSON; renderer exists in py-marathon-utils |
-| HUD                 | 🔲 Not started ||
-| Audio               | 🟡 Source extracted | Need UE import + cue setup |
+| HUD                 | 🟡 In progress | `AM1HUD` draws the weapon-in-hand sprite (canonical Shapes coll-1 idle/fire/reload frames); ammo/shields are debug text — real Marathon HUD TBD |
+| Audio               | ✅ Done (v1) | All 104 M1 sounds imported with canonical names (`Tools/m1_sound_names.json`); weapon/monster/teleport SFX wired. Music + door/platform sounds TBD |
 | Save system         | 🔲 Not started ||
 
 Update this table as systems reach milestones (🔲 Not started → 🟡 In progress → ✅ Done → ⛔ Superseded).

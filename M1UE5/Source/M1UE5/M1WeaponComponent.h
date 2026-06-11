@@ -146,6 +146,11 @@ public:
 	int32 GetAmmo() const { return Ammo.IsValidIndex(CurrentIndex) ? Ammo[CurrentIndex] : 0; }
 	const FM1WeaponDef& GetWeapon() const { return Weapons[CurrentIndex]; }
 
+	// State the HUD viewmodel reads each frame (M1HUD.cpp).
+	int32 GetCurrentIndex() const { return CurrentIndex; }
+	bool IsReloading() const { return bReloading; }
+	float GetLastFireTime() const { return LastFireTime; }
+
 protected:
 	virtual void BeginPlay() override;
 

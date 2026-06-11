@@ -2,6 +2,7 @@
 #include "M1Character.h"
 #include "M1PlayerController.h"
 #include "M1Enemy.h"
+#include "M1HUD.h"
 #include "M1SpawnTable.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
@@ -11,6 +12,7 @@ AM1GameMode::AM1GameMode()
 {
 	DefaultPawnClass = AM1Character::StaticClass();
 	PlayerControllerClass = AM1PlayerController::StaticClass();
+	HUDClass = AM1HUD::StaticClass();  // weapon-in-hand sprite viewmodel
 }
 
 void AM1GameMode::BeginPlay()

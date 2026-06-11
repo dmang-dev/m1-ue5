@@ -32,6 +32,9 @@ public:
 	 *  menu and HUD always show the SAME value instead of per-file compile times. */
 	static FString GetBuildStamp();
 
+	/** The HUD viewmodel reads weapon state through this (M1HUD.cpp). */
+	UM1WeaponComponent* GetWeaponComponent() const { return Weapon; }
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
