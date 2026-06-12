@@ -7,6 +7,7 @@
 class AM1Character;
 class UM1WeaponComponent;
 class UTexture2D;
+class UTextureRenderTarget2D;
 
 /**
  * Marathon HUD. Draws (in order) the weapon-in-hand viewmodel sprite, then the
@@ -29,10 +30,24 @@ public:
 	virtual void DrawHUD() override;
 
 private:
-	/** Weapon-in-hand viewmodel (bottom-center). Unchanged from the original. */
-	void DrawViewmodel(UM1WeaponComponent* Weapon);
+	/** Weapon-in-hand viewmodel, anchored bottom-center of the given rect (the
+	 *  bezel hole when framed, or the full canvas in the fallback path). */
+	void DrawViewmodel(UM1WeaponComponent* Weapon, float RX, float RY, float RW, float RH);
 
-	/** Marathon interface panel: bottom-strip chrome + shield bar + ammo. */
+	/** Authentic 4:3 framed HUD: the world (SceneRT) in the bezel's viewport hole,
+	 *  the PICT 128 metal frame over it, pillarboxed, with shield/ammo readouts. */
+	void DrawFramedBezel(AM1Character* Player, UM1WeaponComponent* Weapon,
+		UTexture2D* Bezel, UTextureRenderTarget2D* RT);
+
+	/** Shield/oxygen meters + ammo, positioned into the bezel's regions
+	 *  (bezel px coords -> screen via BezelX/BezelY/Scale). */
+	void DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
+		float BezelX, float BezelY, float Scale);
+
+	/** Bezel texture loader (/Game/UI/HUD/T_hud_bezel), cached. */
+	UTexture2D* GetBezelTexture();
+
+	/** Fallback HUD (no bezel/RT): bottom-strip shield bar + ammo. */
 	void DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon);
 
 	/** Terminal (lore) overlay: dark backdrop + the active green-on-black page

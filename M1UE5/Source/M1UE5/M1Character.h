@@ -7,6 +7,8 @@
 class UCameraComponent;
 class USoundBase;
 class UM1WeaponComponent;
+class USceneCaptureComponent2D;
+class UTextureRenderTarget2D;
 
 /**
  * First-person walking pawn for the Marathon levels: WASD to walk, mouse to
@@ -42,6 +44,10 @@ public:
 
 	/** The HUD viewmodel reads weapon state through this (M1HUD.cpp). */
 	UM1WeaponComponent* GetWeaponComponent() const { return Weapon; }
+
+	/** The world rendered for the bezel's 3D-viewport hole. Null until BeginPlay
+	 *  sets it up (the HUD falls back to a fullscreen view when null). */
+	UTextureRenderTarget2D* GetSceneRT() const { return SceneRT; }
 
 	/** Current shields, for the HUD shield bar (M1HUD.cpp). */
 	float GetHealth() const { return Health; }
@@ -104,6 +110,14 @@ private:
 	/** First-person weapon (hitscan firing, ammo, reload). */
 	UPROPERTY(VisibleAnywhere, Category = "Weapon")
 	UM1WeaponComponent* Weapon;
+
+	/** Renders the world for the authentic bezel's 4:3 viewport hole; the HUD
+	 *  composites the result into the metal frame. */
+	UPROPERTY(VisibleAnywhere, Category = "HUD")
+	USceneCaptureComponent2D* SceneCapture = nullptr;
+
+	UPROPERTY()
+	UTextureRenderTarget2D* SceneRT = nullptr;
 
 	/** Marathon "shields". No regeneration -- recharge canisters/chargers are a
 	 *  later system; v1 is a flat pool with restart-on-death. */

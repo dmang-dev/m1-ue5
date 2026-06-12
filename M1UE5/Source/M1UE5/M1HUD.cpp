@@ -8,6 +8,7 @@
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 
 namespace
@@ -85,10 +86,111 @@ void AM1HUD::DrawHUD()
 		return;
 	}
 
-	// Order matters: the viewmodel draws first (over the world), then the panel
-	// chrome draws on top along the bottom so the gun reads as held above it.
-	DrawViewmodel(Weapon);
-	DrawInterfacePanel(Player, Weapon);
+	// Authentic 4:3 framed HUD: the world renders into the bezel's viewport hole
+	// (SceneRT), the PICT 128 metal frame draws around it. Falls back to the
+	// fullscreen view + bottom-strip HUD if the bezel art or RT isn't ready, so
+	// the screen is never blank.
+	UTexture2D* Bezel = GetBezelTexture();
+	UTextureRenderTarget2D* RT = Player->GetSceneRT();
+	if (Bezel && RT)
+	{
+		DrawFramedBezel(Player, Weapon, Bezel, RT);
+	}
+	else
+	{
+		DrawViewmodel(Weapon, 0.0f, 0.0f, Canvas->SizeX, Canvas->SizeY);
+		DrawInterfacePanel(Player, Weapon);
+	}
+}
+
+void AM1HUD::DrawFramedBezel(AM1Character* Player, UM1WeaponComponent* Weapon,
+	UTexture2D* Bezel, UTextureRenderTarget2D* RT)
+{
+	const float SX = Canvas->SizeX, SY = Canvas->SizeY;
+	// Fit the 640x480 bezel by its limiting axis, centered (pillarbox on 16:9).
+	const float Scale = FMath::Min(SX / 640.0f, SY / 480.0f);
+	const float BW = 640.0f * Scale, BH = 480.0f * Scale;
+	const float BX = (SX - BW) * 0.5f, BY = (SY - BH) * 0.5f;
+
+	// Black behind everything (pillarbox bars + under the frame).
+	DrawRect(FLinearColor::Black, 0.0f, 0.0f, SX, SY);
+
+	// 3D-viewport hole (bezel px 174,21 .. 624,294 -> 450 x 273).
+	const float HX = BX + 174.0f * Scale, HY = BY + 21.0f * Scale;
+	const float HW = 450.0f * Scale, HH = 273.0f * Scale;
+
+	// World view into the hole, then the gun over it.
+	DrawTexture(RT, HX, HY, HW, HH, 0.0f, 0.0f, 1.0f, 1.0f);
+	DrawViewmodel(Weapon, HX, HY, HW, HH);
+
+	// Metal frame on top (its hole is transparent, so the world shows through).
+	DrawTexture(Bezel, BX, BY, BW, BH, 0.0f, 0.0f, 1.0f, 1.0f);
+
+	// Crosshair at the hole centre (where the camera looks).
+	const float CX = HX + HW * 0.5f, CY = HY + HH * 0.5f;
+	const FLinearColor Reticle(0.2f, 1.0f, 0.4f, 0.85f);
+	DrawRect(Reticle, CX - 1.0f, CY - 7.0f, 2.0f, 14.0f);
+	DrawRect(Reticle, CX - 7.0f, CY - 1.0f, 14.0f, 2.0f);
+
+	DrawReadouts(Player, Weapon, BX, BY, Scale);
+}
+
+void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
+	float BX, float BY, float Scale)
+{
+	// Vertical meters (bezel px). Right column = shields (dynamic, fills bottom-up);
+	// left column = oxygen (static full until the vacuum system exists).
+	const float MeterTop = 126.0f, MeterH = 134.0f, MeterW = 28.0f;
+	{
+		const float Frac = FMath::Clamp(
+			Player->GetHealth() / FMath::Max(1.0f, Player->GetMaxHealth()), 0.0f, 1.0f);
+		const float X = BX + 122.0f * Scale, Y = BY + MeterTop * Scale;
+		const float W = MeterW * Scale, H = MeterH * Scale;
+		DrawRect(FLinearColor(0.0f, 0.05f, 0.10f, 0.9f), X, Y, W, H);
+		DrawRect(FLinearColor(0.0f, 0.85f, 1.0f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
+	}
+	{
+		const float X = BX + 88.0f * Scale, Y = BY + MeterTop * Scale;
+		const float W = MeterW * Scale, H = MeterH * Scale;
+		DrawRect(FLinearColor(0.0f, 0.10f, 0.0f, 0.9f), X, Y, W, H);
+		DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), X, Y, W, H);
+	}
+
+	// Ammo readout in the message panel (bezel px ~x[238,615] y[386,448]).
+	const int32 Slot = FMath::Clamp(Weapon->GetCurrentIndex(), 0,
+		(int32)UE_ARRAY_COUNT(GM1HudIcons) - 1);
+	const FM1HudIconRow& Icons = GM1HudIcons[Slot];
+	const FM1WeaponDef& Def = Weapon->GetWeapon();
+	float CX = BX + 238.0f * Scale;
+	const float CY = BY + 386.0f * Scale;
+	const float IconH = 46.0f * Scale;
+	if (UTexture2D* WpnTex = GetHudTexture(Icons.Weapon))
+	{
+		const float S = IconH / FMath::Max(1, WpnTex->GetSizeY());
+		const float W = WpnTex->GetSizeX() * S;
+		DrawTexture(WpnTex, CX, CY, W, IconH, 0.0f, 0.0f, 1.0f, 1.0f);
+		CX += W + 12.0f * Scale;
+	}
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	if (Font && Def.MagSize > 0)
+	{
+		const FString AmmoStr = FString::Printf(TEXT("%d / %d"), Weapon->GetAmmo(), Def.MagSize);
+		DrawText(AmmoStr, FLinearColor(0.6f, 1.0f, 0.7f, 1.0f),
+			CX, CY + IconH * 0.2f, Font, FMath::Max(1.0f, Scale * 1.6f));
+	}
+}
+
+UTexture2D* AM1HUD::GetBezelTexture()
+{
+	const FString Key = TEXT("__bezel");
+	if (UTexture2D** Found = FrameCache.Find(Key))
+	{
+		return *Found;
+	}
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr,
+		TEXT("/Game/UI/HUD/T_hud_bezel.T_hud_bezel"));
+	FrameCache.Add(Key, Tex);
+	return Tex;
 }
 
 void AM1HUD::DrawTerminal(AM1Character* Player)
@@ -131,7 +233,7 @@ void AM1HUD::DrawTerminal(AM1Character* Player)
 	}
 }
 
-void AM1HUD::DrawViewmodel(UM1WeaponComponent* Weapon)
+void AM1HUD::DrawViewmodel(UM1WeaponComponent* Weapon, float RX, float RY, float RW, float RH)
 {
 	UWorld* World = GetWorld();
 	const int32 Index = Weapon->GetCurrentIndex();
@@ -175,12 +277,13 @@ void AM1HUD::DrawViewmodel(UM1WeaponComponent* Weapon)
 		return;
 	}
 
-	// Marathon's weapon art targets a 640x480 frame; scale with the viewport so
-	// the gun fills a similar fraction of the screen, anchored bottom-center.
-	const float Scale = (Canvas->SizeY / kPanelDesignH) * 2.0f;
+	// Marathon's weapon art targets a 640x480 frame; scale with the draw rect so
+	// the gun fills a similar fraction, anchored bottom-center of the rect (the
+	// bezel hole when framed, else the full screen).
+	const float Scale = (RH / kPanelDesignH) * 2.0f;
 	const float W = Seq->PixelW * Scale;
 	const float H = Seq->PixelH * Scale;
-	DrawTexture(Tex, (Canvas->SizeX - W) * 0.5f, Canvas->SizeY - H,
+	DrawTexture(Tex, RX + (RW - W) * 0.5f, RY + RH - H,
 		W, H, 0.0f, 0.0f, 1.0f, 1.0f);
 }
 

@@ -1,6 +1,8 @@
 #include "M1Character.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
@@ -116,6 +118,16 @@ AM1Character::AM1Character()
 	}
 
 	Weapon = CreateDefaultSubobject<UM1WeaponComponent>(TEXT("Weapon"));
+
+	// Renders the world into the bezel's 4:3 viewport hole. Attached to the eye so
+	// it shares the player's view; the HUD composites its target into the frame.
+	SceneCapture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("BezelCapture"));
+	SceneCapture->SetupAttachment(FirstPersonCamera);
+	SceneCapture->bCaptureEveryFrame = true;
+	SceneCapture->bCaptureOnMovement = false;
+	SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+	SceneCapture->FOVAngle = 75.0f;  // match the camera; tune with the hole aspect
+	SceneCapture->bAlwaysPersistRenderingState = true;
 }
 
 void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -400,6 +412,19 @@ void AM1Character::BeginPlay()
 		{
 			Health = FMath::Clamp(SavedShields, 1.0f, M1Tuning::GPlayerShields);
 		}
+	}
+
+	// Build the render target the HUD draws into the bezel's viewport hole. Hole
+	// is ~450x273 px in the 640x480 bezel (aspect 1.648); 960x582 supersamples it.
+	if (SceneCapture)
+	{
+		SceneRT = NewObject<UTextureRenderTarget2D>(this);
+		SceneRT->RenderTargetFormat = ETextureRenderTargetFormat::RTF_RGBA8_SRGB;
+		SceneRT->ClearColor = FLinearColor::Black;
+		SceneRT->bAutoGenerateMips = false;
+		SceneRT->InitAutoFormat(960, 582);
+		SceneRT->UpdateResourceImmediate(true);
+		SceneCapture->TextureTarget = SceneRT;
 	}
 
 	// Teleport-in SFX on level arrival (incl. [ / ] cycling). M1's atmosphere is
