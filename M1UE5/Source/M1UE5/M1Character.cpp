@@ -283,6 +283,13 @@ void AM1Character::ShowShields() const
 	}
 }
 
+float AM1Character::GetMaxHealth() const
+{
+	// 1x shields. The HUD bar fills from this; raising GPlayerShields raises both
+	// the start value (BeginPlay) and the bar's full mark together.
+	return M1Tuning::GPlayerShields;
+}
+
 FString AM1Character::GetBuildStamp()
 {
 	// __DATE__/__TIME__ are this translation unit's compile time. Routing the menu

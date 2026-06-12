@@ -35,6 +35,14 @@ public:
 	/** The HUD viewmodel reads weapon state through this (M1HUD.cpp). */
 	UM1WeaponComponent* GetWeaponComponent() const { return Weapon; }
 
+	/** Current shields, for the HUD shield bar (M1HUD.cpp). */
+	float GetHealth() const { return Health; }
+
+	/** Full shields = the canonical starting pool (M1Tuning::GPlayerShields).
+	 *  Used as the shield bar's 100% width. NOTE: canisters can push real M1
+	 *  shields to 2x/3x; until that pickup system exists this is the 1x cap. */
+	float GetMaxHealth() const;
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 

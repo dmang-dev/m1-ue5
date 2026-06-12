@@ -146,6 +146,16 @@ public:
 	int32 GetAmmo() const { return Ammo.IsValidIndex(CurrentIndex) ? Ammo[CurrentIndex] : 0; }
 	const FM1WeaponDef& GetWeapon() const { return Weapons[CurrentIndex]; }
 
+	/** Secondary-trigger ammo for weapons with a dedicated secondary mag (the
+	 *  AR's grenade magazine). Returns -1 when the secondary shares the primary
+	 *  pool (or there is no secondary) -- the HUD then shows nothing extra. */
+	int32 GetSecAmmo() const
+	{
+		const FM1WeaponDef& W = Weapons[CurrentIndex];
+		return (W.bHasSecondary && W.SecMagSize >= 0 && SecAmmo.IsValidIndex(CurrentIndex))
+			? SecAmmo[CurrentIndex] : -1;
+	}
+
 	// State the HUD viewmodel reads each frame (M1HUD.cpp).
 	int32 GetCurrentIndex() const { return CurrentIndex; }
 	bool IsReloading() const { return bReloading; }

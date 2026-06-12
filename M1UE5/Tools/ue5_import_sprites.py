@@ -33,6 +33,9 @@ DEST = "/Game/Sprites/Monsters"  # default-texture lookup for the material
 LISTS = [
     (os.path.join(SPRITES, "import_list.json"), "/Game/Sprites/Monsters"),
     (os.path.join(SPRITES, "weapon_import_list.json"), "/Game/Sprites/Weapons"),
+    # HUD panel chrome + inventory icons (gen_hud_assets.py). Same pixel-art
+    # settings; AM1HUD loads these by path. Does not touch M_M1Sprite.
+    (os.path.join(SPRITES, "hud_import_list.json"), "/Game/Sprites/HUD"),
 ]
 
 result = {"textures": 0, "missing": [], "material": None}

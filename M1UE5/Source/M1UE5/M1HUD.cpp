@@ -3,9 +3,53 @@
 #include "M1Character.h"
 #include "M1WeaponComponent.h"
 #include "M1WeaponSpriteTable.h"
+#include "M1HudTable.h"
 #include "Engine/Canvas.h"
+#include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
+
+namespace
+{
+	// --- Marathon interface layout (from Aleph One game_window.cpp research). ---
+	//
+	// The classic M1 HUD draws into the bottom strip of a 640x480 frame: the
+	// interface bitmap is blitted to {0, 320, 640, 160}, i.e. the bottom third.
+	// We reproduce that proportion: the panel art (Coll_10 bitmap 001, the main
+	// 435x325 bezel) is anchored bottom-center and scaled to the viewport, the
+	// same Canvas->SizeY/480 factor the viewmodel uses.
+	//
+	// The exact shield/oxygen/ammo pixel rects come from the original's
+	// get_interface_rectangle() (which reads them out of the Shapes file's
+	// interface data -- numbers we don't have as source constants). What we DO
+	// have from AO: the ammo readouts all live on the RIGHT side of the panel
+	// (screen x >= 385 of 640) and the status bars classically sit on the LEFT.
+	// So we place the shield bar in the panel's lower-left and the ammo readout
+	// in the lower-right. This is "reads as the Marathon HUD", not pixel-perfect,
+	// and is expressed as fractions of the panel rect so it tracks any scale.
+
+	constexpr float kPanelDesignH = 480.0f;  // Marathon art targets 640x480
+
+	// Shield bar, as fractions of the drawn panel rect. Lower-left band.
+	constexpr float kShieldX = 0.06f;   // left inset
+	constexpr float kShieldY = 0.30f;   // top inset
+	constexpr float kShieldW = 0.34f;   // full (100% shields) width
+	constexpr float kShieldH = 0.10f;   // bar thickness
+
+	// Oxygen bar sits just below the shield bar. Marathon depletes oxygen only
+	// in vacuum; that system does not exist yet, so we draw it STATIC/FULL as a
+	// placeholder so the panel reads correctly. (Omit by setting kDrawOxygen 0.)
+	constexpr bool  kDrawOxygen = true;
+	constexpr float kOxygenY = 0.44f;
+
+	// Ammo readout anchor (icon + count), as fractions of the panel rect.
+	// Lower-right, matching AO's right-side ammo positions.
+	constexpr float kAmmoIconX = 0.62f;
+	constexpr float kAmmoIconY = 0.30f;
+	constexpr float kAmmoIconMaxH = 0.30f;  // icon height cap (frac of panel H)
+	constexpr float kWpnIconX = 0.84f;      // weapon icon, far right
+}
 
 void AM1HUD::DrawHUD()
 {
@@ -13,12 +57,20 @@ void AM1HUD::DrawHUD()
 
 	AM1Character* Player = Cast<AM1Character>(GetOwningPawn());
 	UM1WeaponComponent* Weapon = Player ? Player->GetWeaponComponent() : nullptr;
-	UWorld* World = GetWorld();
-	if (!Weapon || !World || !Canvas)
+	if (!Weapon || !GetWorld() || !Canvas)
 	{
 		return;
 	}
 
+	// Order matters: the viewmodel draws first (over the world), then the panel
+	// chrome draws on top along the bottom so the gun reads as held above it.
+	DrawViewmodel(Weapon);
+	DrawInterfacePanel(Player, Weapon);
+}
+
+void AM1HUD::DrawViewmodel(UM1WeaponComponent* Weapon)
+{
+	UWorld* World = GetWorld();
 	const int32 Index = Weapon->GetCurrentIndex();
 	if (Index < 0 || Index >= (int32)UE_ARRAY_COUNT(GM1WeaponSprites))
 	{
@@ -62,11 +114,137 @@ void AM1HUD::DrawHUD()
 
 	// Marathon's weapon art targets a 640x480 frame; scale with the viewport so
 	// the gun fills a similar fraction of the screen, anchored bottom-center.
-	const float Scale = (Canvas->SizeY / 480.0f) * 2.0f;
+	const float Scale = (Canvas->SizeY / kPanelDesignH) * 2.0f;
 	const float W = Seq->PixelW * Scale;
 	const float H = Seq->PixelH * Scale;
 	DrawTexture(Tex, (Canvas->SizeX - W) * 0.5f, Canvas->SizeY - H,
 		W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+}
+
+void AM1HUD::DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon)
+{
+	// --- Panel chrome: bottom-center, scaled to the viewport like the viewmodel.
+	//     If the texture is absent (not yet rendered/imported) we skip it but
+	//     still draw the bars/ammo at the placement they WOULD occupy, so the
+	//     HUD is informative even before the art lands. ---
+	UTexture2D* Panel = GetHudTexture(TEXT("T_hud_panel"));
+
+	// The panel rect we lay everything else out against. With art present we use
+	// its native aspect; without art we fall back to a bottom strip ~1/3 tall
+	// (matching AO's {0,320,640,160} interface blit) so the bars still position.
+	const float ViewScale = Canvas->SizeY / kPanelDesignH;
+	float PanelW, PanelH, PanelX, PanelY;
+	if (Panel)
+	{
+		const float Scale = ViewScale * 1.4f;  // fill a chunk of the lower screen
+		PanelW = Panel->GetSizeX() * Scale;
+		PanelH = Panel->GetSizeY() * Scale;
+		PanelX = (Canvas->SizeX - PanelW) * 0.5f;
+		PanelY = Canvas->SizeY - PanelH;
+		DrawTexture(Panel, PanelX, PanelY, PanelW, PanelH,
+			0.0f, 0.0f, 1.0f, 1.0f);
+	}
+	else
+	{
+		PanelW = Canvas->SizeX;
+		PanelH = Canvas->SizeY * (160.0f / 480.0f);
+		PanelX = 0.0f;
+		PanelY = Canvas->SizeY - PanelH;
+	}
+
+	// --- Shield bar. width = (health/max) * full, fill left-to-right.
+	//     Marathon shield color is cyan. DrawRect a dim back-rail then the fill,
+	//     so an empty bar still reads as "the shield region". ---
+	if (Player)
+	{
+		const float MaxHealth = FMath::Max(1.0f, Player->GetMaxHealth());
+		const float Frac = FMath::Clamp(Player->GetHealth() / MaxHealth, 0.0f, 1.0f);
+
+		const float BarX = PanelX + kShieldX * PanelW;
+		const float BarY = PanelY + kShieldY * PanelH;
+		const float BarFullW = kShieldW * PanelW;
+		const float BarH = kShieldH * PanelH;
+
+		// Back rail (dark blue) then the cyan fill scaled by shield fraction.
+		DrawRect(FLinearColor(0.0f, 0.06f, 0.12f, 0.85f), BarX, BarY, BarFullW, BarH);
+		DrawRect(FLinearColor(0.0f, 0.75f, 1.0f, 1.0f), BarX, BarY, BarFullW * Frac, BarH);
+
+		// Oxygen placeholder: full/static green bar (no vacuum system yet). It
+		// shares the shield bar's X/width so the two stack like the original.
+		if (kDrawOxygen)
+		{
+			const float OxyY = PanelY + kOxygenY * PanelH;
+			DrawRect(FLinearColor(0.0f, 0.10f, 0.0f, 0.85f), BarX, OxyY, BarFullW, BarH);
+			DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), BarX, OxyY, BarFullW, BarH);
+		}
+	}
+
+	// --- Ammo readout: weapon icon + ammo icon + count, lower-right. ---
+	const int32 Slot = Weapon->GetCurrentIndex();
+	if (Slot < 0 || Slot >= (int32)UE_ARRAY_COUNT(GM1HudIcons))
+	{
+		return;
+	}
+	const FM1HudIconRow& Icons = GM1HudIcons[Slot];
+
+	const float IconMaxH = kAmmoIconMaxH * PanelH;
+
+	// Weapon icon (far right). Skip the Fist (no inventory art).
+	if (UTexture2D* WpnTex = GetHudTexture(Icons.Weapon))
+	{
+		const float Scale = IconMaxH / FMath::Max(1, WpnTex->GetSizeY());
+		const float W = WpnTex->GetSizeX() * Scale;
+		const float H = WpnTex->GetSizeY() * Scale;
+		DrawTexture(WpnTex, PanelX + kWpnIconX * PanelW, PanelY + kAmmoIconY * PanelH,
+			W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+	}
+
+	// Ammo icon + count. The Fist (slot 0) and the depleting Alien weapon have
+	// no ammo icon -> skip the icon but still show the count for finite mags.
+	const FM1WeaponDef& Def = Weapon->GetWeapon();
+	const int32 Ammo = Weapon->GetAmmo();
+
+	float TextX = PanelX + kAmmoIconX * PanelW;
+	const float TextY = PanelY + kAmmoIconY * PanelH;
+	if (UTexture2D* AmmoTex = GetHudTexture(Icons.Ammo))
+	{
+		const float Scale = IconMaxH / FMath::Max(1, AmmoTex->GetSizeY());
+		const float W = AmmoTex->GetSizeX() * Scale;
+		const float H = AmmoTex->GetSizeY() * Scale;
+		DrawTexture(AmmoTex, TextX, TextY, W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+		TextX += W + 6.0f * ViewScale;  // count sits to the right of the icon
+	}
+
+	// Only show a number for weapons that actually track ammo: finite mag, not
+	// the Fist's infinite sentinel. Magnum/AR/etc. show "cur / mag".
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	if (Font && Def.MagSize > 0)
+	{
+		const FString AmmoStr = FString::Printf(TEXT("%d / %d"), Ammo, Def.MagSize);
+		// Scale the text up at high res so it stays readable at 1080p+.
+		const float TextScale = FMath::Max(1.0f, ViewScale * 1.5f);
+		DrawText(AmmoStr, FLinearColor(0.9f, 0.95f, 1.0f, 1.0f),
+			TextX, TextY + IconMaxH * 0.25f, Font, TextScale);
+
+		// AR grenades (secondary mag): show "GR cur / mag" with its icon below.
+		const int32 SecAmmo = Weapon->GetSecAmmo();
+		if (SecAmmo >= 0 && Def.SecMagSize > 0)
+		{
+			const float SecY = TextY + IconMaxH * 0.55f;
+			float SecX = PanelX + kAmmoIconX * PanelW;
+			if (UTexture2D* SecTex = GetHudTexture(Icons.SecAmmo))
+			{
+				const float Scale = (IconMaxH * 0.5f) / FMath::Max(1, SecTex->GetSizeY());
+				const float W = SecTex->GetSizeX() * Scale;
+				const float H = SecTex->GetSizeY() * Scale;
+				DrawTexture(SecTex, SecX, SecY, W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+				SecX += W + 6.0f * ViewScale;
+			}
+			const FString SecStr = FString::Printf(TEXT("%d / %d"), SecAmmo, Def.SecMagSize);
+			DrawText(SecStr, FLinearColor(1.0f, 0.85f, 0.3f, 1.0f),
+				SecX, SecY, Font, FMath::Max(1.0f, ViewScale * 1.2f));
+		}
+	}
 }
 
 UTexture2D* AM1HUD::GetFrameTexture(const FString& AssetBase, int32 Frame)
@@ -80,5 +258,23 @@ UTexture2D* AM1HUD::GetFrameTexture(const FString& AssetBase, int32 Frame)
 		TEXT("/Game/Sprites/Weapons/%s.%s"), *Key, *Key);
 	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *Path);
 	FrameCache.Add(Key, Tex);  // cache nulls too: one failed load, not 60/s
+	return Tex;
+}
+
+UTexture2D* AM1HUD::GetHudTexture(const TCHAR* AssetName)
+{
+	if (!AssetName || AssetName[0] == TEXT('\0'))
+	{
+		return nullptr;  // nullptr entry in the slot table (e.g. Fist has no icon)
+	}
+	const FString Key = AssetName;
+	if (UTexture2D** Found = FrameCache.Find(Key))
+	{
+		return *Found;
+	}
+	const FString Path = FString::Printf(
+		TEXT("/Game/Sprites/HUD/%s.%s"), AssetName, AssetName);
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *Path);
+	FrameCache.Add(Key, Tex);  // cache nulls too (art may not exist yet)
 	return Tex;
 }

@@ -33,17 +33,22 @@ SRC = ROOT.parent / "M1SOURCE" / "Marathon-20250829" / "Shapes.shps"
 RENDER_LISTS = [
     ROOT / "Reference" / "Sprites" / "render_list_monsters.json",
     ROOT / "Reference" / "Sprites" / "render_list_weapons.json",
+    ROOT / "Reference" / "Sprites" / "render_list_hud.json",
 ]
 
 
 def main() -> int:
-    wanted = {}  # (coll, clut, bitmap) -> out path
+    wanted = {}  # (coll, clut, bitmap) -> (out path, transparent)
     for lst in RENDER_LISTS:
         if not lst.is_file():
             print(f"missing {lst}; run the gen_* scripts first", file=sys.stderr)
             return 1
         for e in json.loads(lst.read_text(encoding="utf-8")):
-            wanted[(e["coll"], e["clut"], e["bitmap"])] = Path(e["out"])
+            # Default True for back-compat: monster/weapon sprites color-key
+            # index 0. The HUD panel chrome opts OUT (transparent=false) so its
+            # index-0 *opaque* chrome color survives instead of going alpha.
+            transparent = e.get("transparent", True)
+            wanted[(e["coll"], e["clut"], e["bitmap"])] = (Path(e["out"]), transparent)
     colls = {c for c, _, _ in wanted}
     print(f"renders: {len(wanted)} across collections {sorted(colls)}")
 
@@ -60,14 +65,16 @@ def main() -> int:
             continue
         parsed = shapes.parse_collection(res["data"])
         cluts = parsed["cluts"] or [[(0, 0, 0)] * 256]
-        for (c, k, b), out in wanted.items():
+        for (c, k, b), (out, transparent) in wanted.items():
             if c != coll_idx:
                 continue
             if b >= len(parsed["bitmaps"]):
                 print(f"  WARN Coll_{c:02d} has no bitmap {b}", file=sys.stderr)
                 continue
             bm = parsed["bitmaps"][b]
-            bm.transparent = True  # M1: index 0 is implicitly transparent
+            # Sprites/icons: index 0 is implicitly transparent (color-keyed).
+            # Panel chrome: index 0 is a real opaque color -- keep it opaque.
+            bm.transparent = transparent
             out.parent.mkdir(parents=True, exist_ok=True)
             bm.to_image(cluts[min(k, len(cluts) - 1)]).save(out)
             done += 1
