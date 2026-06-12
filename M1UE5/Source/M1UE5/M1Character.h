@@ -80,7 +80,7 @@ private:
 	/** Marathon "shields". No regeneration -- recharge canisters/chargers are a
 	 *  later system; v1 is a flat pool with restart-on-death. */
 	UPROPERTY(VisibleAnywhere, Category = "Health")
-	float Health = 100.0f;
+	float Health = 150.0f;  // set from M1Tuning::GPlayerShields in BeginPlay
 
 	/** HUD key 11: "Shields  NNN" readout (updated on BeginPlay + every hit). */
 	void ShowShields() const;

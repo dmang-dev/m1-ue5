@@ -1,6 +1,7 @@
 #include "M1Enemy.h"
 
 #include "M1Audio.h"
+#include "M1Tuning.h"
 
 #include "M1MonsterTable.h"
 #include "M1Projectile.h"
@@ -28,8 +29,6 @@ namespace
 	// random initial offset), never every frame.
 	constexpr float GSenseIntervalMin = 0.30f;
 	constexpr float GSenseIntervalMax = 0.50f;
-	constexpr float GMeleeReachCm = 60.0f;     // melee range = capsule radius + this
-	constexpr float GRangedRangeCapCm = 1500.0f;
 }
 
 const FM1MonsterRow* AM1Enemy::FindRow(int32 MonsterType)
@@ -311,7 +310,7 @@ void AM1Enemy::Activate(float Now)
 		UGameplayStatics::SpawnSoundAtLocation(this, ActivationSound, GetActorLocation(), FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 	}
 	NextRandomSoundTime = Now + FMath::FRandRange(4.0f, 8.0f);
-	NextAttackTime = Now + 0.5f;  // brief reaction beat before the first attack
+	NextAttackTime = Now + M1Tuning::GFirstAttackDelay;  // reaction beat before first attack
 }
 
 void AM1Enemy::Tick(float DeltaSeconds)
@@ -404,9 +403,9 @@ void AM1Enemy::Tick(float DeltaSeconds)
 	// Attack windows. Melee fires inside its reach; ranged inside its (capped)
 	// range with LOS. The closest applicable range gates the steering stop.
 	const float MeleeRange = Row->bHasMelee
-		? FMath::Max(Row->MeleeRangeCm, Row->RadiusCm + GMeleeReachCm) : 0.0f;
+		? FMath::Max(Row->MeleeRangeCm, Row->RadiusCm + M1Tuning::GMeleeReachCm) : 0.0f;
 	const float RangedRange = Row->bRanged
-		? FMath::Min(Row->AttackRangeRangedCm, GRangedRangeCapCm) : 0.0f;
+		? FMath::Min(Row->AttackRangeRangedCm, M1Tuning::GRangedRangeCapCm) : 0.0f;
 
 	const bool bMeleeNow = Row->bHasMelee && Row->MeleeDamage > 0.0f
 		&& Dist <= MeleeRange;

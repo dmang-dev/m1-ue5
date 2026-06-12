@@ -13,6 +13,7 @@
 #include "Engine/DamageEvents.h"
 #include "UObject/ConstructorHelpers.h"
 #include "M1WeaponComponent.h"
+#include "M1Tuning.h"
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -257,7 +258,8 @@ float AM1Character::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 		return 0.0f;  // already dead (level restart pending) or a no-op hit
 	}
 
-	Health -= DamageAmount;
+	const float Applied = DamageAmount * M1Tuning::GIncomingDamageScale;
+	Health -= Applied;
 	ShowShields();
 
 	if (Health <= 0.0f)
@@ -269,7 +271,7 @@ float AM1Character::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 			UGameplayStatics::OpenLevel(this, FName(*World->GetName()));
 		}
 	}
-	return DamageAmount;
+	return Applied;
 }
 
 void AM1Character::ShowShields() const
