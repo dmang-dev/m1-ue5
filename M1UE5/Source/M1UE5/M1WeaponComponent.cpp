@@ -608,6 +608,15 @@ void UM1WeaponComponent::ShowAmmo() const
 	{
 		return;
 	}
+	// No gameplay readout on the main menu (this pawn can spawn there if the menu
+	// level falls back to the gameplay game mode).
+	if (UWorld* W = GetWorld())
+	{
+		if (W->GetMapName().Contains(TEXT("MainMenu")))
+		{
+			return;
+		}
+	}
 
 	const FM1WeaponDef& W = Weapons[CurrentIndex];
 	const int32 Cur = Ammo.IsValidIndex(CurrentIndex) ? Ammo[CurrentIndex] : 0;

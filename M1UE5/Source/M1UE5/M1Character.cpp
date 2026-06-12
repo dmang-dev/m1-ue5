@@ -328,6 +328,17 @@ void AM1Character::BeginPlay()
 		FirstPersonCamera->SetFieldOfView(75.0f);
 	}
 
+	// The L_MainMenu level runs the MENU game mode (spectator pawn). If it ever
+	// falls back to the global gameplay game mode (the .umap GameMode override is
+	// a regenerable artifact), this pawn can still spawn there -- so skip ALL the
+	// gameplay presentation (teleport cue, HUD, debug stamps) on the menu so it
+	// never draws the gun/shield-bar over the menu. AM1HUD::DrawHUD guards too.
+	const bool bMenu = GetWorld() && GetWorld()->GetMapName().Contains(TEXT("MainMenu"));
+	if (bMenu)
+	{
+		return;
+	}
+
 	// Teleport-in SFX on level arrival (incl. [ / ] cycling). M1's atmosphere is
 	// event-driven rather than an ambient bed, so this is the cue that fits the
 	// current pre-combat state; monster/weapon/door SFX arrive with those systems.

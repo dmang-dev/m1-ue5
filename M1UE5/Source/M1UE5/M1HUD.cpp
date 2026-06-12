@@ -55,6 +55,16 @@ void AM1HUD::DrawHUD()
 {
 	Super::DrawHUD();
 
+	// Never draw the gameplay HUD (panel, viewmodel, terminal) on the main menu,
+	// even if the menu level falls back to the gameplay game mode.
+	if (UWorld* W = GetWorld())
+	{
+		if (W->GetMapName().Contains(TEXT("MainMenu")))
+		{
+			return;
+		}
+	}
+
 	AM1Character* Player = Cast<AM1Character>(GetOwningPawn());
 	UM1WeaponComponent* Weapon = Player ? Player->GetWeaponComponent() : nullptr;
 	if (!Player || !GetWorld() || !Canvas)
