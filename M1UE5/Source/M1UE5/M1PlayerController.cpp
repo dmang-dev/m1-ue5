@@ -1,5 +1,6 @@
 #include "M1PlayerController.h"
 #include "M1Character.h"
+#include "M1Tuning.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Layout/SBox.h"
@@ -210,11 +211,26 @@ void AM1PlayerController::CloseMenu()
 
 void AM1PlayerController::OnNewGame()
 {
+	// Reset the campaign checkpoint to level 0 at full shields so a New Game never
+	// inherits a previous run's shields/level.
+	AM1Character::M1WriteCheckpoint(0, M1Tuning::GPlayerShields);
 	// Tear the menu down BEFORE travelling — otherwise the widget lingers in the
 	// viewport into the next level and its button lambdas dereference this (now
 	// destroyed) controller on the next input event -> crash.
 	CloseMenu();
-	UGameplayStatics::OpenLevel(this, FName("/Game/Levels/M1/L_00_Arrival"));
+	UGameplayStatics::OpenLevel(this, FName(AM1Character::M1LevelPath(0)));
+}
+
+void AM1PlayerController::OnContinue()
+{
+	int32 Idx; float Shields;
+	if (!AM1Character::M1ReadCheckpoint(Idx, Shields))
+	{
+		OnNewGame();  // nothing saved yet -> just start fresh
+		return;
+	}
+	CloseMenu();
+	UGameplayStatics::OpenLevel(this, FName(AM1Character::M1LevelPath(Idx)));
 }
 
 void AM1PlayerController::OnQuitGame()
@@ -268,8 +284,9 @@ TSharedRef<SWidget> AM1PlayerController::BuildMainMenuScreen()
 	};
 
 	// Normalized rects measured off the 435x325 bitmap.
-	AddHotspot(0.345f, 0.085f, 0.793f, 0.175f, [this]() { OnNewGame(); });  // BEGIN NEW GAME
-	AddHotspot(0.420f, 0.815f, 0.595f, 0.910f, [this]() { OnQuitGame(); }); // QUIT
+	AddHotspot(0.345f, 0.085f, 0.793f, 0.175f, [this]() { OnNewGame(); });   // BEGIN NEW GAME
+	AddHotspot(0.345f, 0.185f, 0.793f, 0.265f, [this]() { OnContinue(); });  // CONTINUE SAVED GAME
+	AddHotspot(0.420f, 0.815f, 0.595f, 0.910f, [this]() { OnQuitGame(); });  // QUIT
 
 	return SNew(SOverlay)
 		// Black backdrop fills the pillarbox bars around the 4:3 bitmap.

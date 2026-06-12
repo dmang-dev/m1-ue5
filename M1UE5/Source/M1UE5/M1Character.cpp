@@ -15,6 +15,7 @@
 #include "M1WeaponComponent.h"
 #include "M1Tuning.h"
 #include "M1TerminalTable.h"
+#include "M1SaveGame.h"
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -339,6 +340,19 @@ void AM1Character::BeginPlay()
 		return;
 	}
 
+	// Carry shields forward from the checkpoint. The checkpoint is stamped with
+	// the level it belongs to (written on transition / New Game), so a stale save
+	// from a different level never bleeds its shields into this one.
+	if (GetWorld())
+	{
+		int32 SavedIdx; float SavedShields;
+		const int32 CurIdx = M1LevelIndexForMap(GetWorld()->GetMapName());
+		if (CurIdx >= 0 && M1ReadCheckpoint(SavedIdx, SavedShields) && SavedIdx == CurIdx)
+		{
+			Health = FMath::Clamp(SavedShields, 1.0f, M1Tuning::GPlayerShields);
+		}
+	}
+
 	// Teleport-in SFX on level arrival (incl. [ / ] cycling). M1's atmosphere is
 	// event-driven rather than an ambient bed, so this is the cue that fits the
 	// current pre-combat state; monster/weapon/door SFX arrive with those systems.
@@ -428,22 +442,77 @@ void AM1Character::CycleLevel(int32 Direction)
 	{
 		return;
 	}
+	const int32 Index = FMath::Max(0, M1LevelIndexForMap(GetWorld()->GetMapName()));
+	const int32 Next = ((Index + Direction) % GM1LevelCount + GM1LevelCount) % GM1LevelCount;
+	// Checkpoint the destination + carry current shields forward (Marathon
+	// shields never regenerate, so the next level starts where this one left off).
+	M1WriteCheckpoint(Next, Health);
+	UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+}
 
+int32 AM1Character::M1LevelCount()
+{
+	return GM1LevelCount;
+}
+
+const TCHAR* AM1Character::M1LevelPath(int32 Index)
+{
+	return GM1Levels[FMath::Clamp(Index, 0, GM1LevelCount - 1)];
+}
+
+int32 AM1Character::M1LevelIndexForMap(const FString& MapName)
+{
 	// GetMapName() is the short package name (possibly PIE-prefixed); match it
 	// against each level's clean filename.
-	const FString Current = GetWorld()->GetMapName();
-	int32 Index = 0;
 	for (int32 i = 0; i < GM1LevelCount; ++i)
 	{
-		if (Current.EndsWith(FPaths::GetCleanFilename(GM1Levels[i])))
+		if (MapName.EndsWith(FPaths::GetCleanFilename(GM1Levels[i])))
 		{
-			Index = i;
-			break;
+			return i;
 		}
 	}
+	return -1;
+}
 
-	const int32 Next = ((Index + Direction) % GM1LevelCount + GM1LevelCount) % GM1LevelCount;
-	UGameplayStatics::OpenLevel(this, FName(GM1Levels[Next]));
+namespace
+{
+	const TCHAR* const GM1SaveSlot = TEXT("M1Campaign");
+}
+
+void AM1Character::M1WriteCheckpoint(int32 LevelIndex, float Shields)
+{
+	UM1SaveGame* Save = Cast<UM1SaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UM1SaveGame::StaticClass()));
+	if (!Save)
+	{
+		return;
+	}
+	Save->LevelIndex = LevelIndex;
+	Save->Shields = Shields;
+	Save->bValid = true;
+	UGameplayStatics::SaveGameToSlot(Save, GM1SaveSlot, 0);
+}
+
+bool AM1Character::M1ReadCheckpoint(int32& OutLevelIndex, float& OutShields)
+{
+	if (!UGameplayStatics::DoesSaveGameExist(GM1SaveSlot, 0))
+	{
+		return false;
+	}
+	UM1SaveGame* Save = Cast<UM1SaveGame>(UGameplayStatics::LoadGameFromSlot(GM1SaveSlot, 0));
+	if (!Save || !Save->bValid)
+	{
+		return false;
+	}
+	OutLevelIndex = Save->LevelIndex;
+	OutShields = Save->Shields;
+	return true;
+}
+
+bool AM1Character::M1HasCheckpoint()
+{
+	int32 Idx; float Sh;
+	return M1ReadCheckpoint(Idx, Sh);
 }
 
 void AM1Character::MoveForward(float Value)

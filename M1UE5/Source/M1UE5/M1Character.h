@@ -32,6 +32,14 @@ public:
 	 *  menu and HUD always show the SAME value instead of per-file compile times. */
 	static FString GetBuildStamp();
 
+	/** --- Campaign level order + checkpoint, shared with the menu controller. --- */
+	static int32 M1LevelCount();
+	static const TCHAR* M1LevelPath(int32 Index);             // clamped package path
+	static int32 M1LevelIndexForMap(const FString& MapName);  // -1 if not a campaign map
+	static void M1WriteCheckpoint(int32 LevelIndex, float Shields);
+	static bool M1ReadCheckpoint(int32& OutLevelIndex, float& OutShields);
+	static bool M1HasCheckpoint();
+
 	/** The HUD viewmodel reads weapon state through this (M1HUD.cpp). */
 	UM1WeaponComponent* GetWeaponComponent() const { return Weapon; }
 

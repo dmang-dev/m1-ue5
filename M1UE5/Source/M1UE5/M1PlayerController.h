@@ -28,6 +28,7 @@ private:
 	void DismissChapterScreen();
 
 	void OnNewGame();
+	void OnContinue();
 	void OnQuitGame();
 	void OnReturnToMenu();
 
