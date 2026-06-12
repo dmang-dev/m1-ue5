@@ -169,6 +169,16 @@ Asset pipeline is the published package **`py-marathon-utils`**
 
 ## Known issues / gotchas ⚠️
 
+- **M1 sprite PNGs extract fully opaque** — Marathon 1's Shapes format predates
+  the per-bitmap transparent flag (0x4000) that py-marathon-utils' alpha rule
+  checks, so index-0 (the engine's implicit sprite transparency) bakes in as
+  opaque chroma blue → blue boxes around enemies/weapons. After any
+  `extract_reference.py --shapes`, run `Tools/fix_sprite_alpha.py` with the
+  project venv (`.venv\Scripts\python.exe`, has marathon_utils + Pillow) to
+  re-render the sprite bitmaps with forced index-0 alpha, then re-run
+  `Tools/ue5_import_sprites.py`. Candidate for an upstream py-marathon-utils
+  fix (treat M1 sprite-collection bitmaps as transparent by default).
+
 - **OBJ import MUST use the LEGACY importer, not Interchange.** UE5's Interchange
   OBJ translator silently culls ~17% of each level's triangles at the *translate*
   stage (Arrival 2738→2208), punching holes around every terminal niche. No
