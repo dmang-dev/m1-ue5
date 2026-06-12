@@ -98,8 +98,15 @@ mat.set_editor_property("two_sided", True)
 node = mel.create_material_expression(
     mat, unreal.MaterialExpressionTextureSampleParameter2D, -380, 0)
 node.set_editor_property("parameter_name", "Sprite")
-# Give the parameter a sane default so the material compiles standalone.
-default_tex = unreal.load_asset(f"{DEST}/T_mon2_stand")
+# Give the parameter a sane default so the material compiles standalone. The
+# old per-type T_mon2_stand asset is gone (shared textures now); use the first
+# successfully imported monster texture instead.
+default_tex = None
+for p in sorted(unreal.EditorAssetLibrary.list_assets(DEST, recursive=False)):
+    asset = unreal.load_asset(p)
+    if isinstance(asset, unreal.Texture2D):
+        default_tex = asset
+        break
 if default_tex:
     node.set_editor_property("texture", default_tex)
 mel.connect_material_property(node, "RGB", unreal.MaterialProperty.MP_EMISSIVE_COLOR)

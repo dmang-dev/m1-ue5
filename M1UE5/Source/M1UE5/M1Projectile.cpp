@@ -3,12 +3,17 @@
 #include "M1Audio.h"
 
 #include "Components/SphereComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/StaticMesh.h"
 #include "Sound/SoundBase.h"
 #include "Engine/World.h"
 #include "Engine/HitResult.h"
 #include "DrawDebugHelpers.h"
+#include "UObject/ConstructorHelpers.h"
 
 AM1Projectile::AM1Projectile()
 {
@@ -36,6 +41,27 @@ AM1Projectile::AM1Projectile()
 	ProjectileMovement->bShouldBounce = false;
 	ProjectileMovement->ProjectileGravityScale = 0.0f;  // straight flight in v1
 
+	// Visible tracer: a tiny engine sphere (radius 50cm at scale 1 -> ~10cm at
+	// 0.2), no collision (the root sphere owns collision). Made unlit-emissive in
+	// Init so player AND enemy bolts read as energy. v1 tracer, not VFX.
+	TracerMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TracerMesh"));
+	TracerMesh->SetupAttachment(CollisionSphere);
+	TracerMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	TracerMesh->SetCollisionProfileName(TEXT("NoCollision"));
+	TracerMesh->SetCastShadow(false);
+	TracerMesh->SetRelativeScale3D(FVector(0.2f));  // ~10cm diameter
+	static ConstructorHelpers::FObjectFinderOptional<UStaticMesh> SphereFinder(
+		TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (UStaticMesh* SphereMesh = SphereFinder.Get())
+	{
+		TracerMesh->SetStaticMesh(SphereMesh);
+	}
+	// Base material the emissive MID is built over (engine basic, two-sided not
+	// needed). Tolerated-missing: the tracer then renders with the mesh default.
+	static ConstructorHelpers::FObjectFinderOptional<UMaterialInterface> TracerMatFinder(
+		TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+	TracerBaseMaterial = TracerMatFinder.Get();
+
 	// Speed is finalized in Init; clean up after ~5s so strays don't linger.
 	InitialLifeSpan = 5.0f;
 }
@@ -53,6 +79,23 @@ void AM1Projectile::Init(float Speed, float InDamage, float InBlastRadius, USoun
 		// If movement already activated (deferred spawn finished), push the new
 		// speed along the current facing so the bolt actually flies.
 		ProjectileMovement->Velocity = GetActorForwardVector() * Speed;
+	}
+
+	// Build the emissive-ish tracer material once flight is configured. A MID
+	// over the engine basic material; we set the common color params (only the
+	// ones the material actually exposes take effect -- the rest no-op) to an
+	// energy orange so both player and enemy bolts read in flight.
+	if (TracerMesh && TracerBaseMaterial)
+	{
+		if (UMaterialInstanceDynamic* TracerMID =
+			UMaterialInstanceDynamic::Create(TracerBaseMaterial, this))
+		{
+			const FLinearColor Energy(4.0f, 1.6f, 0.2f, 1.0f);  // bright orange
+			TracerMID->SetVectorParameterValue(TEXT("Color"), Energy);
+			TracerMID->SetVectorParameterValue(TEXT("EmissiveColor"), Energy);
+			TracerMID->SetVectorParameterValue(TEXT("BaseColor"), Energy);
+			TracerMesh->SetMaterial(0, TracerMID);
+		}
 	}
 
 	// Ignore the shooter so the projectile doesn't collide point-blank at spawn.

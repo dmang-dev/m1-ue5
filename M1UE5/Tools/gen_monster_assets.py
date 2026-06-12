@@ -157,15 +157,25 @@ def load_collection(coll):
     return data
 
 
-def resolve_state(coll_data, coll, clut, shape_ref, render_list):
-    """shape_ref ({'shape': N, ...} or None) -> dict with the FRONT (view 0)
-    frame list, or None. Each frame: png path, world box in cm.
+# Shared-texture asset name for one unique (coll, clut, bitmap). One texture is
+# imported per source bitmap+palette and reused across every (type, state, view,
+# frame) that references it -- no more per-(type,state,frame) duplication.
+def shared_tex_name(coll, clut, bmp):
+    return "T_spr_c%02dk%d_%03d" % (coll, clut, bmp)
 
-    Frame pngs point at CLUT-correct renders under Reference/Sprites/png/
-    (produced by Tools/render_sprites.py from Shapes.shps with the monster's
-    color table + forced index-0 alpha); each needed (coll, clut, bitmap) is
-    recorded in render_list. The clut-0 extraction under Reference/Shapes is
-    only used to verify the source bitmap exists."""
+
+def resolve_state(coll_data, coll, clut, shape_ref, render_list, import_set):
+    """shape_ref ({'shape': N, ...} or None) -> dict describing ALL views of the
+    animation (a [view][frame] grid of shared textures), or None.
+
+    For each cell the source (coll, clut, bitmap) is recorded once in render_list
+    (clut-correct, alpha-forced render under Reference/Sprites/png/) and once in
+    import_set (the SHARED UE texture asset, deduped across the whole run). The
+    clut-0 extraction under Reference/Shapes is only used to verify the bitmap
+    exists. Returns the view-major grid plus animation timing + world box.
+
+    Marathon stores number_of_views directions (1/4/5/8); the C++ enemy mirrors
+    5 -> 8 at runtime, so we emit exactly number_of_views views here."""
     if not shape_ref:
         return None
     idx = shape_ref.get("shape", -1)
@@ -176,38 +186,58 @@ def resolve_state(coll_data, coll, clut, shape_ref, render_list):
     sounds = [hs.get("key_frame_sound", -1), hs.get("first_frame_sound", -1),
               hs.get("last_frame_sound", -1)]
     fpv = hs["frames_per_view"]
+    nv = hs.get("number_of_views", 1)
     flat = hs["low_shape_indices"]
-    if fpv <= 0 or not flat:
+    lows = coll_data["low_shapes"]
+    if fpv <= 0 or nv <= 0 or not flat:
         return None
-    frames = []
-    for f in range(min(fpv, len(flat))):  # view 0 = first fpv entries (views-major)
-        low_idx = flat[f]
-        lows = coll_data["low_shapes"]
-        if low_idx < 0 or low_idx >= len(lows):
-            return None
-        low = lows[low_idx]
-        bmp = low["bitmap_index"]
-        src = os.path.join(SHAPES, "Coll_%02d" % coll, "bitmaps", "%03d.png" % bmp)
-        if not os.path.isfile(src):
-            return None
-        png = os.path.join(SPRITES_OUT, "png", "c%02d_k%d_%03d.png" % (coll, clut, bmp))
-        render_list.append({"coll": coll, "clut": clut, "bitmap": bmp, "out": png})
-        frames.append({
-            "png": png,
-            "bitmap_index": bmp,
-            "width_cm": round((low["world_right"] - low["world_left"]) * CM_PER_INTERNAL, 2),
-            "height_cm": round((low["world_top"] - low["world_bottom"]) * CM_PER_INTERNAL, 2),
-        })
-    if not frames:
+    # The stored low_shape_indices is view-major and may hold more views than
+    # number_of_views (the file pre-unfolds 5 -> 8); cap to what fits.
+    nv = min(nv, len(flat) // fpv)
+    if nv <= 0:
+        return None
+
+    grid = []          # grid[view][frame] = {"tex","bitmap","width_cm","height_cm"}
+    size_cell = None   # first valid cell -> used for the sprite world box
+    for v in range(nv):
+        row = []
+        for f in range(fpv):
+            low_idx = flat[v * fpv + f]  # view-major: (view v, frame f)
+            if low_idx < 0 or low_idx >= len(lows):
+                return None
+            low = lows[low_idx]
+            bmp = low["bitmap_index"]
+            src = os.path.join(SHAPES, "Coll_%02d" % coll, "bitmaps", "%03d.png" % bmp)
+            if not os.path.isfile(src):
+                return None
+            png = os.path.join(SPRITES_OUT, "png", "c%02d_k%d_%03d.png" % (coll, clut, bmp))
+            render_list.append({"coll": coll, "clut": clut, "bitmap": bmp, "out": png})
+            tex = shared_tex_name(coll, clut, bmp)
+            import_set[tex] = png  # dedupe: shared asset name -> its source png
+            cell = {
+                "tex": tex,
+                "bitmap_index": bmp,
+                "width_cm": round((low["world_right"] - low["world_left"]) * CM_PER_INTERNAL, 2),
+                "height_cm": round((low["world_top"] - low["world_bottom"]) * CM_PER_INTERNAL, 2),
+            }
+            if size_cell is None:
+                size_cell = cell
+            row.append(cell)
+        grid.append(row)
+    if size_cell is None:
         return None
     return {
         "shape_index": idx,
         "shape_name": hs.get("name"),
+        "number_of_views": nv,
+        "frames_per_view": fpv,
         "ticks_per_frame": hs["ticks_per_frame"],
         "frame_time_s": round(hs["ticks_per_frame"] / TICKS_PER_SECOND, 4),
         # First valid frame sound (key > first > last), as a 'snd ' resource id.
         "frame_sound": next((s for s in sounds if s is not None and s >= 0), -1),
-        "frames": frames,
+        "grid": grid,            # [view][frame] of shared-texture cells
+        "width_cm": size_cell["width_cm"],
+        "height_cm": size_cell["height_cm"],
     }
 
 
@@ -227,22 +257,65 @@ def used_monster_types():
     return types
 
 
-def attack_info(monster, projectiles):
-    """(range_cm, damage, ranged?, ranged_speed_cms) preferring melee, else
-    ranged, per the v1 design. Damage = projectile base + random/2."""
-    def proj_damage(a):
-        p = projectiles[a["type"]]
-        return p["damage"]["base"] + p["damage"]["random"] / 2.0
+def proj_damage(p):
+    # Damage = projectile base + half of the random spread (commented in the
+    # header). Marathon rolls base + rand(0..random); the midpoint is the
+    # expected value, a fair single stat to drive a v1 enemy bolt.
+    return p["damage"]["base"] + p["damage"]["random"] / 2.0
 
-    melee = monster.get("melee_attack")
-    ranged = monster.get("ranged_attack")
-    if melee and melee.get("type", -1) >= 0:
-        return (melee["range"] * CM_PER_WU, proj_damage(melee), False, 0.0)
-    if ranged and ranged.get("type", -1) >= 0:
+
+def attack_info(monster, projectiles):
+    """Resolve both melee and ranged capability into the row's combat stats.
+
+    Returns a dict consumed verbatim by the C++ row. Marathon enemies can have
+    melee, ranged, or both; the C++ AI picks melee when the player is close and
+    the bolt otherwise. Damage for the existing 'AttackDamage' field is the
+    melee damage if melee-capable, else the ranged (bolt) damage."""
+    melee = monster.get("melee_attack") or {}
+    ranged = monster.get("ranged_attack") or {}
+    has_melee = melee.get("type", -1) >= 0
+    has_ranged = ranged.get("type", -1) >= 0
+
+    info = {
+        "has_melee": has_melee,
+        "melee_damage": 0.0,
+        "melee_range_cm": 0.0,
+        "ranged": has_ranged,
+        "proj_type": -1,
+        "proj_damage": 0.0,
+        "proj_speed_cms": 0.0,
+        "proj_blast_cm": 0.0,
+        "attack_range_cm": 0.0,
+        "proj_flyby_sound": "",
+    }
+
+    if has_melee:
+        info["melee_damage"] = round(proj_damage(projectiles[melee["type"]]), 2)
+        # Melee 'range' in M1 is usually 0; use a fixed ~120cm reach.
+        info["melee_range_cm"] = round(max(melee.get("range", 0.0) * CM_PER_WU, 120.0), 2)
+
+    if has_ranged:
         p = projectiles[ranged["type"]]
-        speed_cms = p["speed"] * CM_PER_WU * TICKS_PER_SECOND
-        return (ranged["range"] * CM_PER_WU, proj_damage(ranged), True, speed_cms)
-    return (0.0, 0.0, False, 0.0)
+        info["proj_type"] = ranged["type"]
+        info["proj_damage"] = round(proj_damage(p), 2)
+        # projectile speed is WU/tick -> cm/s (verified fusion 0.25 -> 750).
+        info["proj_speed_cms"] = round(p["speed"] * CM_PER_WU * TICKS_PER_SECOND, 2)
+        info["proj_blast_cm"] = round(p.get("area_of_effect", 0.0) * CM_PER_WU, 2)
+        info["attack_range_cm"] = round(ranged["range"] * CM_PER_WU, 2)
+        info["proj_flyby_sound"] = sound_path(p.get("flyby_sound", -1))
+
+    # The legacy 'attack_range_cm'/'attack_damage' fields the enemy already uses:
+    # prefer melee reach + damage when present, else the ranged numbers.
+    if has_melee:
+        info["primary_range_cm"] = info["melee_range_cm"]
+        info["primary_damage"] = info["melee_damage"]
+    elif has_ranged:
+        info["primary_range_cm"] = info["attack_range_cm"]
+        info["primary_damage"] = info["proj_damage"]
+    else:
+        info["primary_range_cm"] = 0.0
+        info["primary_damage"] = 0.0
+    return info
 
 
 def build():
@@ -254,7 +327,7 @@ def build():
 
     manifest = {}
     rows = []          # for M1MonsterTable.h
-    import_list = []   # for ue5_import_sprites.py
+    import_set = {}    # shared asset name -> source png (deduped across all types)
     render_list = []   # for render_sprites.py (clut-correct, alpha-forced pngs)
     skipped = {}
 
@@ -270,44 +343,38 @@ def build():
             skipped[mtype] = "degenerate def (radius/height 0; placeholder slot)"
             continue
 
+        def rs(shape_ref):
+            return resolve_state(coll_data, coll, clut, shape_ref, render_list, import_set)
+
         states = {}
-        states["stationary"] = resolve_state(coll_data, coll, clut, mon.get("stationary_shape"), render_list)
-        states["moving"] = resolve_state(coll_data, coll, clut, mon.get("moving_shape"), render_list)
-        states["hit"] = resolve_state(coll_data, coll, clut, mon.get("hit_shape"), render_list)
+        states["stationary"] = rs(mon.get("stationary_shape"))
+        states["moving"] = rs(mon.get("moving_shape"))
+        states["hit"] = rs(mon.get("hit_shape"))
         # Hard variants first (the canonical violent death look), soft as fallback.
-        states["dying"] = (resolve_state(coll_data, coll, clut, mon.get("hard_dying_shape"), render_list)
-                           or resolve_state(coll_data, coll, clut, mon.get("soft_dying_shape"), render_list))
-        states["dead"] = (resolve_state(coll_data, coll, clut, mon.get("hard_dead_shape"), render_list)
-                          or resolve_state(coll_data, coll, clut, mon.get("soft_dead_shape"), render_list))
+        states["dying"] = rs(mon.get("hard_dying_shape")) or rs(mon.get("soft_dying_shape"))
+        states["dead"] = rs(mon.get("hard_dead_shape")) or rs(mon.get("soft_dead_shape"))
 
         if not states["moving"] and not states["stationary"]:
             skipped[mtype] = "no usable stationary/moving shapes"
             continue
 
-        # Sprite picks (front view): stand, move frames, dead -- with fallbacks.
-        stand_frame = ((states["stationary"] or states["moving"])["frames"][0])
-        move = states["moving"] or states["stationary"]
-        move_frames = move["frames"]
+        # The three render states the enemy uses: stand (idle), walk (chasing),
+        # and a single dead pose. Fall back gracefully when a shape is missing.
+        stand = states["stationary"] or states["moving"]
+        walk = states["moving"] or states["stationary"]
         if states["dead"]:
-            dead_frame = states["dead"]["frames"][0]
+            dead = states["dead"]
         elif states["dying"]:
-            dead_frame = states["dying"]["frames"][-1]  # last dying frame = on the ground
+            dead = states["dying"]  # last dying frame is the on-the-ground pose
         else:
-            dead_frame = stand_frame
+            dead = stand
 
         # Death cry: the dying animation's frame sound, else the random sound.
         death_sound_id = states["dying"]["frame_sound"] if states["dying"] else -1
         death_sound = sound_path(death_sound_id) or sound_path(mon.get("random_sound", -1))
 
-        base = "T_mon%d" % mtype
-        import_list.append({"png_path": stand_frame["png"], "asset_name": base + "_stand"})
-        for i, fr in enumerate(move_frames):
-            import_list.append({"png_path": fr["png"], "asset_name": "%s_move%d" % (base, i)})
-        import_list.append({"png_path": dead_frame["png"], "asset_name": base + "_dead"})
-
         # Stats (units per the module docstring).
-        rng_cm, dmg, is_ranged, rng_speed = attack_info(mon, projectiles)
-        size_frame = move_frames[0]
+        atk = attack_info(mon, projectiles)
         name = MONSTER_NAMES.get(mtype, "Mon%02d" % mtype)
         row = {
             "type": mtype,
@@ -317,19 +384,33 @@ def build():
             "height_cm": round(mon["height"] * CM_PER_WU, 2),
             "speed_cms": round(mon["speed"] / 1024.0 * 100.0 * TICKS_PER_SECOND, 2),
             "visual_range_cm": round(mon["visual_range"] * CM_PER_WU, 2),
-            "attack_range_cm": round(rng_cm, 2),
-            "attack_interval_s": round(max(0.25, mon["attack_frequency"] / TICKS_PER_SECOND), 4),
-            "attack_damage": round(dmg, 2),
-            "ranged": is_ranged,
-            "ranged_speed_cms": round(rng_speed, 2),
+            # Primary attack (melee reach + dmg if melee, else ranged) -- kept for
+            # the existing AI gate; new combat detail lives in the explicit fields.
+            "attack_range_cm": round(atk["primary_range_cm"], 2),
+            "attack_interval_s": round(max(0.5, mon["attack_frequency"] / TICKS_PER_SECOND), 4),
+            "attack_damage": round(atk["primary_damage"], 2),
+            # Combat detail.
+            "has_melee": atk["has_melee"],
+            "melee_damage": atk["melee_damage"],
+            "melee_range_cm": atk["melee_range_cm"],
+            "ranged": atk["ranged"],
+            "proj_type": atk["proj_type"],
+            "proj_damage": atk["proj_damage"],
+            "proj_speed_cms": atk["proj_speed_cms"],
+            "proj_blast_cm": atk["proj_blast_cm"],
+            "ranged_range_cm": atk["attack_range_cm"],
+            "proj_flyby_sound": atk["proj_flyby_sound"],
+            "melee_sound": sound_path(mon.get("flaming_sound", -1)),
             "activation_sound": sound_path(mon.get("activation_sound", -1)),
             "random_sound": sound_path(mon.get("random_sound", -1)),
             "death_sound": death_sound,
-            "sprite_base": "/Game/Sprites/Monsters/" + base,
-            "move_frames": len(move_frames),
-            "move_frame_time_s": round(max(1, move["ticks_per_frame"]) / TICKS_PER_SECOND, 4),
-            "sprite_width_cm": size_frame["width_cm"],
-            "sprite_height_cm": size_frame["height_cm"],
+            # Per-state view grids (flat texture-name arrays + dims) for the
+            # billboard. The enemy resolves a texture per (view, frame).
+            "stand": state_block(stand),
+            "walk": state_block(walk),
+            "dead": state_block(dead),
+            "sprite_width_cm": stand["width_cm"],
+            "sprite_height_cm": stand["height_cm"],
         }
         rows.append(row)
         manifest[str(mtype)] = {
@@ -341,12 +422,27 @@ def build():
             "row": row,
         }
 
-    # Dedupe render entries (states share bitmaps within a type).
+    # Dedupe render entries (states share bitmaps within and across types).
     seen = set()
     render_list = [r for r in render_list
                    if (key := (r["coll"], r["clut"], r["bitmap"])) not in seen
                    and not seen.add(key)]
+    # Shared textures: one import per unique (coll, clut, bitmap), sorted stable.
+    import_list = [{"png_path": png, "asset_name": name}
+                   for name, png in sorted(import_set.items())]
     return rows, manifest, import_list, render_list, skipped, type_counts
+
+
+def state_block(state):
+    """Flatten a resolved state into the row's view grid: NumViews, FramesPerView,
+    FrameTicks and a view-major list of shared texture asset names."""
+    flat = [cell["tex"] for view in state["grid"] for cell in view]
+    return {
+        "num_views": state["number_of_views"],
+        "frames_per_view": state["frames_per_view"],
+        "frame_ticks": max(1, state["ticks_per_frame"]),
+        "textures": flat,  # length = num_views * frames_per_view, view-major
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -381,14 +477,43 @@ def fmt_f(v):
     return ("%.2f" % float(v)) + "f"
 
 
+TEX_DIR = "/Game/Sprites/Monsters/"  # shared textures imported here
+
+
+def emit_state_array(lines, var, block):
+    """Emit a file-scope static const TCHAR* array of view-major texture PATHS
+    for one (type, state). Empty states get a single-element placeholder array so
+    the pointer is never null."""
+    lines.append("static const TCHAR* const %s[] =" % var)
+    lines.append("{")
+    texs = block["textures"] if block and block.get("textures") else []
+    if texs:
+        for t in texs:
+            lines.append('\tTEXT("%s%s.%s"),' % (TEX_DIR, t, t))
+    else:
+        lines.append('\tTEXT(""),')
+    lines.append("};\n")
+
+
 def write_monster_table(rows):
     lines = [GENERATED_NOTE]
     lines.append("#pragma once\n")
     lines.append('#include "CoreMinimal.h"\n')
+    lines.append("/** A monster animation state for the billboard: a view-major grid of")
+    lines.append(" *  SHARED texture asset paths (Textures points at NumViews*FramesPerView")
+    lines.append(" *  entries; cell (view v, frame f) = Textures[v*FramesPerView + f]).")
+    lines.append(" *  Marathon stores up to 5 views and mirrors to 8; the enemy does that. */")
+    lines.append("struct FM1SpriteState")
+    lines.append("{")
+    lines.append("\tint32 NumViews;")
+    lines.append("\tint32 FramesPerView;")
+    lines.append("\tint32 FrameTicks;            // 30Hz ticks per frame")
+    lines.append("\tconst TCHAR* const* Textures;  // view-major asset paths")
+    lines.append("};\n")
     lines.append("/** One Marathon 1 monster type (stats in UE cm / seconds; see")
     lines.append(" *  Tools/gen_monster_assets.py for the unit conversions). Sounds are full")
-    lines.append(" *  asset paths or empty. SpriteBase is the /Game/Sprites/Monsters texture")
-    lines.append(" *  prefix; the import script provides _stand, _move0..N-1 and _dead. */")
+    lines.append(" *  asset paths or empty. Stand/Walk/Dead carry shared multi-view sprite")
+    lines.append(" *  grids; ProjDamage = projectile base + half random (expected value). */")
     lines.append("struct FM1MonsterRow")
     lines.append("{")
     lines.append("\tint32 Type;")
@@ -398,32 +523,61 @@ def write_monster_table(rows):
     lines.append("\tfloat HeightCm;")
     lines.append("\tfloat SpeedCmS;")
     lines.append("\tfloat VisualRangeCm;")
-    lines.append("\tfloat AttackRangeCm;")
+    lines.append("\tfloat AttackRangeCm;        // primary-attack gate (melee reach or ranged)")
     lines.append("\tfloat AttackIntervalS;")
-    lines.append("\tfloat AttackDamage;")
-    lines.append("\tbool bRangedAttack;")
-    lines.append("\tfloat RangedSpeedCmS;")
+    lines.append("\tfloat AttackDamage;         // primary-attack damage")
+    lines.append("\t// --- ranged / melee detail ---")
+    lines.append("\tbool bHasMelee;")
+    lines.append("\tfloat MeleeDamage;")
+    lines.append("\tfloat MeleeRangeCm;")
+    lines.append("\tbool bRanged;")
+    lines.append("\tint32 ProjType;             // Marathon projectile index (-1 = none)")
+    lines.append("\tfloat ProjDamage;")
+    lines.append("\tfloat ProjSpeedCmps;")
+    lines.append("\tfloat ProjBlastCm;")
+    lines.append("\tfloat AttackRangeRangedCm;")
+    lines.append("\tconst TCHAR* ProjFlybySound;")
+    lines.append("\tconst TCHAR* MeleeSound;")
+    lines.append("\t// --- sounds ---")
     lines.append("\tconst TCHAR* ActivationSound;")
     lines.append("\tconst TCHAR* RandomSound;")
     lines.append("\tconst TCHAR* DeathSound;")
-    lines.append("\tconst TCHAR* SpriteBase;")
-    lines.append("\tint32 MoveFrames;")
-    lines.append("\tfloat MoveFrameTimeS;")
+    lines.append("\t// --- sprite states ---")
+    lines.append("\tFM1SpriteState Stand;")
+    lines.append("\tFM1SpriteState Walk;")
+    lines.append("\tFM1SpriteState Dead;")
     lines.append("\tfloat SpriteWidthCm;")
     lines.append("\tfloat SpriteHeightCm;")
     lines.append("};\n")
+
+    # Per-(type,state) texture-path arrays first; the rows reference them.
+    for r in rows:
+        for st in ("stand", "walk", "dead"):
+            emit_state_array(lines, "GM1Tex_%d_%s" % (r["type"], st), r[st])
+
+    def state_init(r, st):
+        b = r[st]
+        return "{ %d, %d, %d, GM1Tex_%d_%s }" % (
+            b["num_views"], b["frames_per_view"], b["frame_ticks"], r["type"], st)
+
     lines.append("static const FM1MonsterRow GM1MonsterTable[] =")
     lines.append("{")
     for r in rows:
         lines.append(
-            "\t{ %d, TEXT(\"%s\"), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TEXT(\"%s\"), TEXT(\"%s\"), TEXT(\"%s\"), TEXT(\"%s\"), %d, %s, %s, %s },"
+            "\t{ %d, TEXT(\"%s\"), %s, %s, %s, %s, %s, %s, %s, %s, "
+            "%s, %s, %s, %s, %d, %s, %s, %s, %s, TEXT(\"%s\"), TEXT(\"%s\"), "
+            "TEXT(\"%s\"), TEXT(\"%s\"), TEXT(\"%s\"), %s, %s, %s, %s, %s },"
             % (r["type"], r["name"], fmt_f(r["vitality"]), fmt_f(r["radius_cm"]),
                fmt_f(r["height_cm"]), fmt_f(r["speed_cms"]), fmt_f(r["visual_range_cm"]),
                fmt_f(r["attack_range_cm"]), fmt_f(r["attack_interval_s"]),
-               fmt_f(r["attack_damage"]), "true" if r["ranged"] else "false",
-               fmt_f(r["ranged_speed_cms"]), r["activation_sound"], r["random_sound"],
-               r["death_sound"],
-               r["sprite_base"], r["move_frames"], fmt_f(r["move_frame_time_s"]),
+               fmt_f(r["attack_damage"]),
+               "true" if r["has_melee"] else "false", fmt_f(r["melee_damage"]),
+               fmt_f(r["melee_range_cm"]), "true" if r["ranged"] else "false",
+               r["proj_type"], fmt_f(r["proj_damage"]), fmt_f(r["proj_speed_cms"]),
+               fmt_f(r["proj_blast_cm"]), fmt_f(r["ranged_range_cm"]),
+               r["proj_flyby_sound"], r["melee_sound"],
+               r["activation_sound"], r["random_sound"], r["death_sound"],
+               state_init(r, "stand"), state_init(r, "walk"), state_init(r, "dead"),
                fmt_f(r["sprite_width_cm"]), fmt_f(r["sprite_height_cm"])))
     lines.append("};\n")
     lines.append("static const int32 GM1MonsterTableCount = UE_ARRAY_COUNT(GM1MonsterTable);\n")

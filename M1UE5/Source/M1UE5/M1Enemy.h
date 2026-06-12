@@ -10,6 +10,7 @@ class UMaterialInstanceDynamic;
 class UTexture2D;
 class USoundBase;
 struct FM1MonsterRow;
+struct FM1SpriteState;
 
 /**
  * A Marathon 1 monster: a billboarded sprite card on an ACharacter capsule,
@@ -54,12 +55,32 @@ private:
 	void SetSpriteTexture(UTexture2D* Texture);
 	bool HasLineOfSight(const FVector& TargetLocation) const;
 
+	/** Load + cache a shared sprite texture by asset path (TMap so we never
+	 *  LoadObject per frame). Returns nullptr (and caches the miss) when the
+	 *  texture isn't imported yet -- callers must tolerate that. */
+	UTexture2D* GetSharedTexture(const TCHAR* Path);
+
+	/** Pick the (view, frame) shared texture for a state given the camera's
+	 *  position relative to the enemy's facing. Marathon mirrors 5 views to 8;
+	 *  see the d->(view,mirror) table in the .cpp. Sets bOutFlip. nullptr on a
+	 *  missing/empty state or a not-yet-imported texture. */
+	UTexture2D* PickViewTexture(const FM1SpriteState& StateData, int32 Frame,
+		bool& bOutFlip) const;
+
+	/** Apply a state's sprite for this tick: compute direction, advance frame,
+	 *  swap the texture, and set the horizontal flip via the plane's scale Y. */
+	void UpdateSpriteForState(const FM1SpriteState& StateData, int32 Frame);
+
 	/** Placement Z is floor-relative: drop a trace and rest the capsule on the
 	 *  sector mesh under the spawn point. */
 	void SnapToFloor();
 
 	void Activate(float Now);
-	void PerformAttack(APawn* Player);
+
+	/** Land an attack on the player. bMelee = a close-range melee hit; otherwise
+	 *  fire an AM1Projectile (the firer's Instigator, so it ignores itself but
+	 *  CAN hit other monsters -- Marathon infighting). */
+	void PerformAttack(APawn* Player, bool bMelee);
 	void Die();
 
 	/** Camera-facing sprite card (engine Plane + M_M1Sprite dynamic instance). */
@@ -74,19 +95,21 @@ private:
 	UMaterialInstanceDynamic* SpriteMID = nullptr;
 
 	UPROPERTY()
-	UTexture2D* StandTexture = nullptr;
-
-	UPROPERTY()
-	UTexture2D* DeadTexture = nullptr;
-
-	UPROPERTY()
 	UTexture2D* CurrentTexture = nullptr;
 
+	/** Shared-texture cache keyed by asset path. Values may be null (cached miss
+	 *  for a not-yet-imported texture) so we don't re-attempt LoadObject. */
 	UPROPERTY()
-	TArray<UTexture2D*> MoveTextures;
+	TMap<FString, UTexture2D*> TextureCache;
 
 	UPROPERTY()
 	USoundBase* ActivationSound = nullptr;
+
+	UPROPERTY()
+	USoundBase* ProjFlybySound = nullptr;
+
+	UPROPERTY()
+	USoundBase* MeleeSound = nullptr;
 
 	UPROPERTY()
 	USoundBase* RandomSound = nullptr;
@@ -100,6 +123,20 @@ private:
 	EM1EnemyState State = EM1EnemyState::Idle;
 	float HitPoints = 1.0f;
 	bool bHasLOS = false;
+
+	/** Magnitudes of the sprite plane's relative scale, captured in InitFromType.
+	 *  The billboard horizontal flip is applied by negating scale Y (the plane's
+	 *  local Y is its horizontal axis after the ctor's roll+90/yaw-90); X/Z keep
+	 *  their sign. */
+	float FlipScaleX = 1.0f;
+	float FlipScaleY = 1.0f;
+	float FlipScaleZ = 1.0f;
+	int32 FlipSign = 0;  // 0 = unset, so the first apply always writes
+
+	/** The enemy's logical FACING yaw (world deg) for view selection. The actor
+	 *  yaw itself is the billboard (always at the camera), so facing is tracked
+	 *  separately: toward the player while chasing, else the spawn facing. */
+	float FacingYawDeg = 0.0f;
 
 	/** Staggered sense/LOS timer so 300+ enemies never trace on the same frame. */
 	float NextSenseTime = 0.0f;

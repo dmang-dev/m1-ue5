@@ -6,6 +6,8 @@
 
 class USphereComponent;
 class UProjectileMovementComponent;
+class UStaticMeshComponent;
+class UMaterialInterface;
 class USoundBase;
 
 /**
@@ -39,6 +41,16 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Projectile")
 	UProjectileMovementComponent* ProjectileMovement;
+
+	/** Small unlit emissive tracer so the bolt/rocket reads in flight (no
+	 *  collision; collision stays on the sphere root). */
+	UPROPERTY(VisibleAnywhere, Category = "Projectile")
+	UStaticMeshComponent* TracerMesh;
+
+	/** Base material the runtime emissive MID is built over (engine basic
+	 *  material; may be null if not found -- then the tracer shows untinted). */
+	UPROPERTY()
+	UMaterialInterface* TracerBaseMaterial = nullptr;
 
 	UPROPERTY()
 	USoundBase* ExplosionSound = nullptr;

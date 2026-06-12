@@ -100,6 +100,10 @@ bool AM1Enemy::InitFromType(int32 MonsterType)
 
 	HitPoints = Row->Vitality;
 
+	// Capture the spawn facing for view selection before Tick starts overwriting
+	// the actor yaw with the camera billboard.
+	FacingYawDeg = GetActorRotation().Yaw;
+
 	// Capsule: data radius/half-height (half-height clamped so the capsule stays
 	// valid for squat types like Lookers).
 	const float HalfHeight = FMath::Max(Row->HeightCm * 0.5f, Row->RadiusCm);
@@ -110,43 +114,23 @@ bool AM1Enemy::InitFromType(int32 MonsterType)
 		Move->MaxWalkSpeed = Row->SpeedCmS;
 	}
 
-	// --- Sprites. Asset paths follow the generated SpriteBase convention:
-	// /Game/Sprites/Monsters/T_mon<N>  +  _stand/_move<i>/_dead. ---
-	const FString Base(Row->SpriteBase);
-	int32 SlashIdx = INDEX_NONE;
-	Base.FindLastChar(TEXT('/'), SlashIdx);
-	const FString Leaf = (SlashIdx != INDEX_NONE) ? Base.Mid(SlashIdx + 1) : Base;
-	auto LoadTex = [&Base, &Leaf](const FString& Suffix) -> UTexture2D*
-	{
-		const FString Path = FString::Printf(TEXT("%s%s.%s%s"), *Base, *Suffix, *Leaf, *Suffix);
-		return LoadObject<UTexture2D>(nullptr, *Path);
-	};
-
-	StandTexture = LoadTex(TEXT("_stand"));
-	DeadTexture = LoadTex(TEXT("_dead"));
-	MoveTextures.Reset();
-	for (int32 i = 0; i < Row->MoveFrames; ++i)
-	{
-		if (UTexture2D* Frame = LoadTex(FString::Printf(TEXT("_move%d"), i)))
-		{
-			MoveTextures.Add(Frame);
-		}
-	}
-	if (!StandTexture && MoveTextures.Num() > 0)
-	{
-		StandTexture = MoveTextures[0];
-	}
-	if (!DeadTexture)
-	{
-		DeadTexture = StandTexture;
-	}
+	// --- Sprites. Each row carries view-major shared-texture grids for the
+	// stand/walk/dead states; the actual textures are loaded lazily + cached in
+	// GetSharedTexture and chosen per (view, frame) in Tick. ---
+	TextureCache.Reset();
+	CurrentTexture = nullptr;
 
 	if (SpritePlane)
 	{
 		// World size from the sprite's Marathon world box; the plane is 100x100,
-		// so scale = size/100. Feet sit at the capsule bottom.
-		SpritePlane->SetRelativeScale3D(FVector(
-			Row->SpriteWidthCm / 100.0f, Row->SpriteHeightCm / 100.0f, 1.0f));
+		// so scale = size/100. Feet sit at the capsule bottom. Cache the |scale|
+		// per axis so the billboard horizontal flip can toggle scale Y's sign
+		// without losing the magnitude.
+		FlipScaleX = Row->SpriteWidthCm / 100.0f;
+		FlipScaleY = Row->SpriteHeightCm / 100.0f;  // plane local Y after roll+yaw
+		FlipScaleZ = 1.0f;
+		FlipSign = 0;
+		SpritePlane->SetRelativeScale3D(FVector(FlipScaleX, FlipScaleY, FlipScaleZ));
 		SpritePlane->SetRelativeLocation(FVector(
 			0.0f, 0.0f, Row->SpriteHeightCm * 0.5f - HalfHeight + 1.0f));
 		if (SpriteMaterial)
@@ -158,7 +142,8 @@ bool AM1Enemy::InitFromType(int32 MonsterType)
 			}
 		}
 	}
-	SetSpriteTexture(StandTexture);
+	// Initial pose: stand, frame 0 (view chosen next tick once the camera moves).
+	UpdateSpriteForState(Row->Stand, 0);
 
 	// --- Sounds (empty path = silent). ---
 	ActivationSound = (Row->ActivationSound && Row->ActivationSound[0])
@@ -167,6 +152,10 @@ bool AM1Enemy::InitFromType(int32 MonsterType)
 		? LoadObject<USoundBase>(nullptr, Row->RandomSound) : nullptr;
 	DeathSound = (Row->DeathSound && Row->DeathSound[0])
 		? LoadObject<USoundBase>(nullptr, Row->DeathSound) : nullptr;
+	ProjFlybySound = (Row->ProjFlybySound && Row->ProjFlybySound[0])
+		? LoadObject<USoundBase>(nullptr, Row->ProjFlybySound) : nullptr;
+	MeleeSound = (Row->MeleeSound && Row->MeleeSound[0])
+		? LoadObject<USoundBase>(nullptr, Row->MeleeSound) : nullptr;
 
 	SnapToFloor();
 
@@ -212,6 +201,93 @@ void AM1Enemy::SetSpriteTexture(UTexture2D* Texture)
 	}
 }
 
+UTexture2D* AM1Enemy::GetSharedTexture(const TCHAR* Path)
+{
+	if (!Path || !Path[0])
+	{
+		return nullptr;
+	}
+	const FString Key(Path);
+	// A cached null means "already tried, not imported yet" -- don't retry.
+	if (UTexture2D** Found = TextureCache.Find(Key))
+	{
+		return *Found;
+	}
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, Path);
+	TextureCache.Add(Key, Tex);
+	return Tex;
+}
+
+UTexture2D* AM1Enemy::PickViewTexture(const FM1SpriteState& StateData, int32 Frame,
+	bool& bOutFlip) const
+{
+	bOutFlip = false;
+	const int32 NumViews = StateData.NumViews;
+	const int32 FramesPerView = StateData.FramesPerView;
+	if (NumViews <= 0 || FramesPerView <= 0 || !StateData.Textures)
+	{
+		return nullptr;
+	}
+
+	// Direction index d in 0..7 from the camera's bearing relative to the enemy's
+	// FACING yaw. d=0 = camera sees the enemy's FRONT. The actor yaw is kept
+	// pointed at the player while chasing (see Tick), so strafing around the
+	// enemy cycles through its side/back views.
+	int32 ViewIndex = 0;
+	bool bFlip = false;
+	if (NumViews == 1)
+	{
+		ViewIndex = 0;  // single-view shape: always view 0, never flipped
+	}
+	else if (APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(
+		const_cast<AM1Enemy*>(this), 0))
+	{
+		const FVector ToCam = Cam->GetCameraLocation() - GetActorLocation();
+		const float CamYaw = FMath::RadiansToDegrees(FMath::Atan2(ToCam.Y, ToCam.X));
+		// Relative bearing: how far the camera sits off the enemy's facing.
+		const float Rel = FRotator::NormalizeAxis(CamYaw - FacingYawDeg);
+		// d = round(rel / 45) mod 8; 0 = front. Add 360 before mod for negatives.
+		const int32 d = ((FMath::RoundToInt(Rel / 45.0f) % 8) + 8) % 8;
+		// d -> (view, mirror): 0..4 map straight; 5,6,7 mirror views 3,2,1.
+		static const int32 ViewForDir[8] = { 0, 1, 2, 3, 4, 3, 2, 1 };
+		static const bool  FlipForDir[8] = { false, false, false, false,
+		                                     false, true, true, true };
+		ViewIndex = ViewForDir[d];
+		bFlip = FlipForDir[d];
+	}
+
+	// Clamp to the shape's real view count (4-view shapes have no view 4, etc.).
+	ViewIndex = FMath::Clamp(ViewIndex, 0, NumViews - 1);
+	const int32 ClampedFrame = (Frame % FramesPerView + FramesPerView) % FramesPerView;
+	const int32 Flat = ViewIndex * FramesPerView + ClampedFrame;  // view-major
+
+	bOutFlip = bFlip;
+	return const_cast<AM1Enemy*>(this)->GetSharedTexture(StateData.Textures[Flat]);
+}
+
+void AM1Enemy::UpdateSpriteForState(const FM1SpriteState& StateData, int32 Frame)
+{
+	bool bFlip = false;
+	UTexture2D* Tex = PickViewTexture(StateData, Frame, bFlip);
+
+	// Horizontal flip: the sprite plane's local Y is its horizontal axis (after
+	// the ctor's roll+90/yaw-90). Flip by negating scale Y; the material is
+	// two-sided so the back face shows. Only write when the sign changes.
+	const int32 WantSign = bFlip ? -1 : 1;
+	if (SpritePlane && WantSign != FlipSign)
+	{
+		FlipSign = WantSign;
+		SpritePlane->SetRelativeScale3D(FVector(
+			FlipScaleX, FlipScaleY * WantSign, FlipScaleZ));
+	}
+
+	// Tolerate a missing (not-yet-imported) texture: keep the last sprite.
+	if (Tex)
+	{
+		SetSpriteTexture(Tex);
+	}
+}
+
 bool AM1Enemy::HasLineOfSight(const FVector& TargetLocation) const
 {
 	UWorld* World = GetWorld();
@@ -249,6 +325,10 @@ void AM1Enemy::Tick(float DeltaSeconds)
 	}
 
 	// --- Yaw-only billboard at the local player's camera (cheap: no traces). ---
+	// IMPORTANT: the actor yaw is the BILLBOARD (always faces the camera); the
+	// enemy's logical facing for view selection is the separate FacingYawDeg,
+	// updated below while chasing. PickViewTexture reads FacingYawDeg, never the
+	// actor yaw, so the two never fight.
 	if (APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(this, 0))
 	{
 		const FVector ToCam = Cam->GetCameraLocation() - GetActorLocation();
@@ -261,7 +341,9 @@ void AM1Enemy::Tick(float DeltaSeconds)
 
 	if (State == EM1EnemyState::Dead)
 	{
-		return;  // corpse: billboard only
+		// Corpse: keep billboarding the dead sprite from the right view angle.
+		UpdateSpriteForState(Row->Dead, 0);
+		return;
 	}
 
 	APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
@@ -277,6 +359,8 @@ void AM1Enemy::Tick(float DeltaSeconds)
 
 	if (State == EM1EnemyState::Idle)
 	{
+		// Idle keeps its spawn facing; show stand frame 0 from the camera's view.
+		UpdateSpriteForState(Row->Stand, 0);
 		// Cheap distance gate first; the LOS trace only runs on the staggered
 		// sense timer and only when the player is inside visual range.
 		if (Now >= NextSenseTime)
@@ -289,6 +373,16 @@ void AM1Enemy::Tick(float DeltaSeconds)
 			}
 		}
 		return;
+	}
+
+	// --- Chasing: face the player so strafing reveals side/back views. ---
+	{
+		FVector ToPlayer = PlayerLoc - MyLoc;
+		ToPlayer.Z = 0.0f;
+		if (!ToPlayer.IsNearlyZero())
+		{
+			FacingYawDeg = FMath::RadiansToDegrees(FMath::Atan2(ToPlayer.Y, ToPlayer.X));
+		}
 	}
 
 	// --- Chase ---
@@ -307,21 +401,32 @@ void AM1Enemy::Tick(float DeltaSeconds)
 		}
 	}
 
-	const float AttackRange = Row->bRangedAttack
-		? FMath::Min(Row->AttackRangeCm, GRangedRangeCapCm)
-		: Row->RadiusCm + GMeleeReachCm;
-	const bool bCanAttack = Row->AttackDamage > 0.0f;  // civilians never attack
+	// Attack windows. Melee fires inside its reach; ranged inside its (capped)
+	// range with LOS. The closest applicable range gates the steering stop.
+	const float MeleeRange = Row->bHasMelee
+		? FMath::Max(Row->MeleeRangeCm, Row->RadiusCm + GMeleeReachCm) : 0.0f;
+	const float RangedRange = Row->bRanged
+		? FMath::Min(Row->AttackRangeRangedCm, GRangedRangeCapCm) : 0.0f;
 
-	if (bCanAttack && Dist <= AttackRange && Now >= NextAttackTime
-		&& (bHasLOS || !Row->bRangedAttack))
+	const bool bMeleeNow = Row->bHasMelee && Row->MeleeDamage > 0.0f
+		&& Dist <= MeleeRange;
+	const bool bRangedNow = Row->bRanged && Row->ProjDamage > 0.0f
+		&& Dist <= RangedRange && bHasLOS;
+
+	if ((bMeleeNow || bRangedNow) && Now >= NextAttackTime)
 	{
 		NextAttackTime = Now + Row->AttackIntervalS;
-		PerformAttack(Player);
+		// Prefer melee when the player is close enough for it; else the bolt.
+		PerformAttack(Player, bMeleeNow);
 	}
+
+	// Stop closing once inside whichever attack range applies (the larger of the
+	// two when the enemy has both, so it can still shoot from range).
+	const float StopRange = FMath::Max(MeleeRange, RangedRange);
 
 	// Direct Marathon steering: straight at the player on XY; when blocked
 	// (chasing but barely moving), veer 45 degrees for half a second.
-	if (Dist > AttackRange * 0.8f)
+	if (Dist > StopRange * 0.8f)
 	{
 		FVector Dir = PlayerLoc - MyLoc;
 		Dir.Z = 0.0f;
@@ -343,26 +448,30 @@ void AM1Enemy::Tick(float DeltaSeconds)
 		}
 	}
 
-	// --- Walk animation: cycle the move frames while actually moving. ---
-	if (MoveTextures.Num() > 0 && GetVelocity().SizeSquared2D() > 10.0f * 10.0f)
+	// --- Walk animation: advance the walk grid's frame on its own timer while
+	// actually moving; fall back to the stand pose when stopped. Both states
+	// pick their (view, frame) from the camera angle every tick. ---
+	const bool bMoving = GetVelocity().SizeSquared2D() > 10.0f * 10.0f;
+	if (bMoving && Row->Walk.FramesPerView > 1)
 	{
 		AnimTime += DeltaSeconds;
-		const float FrameTime = FMath::Max(Row->MoveFrameTimeS, 0.033f);
-		const int32 Frame = static_cast<int32>(AnimTime / FrameTime) % MoveTextures.Num();
-		if (Frame != AnimFrame)
-		{
-			AnimFrame = Frame;
-			SetSpriteTexture(MoveTextures[Frame]);
-		}
+		const float FrameTime = FMath::Max(Row->Walk.FrameTicks / 30.0f, 0.033f);
+		AnimFrame = static_cast<int32>(AnimTime / FrameTime);
+		UpdateSpriteForState(Row->Walk, AnimFrame);
 	}
-	else if (AnimFrame != -1)
+	else if (bMoving)
 	{
-		AnimFrame = -1;
-		SetSpriteTexture(StandTexture);
+		UpdateSpriteForState(Row->Walk, 0);  // single-frame walk
+	}
+	else
+	{
+		AnimFrame = 0;
+		AnimTime = 0.0f;
+		UpdateSpriteForState(Row->Stand, 0);
 	}
 }
 
-void AM1Enemy::PerformAttack(APawn* Player)
+void AM1Enemy::PerformAttack(APawn* Player, bool bMelee)
 {
 	UWorld* World = GetWorld();
 	if (!World || !Player || !Row)
@@ -370,23 +479,35 @@ void AM1Enemy::PerformAttack(APawn* Player)
 		return;
 	}
 
-	// Flash the stand pose for the attack beat (no dedicated attack frames in
-	// v1); the walk cycle resumes on the next animated tick.
-	AnimFrame = -1;
-	SetSpriteTexture(StandTexture);
+	// Show the stand pose for the attack beat (no dedicated attack frames in v1);
+	// the walk cycle resumes on the next animated tick.
+	AnimFrame = 0;
+	UpdateSpriteForState(Row->Stand, 0);
 
-	if (!Row->bRangedAttack)
+	if (bMelee)
 	{
 		// Melee: the in-range check just happened in Tick; land the hit.
-		UGameplayStatics::ApplyDamage(Player, Row->AttackDamage, GetController(), this, nullptr);
+		UGameplayStatics::ApplyDamage(Player, Row->MeleeDamage, GetController(), this, nullptr);
+		if (MeleeSound)
+		{
+			UGameplayStatics::SpawnSoundAtLocation(this, MeleeSound, GetActorLocation(),
+				FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
+		}
 		return;
 	}
 
-	// Ranged: a plain AM1Projectile aimed at the player's center, no blast,
-	// no impact sound (v1). Instigator = this enemy so it ignores its shooter.
+	// Ranged: spawn an AM1Projectile from the chest aimed at the player's camera
+	// (so it leads the eye, not the feet). Instigator = this enemy so it ignores
+	// its own shooter; it CAN still hit other Pfhor (Marathon infighting -- no
+	// friendly-fire prevention here, by design).
 	const FVector Muzzle = GetActorLocation()
-		+ FVector(0.0f, 0.0f, GetSimpleCollisionHalfHeight() * 0.4f);
-	const FVector Dir = (Player->GetActorLocation() - Muzzle).GetSafeNormal();
+		+ FVector(0.0f, 0.0f, Row->HeightCm * 0.6f);
+	FVector AimAt = Player->GetActorLocation();
+	if (APlayerCameraManager* PlayerCam = UGameplayStatics::GetPlayerCameraManager(this, 0))
+	{
+		AimAt = PlayerCam->GetCameraLocation();
+	}
+	const FVector Dir = (AimAt - Muzzle).GetSafeNormal();
 	if (Dir.IsNearlyZero())
 	{
 		return;
@@ -401,7 +522,15 @@ void AM1Enemy::PerformAttack(APawn* Player)
 	if (AM1Projectile* Proj = World->SpawnActor<AM1Projectile>(
 		AM1Projectile::StaticClass(), SpawnLoc, Dir.Rotation(), SpawnParams))
 	{
-		Proj->Init(Row->RangedSpeedCmS, Row->AttackDamage, 0.0f, nullptr);
+		// Flyby sound doubles as the impact SFX in v1 (no dedicated impact id).
+		Proj->Init(Row->ProjSpeedCmps, Row->ProjDamage, Row->ProjBlastCm, ProjFlybySound);
+	}
+
+	// Fire/launch SFX (attenuated) at the muzzle.
+	if (ProjFlybySound)
+	{
+		UGameplayStatics::SpawnSoundAtLocation(this, ProjFlybySound, Muzzle,
+			FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 	}
 }
 
@@ -456,5 +585,7 @@ void AM1Enemy::Die()
 	// the dead sprite, nothing else.
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetCanBeDamaged(false);
-	SetSpriteTexture(DeadTexture);
+	// Show the dead pose now; Tick keeps re-picking its view as the camera moves.
+	AnimFrame = 0;
+	UpdateSpriteForState(Row->Dead, 0);
 }

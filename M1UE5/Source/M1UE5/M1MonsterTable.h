@@ -5,10 +5,22 @@
 
 #include "CoreMinimal.h"
 
+/** A monster animation state for the billboard: a view-major grid of
+ *  SHARED texture asset paths (Textures points at NumViews*FramesPerView
+ *  entries; cell (view v, frame f) = Textures[v*FramesPerView + f]).
+ *  Marathon stores up to 5 views and mirrors to 8; the enemy does that. */
+struct FM1SpriteState
+{
+	int32 NumViews;
+	int32 FramesPerView;
+	int32 FrameTicks;            // 30Hz ticks per frame
+	const TCHAR* const* Textures;  // view-major asset paths
+};
+
 /** One Marathon 1 monster type (stats in UE cm / seconds; see
  *  Tools/gen_monster_assets.py for the unit conversions). Sounds are full
- *  asset paths or empty. SpriteBase is the /Game/Sprites/Monsters texture
- *  prefix; the import script provides _stand, _move0..N-1 and _dead. */
+ *  asset paths or empty. Stand/Walk/Dead carry shared multi-view sprite
+ *  grids; ProjDamage = projectile base + half random (expected value). */
 struct FM1MonsterRow
 {
 	int32 Type;
@@ -18,53 +30,1329 @@ struct FM1MonsterRow
 	float HeightCm;
 	float SpeedCmS;
 	float VisualRangeCm;
-	float AttackRangeCm;
+	float AttackRangeCm;        // primary-attack gate (melee reach or ranged)
 	float AttackIntervalS;
-	float AttackDamage;
-	bool bRangedAttack;
-	float RangedSpeedCmS;
+	float AttackDamage;         // primary-attack damage
+	// --- ranged / melee detail ---
+	bool bHasMelee;
+	float MeleeDamage;
+	float MeleeRangeCm;
+	bool bRanged;
+	int32 ProjType;             // Marathon projectile index (-1 = none)
+	float ProjDamage;
+	float ProjSpeedCmps;
+	float ProjBlastCm;
+	float AttackRangeRangedCm;
+	const TCHAR* ProjFlybySound;
+	const TCHAR* MeleeSound;
+	// --- sounds ---
 	const TCHAR* ActivationSound;
 	const TCHAR* RandomSound;
 	const TCHAR* DeathSound;
-	const TCHAR* SpriteBase;
-	int32 MoveFrames;
-	float MoveFrameTimeS;
+	// --- sprite states ---
+	FM1SpriteState Stand;
+	FM1SpriteState Walk;
+	FM1SpriteState Dead;
 	float SpriteWidthCm;
 	float SpriteHeightCm;
 };
 
+static const TCHAR* const GM1Tex_1_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_041.T_spr_c12k4_041"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_037.T_spr_c12k4_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_039.T_spr_c12k4_039"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_040.T_spr_c12k4_040"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_038.T_spr_c12k4_038"),
+};
+
+static const TCHAR* const GM1Tex_1_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_000.T_spr_c12k4_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_001.T_spr_c12k4_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_002.T_spr_c12k4_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_003.T_spr_c12k4_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_004.T_spr_c12k4_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_005.T_spr_c12k4_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_006.T_spr_c12k4_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_007.T_spr_c12k4_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_008.T_spr_c12k4_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_009.T_spr_c12k4_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_010.T_spr_c12k4_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_011.T_spr_c12k4_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_012.T_spr_c12k4_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_013.T_spr_c12k4_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_014.T_spr_c12k4_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_015.T_spr_c12k4_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_016.T_spr_c12k4_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_017.T_spr_c12k4_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_018.T_spr_c12k4_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_019.T_spr_c12k4_019"),
+};
+
+static const TCHAR* const GM1Tex_1_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_036.T_spr_c12k4_036"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k4_036.T_spr_c12k4_036"),
+};
+
+static const TCHAR* const GM1Tex_2_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_024.T_spr_c09k0_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_028.T_spr_c09k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_053.T_spr_c09k0_053"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_032.T_spr_c09k0_032"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_054.T_spr_c09k0_054"),
+};
+
+static const TCHAR* const GM1Tex_2_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_000.T_spr_c09k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_001.T_spr_c09k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_002.T_spr_c09k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_003.T_spr_c09k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_004.T_spr_c09k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_005.T_spr_c09k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_006.T_spr_c09k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_007.T_spr_c09k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_008.T_spr_c09k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_009.T_spr_c09k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_010.T_spr_c09k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_011.T_spr_c09k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_012.T_spr_c09k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_013.T_spr_c09k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_014.T_spr_c09k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_015.T_spr_c09k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_016.T_spr_c09k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_017.T_spr_c09k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_018.T_spr_c09k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_019.T_spr_c09k0_019"),
+};
+
+static const TCHAR* const GM1Tex_2_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_023.T_spr_c09k0_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k0_023.T_spr_c09k0_023"),
+};
+
+static const TCHAR* const GM1Tex_3_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_024.T_spr_c09k1_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_028.T_spr_c09k1_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_053.T_spr_c09k1_053"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_032.T_spr_c09k1_032"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_054.T_spr_c09k1_054"),
+};
+
+static const TCHAR* const GM1Tex_3_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_000.T_spr_c09k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_001.T_spr_c09k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_002.T_spr_c09k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_003.T_spr_c09k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_004.T_spr_c09k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_005.T_spr_c09k1_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_006.T_spr_c09k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_007.T_spr_c09k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_008.T_spr_c09k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_009.T_spr_c09k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_010.T_spr_c09k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_011.T_spr_c09k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_012.T_spr_c09k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_013.T_spr_c09k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_014.T_spr_c09k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_015.T_spr_c09k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_016.T_spr_c09k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_017.T_spr_c09k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_018.T_spr_c09k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_019.T_spr_c09k1_019"),
+};
+
+static const TCHAR* const GM1Tex_3_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_023.T_spr_c09k1_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k1_023.T_spr_c09k1_023"),
+};
+
+static const TCHAR* const GM1Tex_4_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_024.T_spr_c09k2_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_028.T_spr_c09k2_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_053.T_spr_c09k2_053"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_032.T_spr_c09k2_032"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_054.T_spr_c09k2_054"),
+};
+
+static const TCHAR* const GM1Tex_4_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_000.T_spr_c09k2_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_001.T_spr_c09k2_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_002.T_spr_c09k2_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_003.T_spr_c09k2_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_004.T_spr_c09k2_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_005.T_spr_c09k2_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_006.T_spr_c09k2_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_007.T_spr_c09k2_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_008.T_spr_c09k2_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_009.T_spr_c09k2_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_010.T_spr_c09k2_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_011.T_spr_c09k2_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_012.T_spr_c09k2_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_013.T_spr_c09k2_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_014.T_spr_c09k2_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_015.T_spr_c09k2_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_016.T_spr_c09k2_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_017.T_spr_c09k2_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_018.T_spr_c09k2_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_019.T_spr_c09k2_019"),
+};
+
+static const TCHAR* const GM1Tex_4_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_023.T_spr_c09k2_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k2_023.T_spr_c09k2_023"),
+};
+
+static const TCHAR* const GM1Tex_5_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_024.T_spr_c09k3_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_028.T_spr_c09k3_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_053.T_spr_c09k3_053"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_032.T_spr_c09k3_032"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_054.T_spr_c09k3_054"),
+};
+
+static const TCHAR* const GM1Tex_5_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_000.T_spr_c09k3_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_001.T_spr_c09k3_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_002.T_spr_c09k3_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_003.T_spr_c09k3_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_004.T_spr_c09k3_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_005.T_spr_c09k3_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_006.T_spr_c09k3_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_007.T_spr_c09k3_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_008.T_spr_c09k3_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_009.T_spr_c09k3_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_010.T_spr_c09k3_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_011.T_spr_c09k3_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_012.T_spr_c09k3_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_013.T_spr_c09k3_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_014.T_spr_c09k3_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_015.T_spr_c09k3_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_016.T_spr_c09k3_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_017.T_spr_c09k3_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_018.T_spr_c09k3_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_019.T_spr_c09k3_019"),
+};
+
+static const TCHAR* const GM1Tex_5_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_023.T_spr_c09k3_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c09k3_023.T_spr_c09k3_023"),
+};
+
+static const TCHAR* const GM1Tex_6_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_041.T_spr_c12k0_041"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_037.T_spr_c12k0_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_039.T_spr_c12k0_039"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_040.T_spr_c12k0_040"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_038.T_spr_c12k0_038"),
+};
+
+static const TCHAR* const GM1Tex_6_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_000.T_spr_c12k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_001.T_spr_c12k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_002.T_spr_c12k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_003.T_spr_c12k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_004.T_spr_c12k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_005.T_spr_c12k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_006.T_spr_c12k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_007.T_spr_c12k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_008.T_spr_c12k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_009.T_spr_c12k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_010.T_spr_c12k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_011.T_spr_c12k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_012.T_spr_c12k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_013.T_spr_c12k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_014.T_spr_c12k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_015.T_spr_c12k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_016.T_spr_c12k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_017.T_spr_c12k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_018.T_spr_c12k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_019.T_spr_c12k0_019"),
+};
+
+static const TCHAR* const GM1Tex_6_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_036.T_spr_c12k0_036"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k0_036.T_spr_c12k0_036"),
+};
+
+static const TCHAR* const GM1Tex_7_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_041.T_spr_c12k1_041"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_037.T_spr_c12k1_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_039.T_spr_c12k1_039"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_040.T_spr_c12k1_040"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_038.T_spr_c12k1_038"),
+};
+
+static const TCHAR* const GM1Tex_7_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_000.T_spr_c12k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_001.T_spr_c12k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_002.T_spr_c12k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_003.T_spr_c12k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_004.T_spr_c12k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_005.T_spr_c12k1_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_006.T_spr_c12k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_007.T_spr_c12k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_008.T_spr_c12k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_009.T_spr_c12k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_010.T_spr_c12k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_011.T_spr_c12k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_012.T_spr_c12k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_013.T_spr_c12k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_014.T_spr_c12k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_015.T_spr_c12k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_016.T_spr_c12k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_017.T_spr_c12k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_018.T_spr_c12k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_019.T_spr_c12k1_019"),
+};
+
+static const TCHAR* const GM1Tex_7_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_036.T_spr_c12k1_036"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k1_036.T_spr_c12k1_036"),
+};
+
+static const TCHAR* const GM1Tex_8_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_041.T_spr_c12k2_041"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_037.T_spr_c12k2_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_039.T_spr_c12k2_039"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_040.T_spr_c12k2_040"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_038.T_spr_c12k2_038"),
+};
+
+static const TCHAR* const GM1Tex_8_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_000.T_spr_c12k2_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_001.T_spr_c12k2_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_002.T_spr_c12k2_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_003.T_spr_c12k2_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_004.T_spr_c12k2_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_005.T_spr_c12k2_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_006.T_spr_c12k2_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_007.T_spr_c12k2_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_008.T_spr_c12k2_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_009.T_spr_c12k2_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_010.T_spr_c12k2_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_011.T_spr_c12k2_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_012.T_spr_c12k2_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_013.T_spr_c12k2_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_014.T_spr_c12k2_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_015.T_spr_c12k2_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_016.T_spr_c12k2_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_017.T_spr_c12k2_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_018.T_spr_c12k2_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_019.T_spr_c12k2_019"),
+};
+
+static const TCHAR* const GM1Tex_8_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_036.T_spr_c12k2_036"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k2_036.T_spr_c12k2_036"),
+};
+
+static const TCHAR* const GM1Tex_9_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_041.T_spr_c12k3_041"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_037.T_spr_c12k3_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_039.T_spr_c12k3_039"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_040.T_spr_c12k3_040"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_038.T_spr_c12k3_038"),
+};
+
+static const TCHAR* const GM1Tex_9_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_000.T_spr_c12k3_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_001.T_spr_c12k3_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_002.T_spr_c12k3_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_003.T_spr_c12k3_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_004.T_spr_c12k3_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_005.T_spr_c12k3_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_006.T_spr_c12k3_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_007.T_spr_c12k3_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_008.T_spr_c12k3_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_009.T_spr_c12k3_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_010.T_spr_c12k3_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_011.T_spr_c12k3_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_012.T_spr_c12k3_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_013.T_spr_c12k3_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_014.T_spr_c12k3_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_015.T_spr_c12k3_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_016.T_spr_c12k3_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_017.T_spr_c12k3_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_018.T_spr_c12k3_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_019.T_spr_c12k3_019"),
+};
+
+static const TCHAR* const GM1Tex_9_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_036.T_spr_c12k3_036"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c12k3_036.T_spr_c12k3_036"),
+};
+
+static const TCHAR* const GM1Tex_12_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_001.T_spr_c14k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_004.T_spr_c14k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_007.T_spr_c14k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_010.T_spr_c14k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_013.T_spr_c14k0_013"),
+};
+
+static const TCHAR* const GM1Tex_12_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_000.T_spr_c14k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_001.T_spr_c14k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_002.T_spr_c14k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_001.T_spr_c14k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_003.T_spr_c14k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_004.T_spr_c14k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_005.T_spr_c14k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_004.T_spr_c14k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_006.T_spr_c14k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_007.T_spr_c14k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_008.T_spr_c14k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_007.T_spr_c14k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_011.T_spr_c14k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_010.T_spr_c14k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_009.T_spr_c14k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_010.T_spr_c14k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_012.T_spr_c14k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_013.T_spr_c14k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_014.T_spr_c14k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_013.T_spr_c14k0_013"),
+};
+
+static const TCHAR* const GM1Tex_12_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_026.T_spr_c14k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_026.T_spr_c14k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_027.T_spr_c14k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k0_027.T_spr_c14k0_027"),
+};
+
+static const TCHAR* const GM1Tex_13_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_001.T_spr_c14k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_004.T_spr_c14k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_007.T_spr_c14k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_010.T_spr_c14k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_013.T_spr_c14k1_013"),
+};
+
+static const TCHAR* const GM1Tex_13_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_000.T_spr_c14k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_001.T_spr_c14k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_002.T_spr_c14k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_001.T_spr_c14k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_003.T_spr_c14k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_004.T_spr_c14k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_005.T_spr_c14k1_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_004.T_spr_c14k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_006.T_spr_c14k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_007.T_spr_c14k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_008.T_spr_c14k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_007.T_spr_c14k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_011.T_spr_c14k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_010.T_spr_c14k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_009.T_spr_c14k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_010.T_spr_c14k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_012.T_spr_c14k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_013.T_spr_c14k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_014.T_spr_c14k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_013.T_spr_c14k1_013"),
+};
+
+static const TCHAR* const GM1Tex_13_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_026.T_spr_c14k1_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_026.T_spr_c14k1_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_027.T_spr_c14k1_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c14k1_027.T_spr_c14k1_027"),
+};
+
+static const TCHAR* const GM1Tex_14_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_000.T_spr_c16k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_001.T_spr_c16k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_002.T_spr_c16k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_003.T_spr_c16k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_004.T_spr_c16k0_004"),
+};
+
+static const TCHAR* const GM1Tex_14_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_000.T_spr_c16k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_027.T_spr_c16k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_001.T_spr_c16k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_028.T_spr_c16k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_002.T_spr_c16k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_029.T_spr_c16k0_029"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_003.T_spr_c16k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_030.T_spr_c16k0_030"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_004.T_spr_c16k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_031.T_spr_c16k0_031"),
+};
+
+static const TCHAR* const GM1Tex_14_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_000.T_spr_c16k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_011.T_spr_c16k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_012.T_spr_c16k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_001.T_spr_c16k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_009.T_spr_c16k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_010.T_spr_c16k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_002.T_spr_c16k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_017.T_spr_c16k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_018.T_spr_c16k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_003.T_spr_c16k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_019.T_spr_c16k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_020.T_spr_c16k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_004.T_spr_c16k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_023.T_spr_c16k0_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_024.T_spr_c16k0_024"),
+};
+
+static const TCHAR* const GM1Tex_15_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_000.T_spr_c16k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_001.T_spr_c16k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_002.T_spr_c16k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_003.T_spr_c16k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_004.T_spr_c16k1_004"),
+};
+
+static const TCHAR* const GM1Tex_15_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_000.T_spr_c16k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_027.T_spr_c16k1_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_001.T_spr_c16k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_028.T_spr_c16k1_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_002.T_spr_c16k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_029.T_spr_c16k1_029"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_003.T_spr_c16k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_030.T_spr_c16k1_030"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_004.T_spr_c16k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_031.T_spr_c16k1_031"),
+};
+
+static const TCHAR* const GM1Tex_15_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_000.T_spr_c16k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_011.T_spr_c16k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_012.T_spr_c16k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_001.T_spr_c16k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_009.T_spr_c16k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_010.T_spr_c16k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_002.T_spr_c16k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_017.T_spr_c16k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_018.T_spr_c16k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_003.T_spr_c16k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_019.T_spr_c16k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_020.T_spr_c16k1_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_004.T_spr_c16k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_023.T_spr_c16k1_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_024.T_spr_c16k1_024"),
+};
+
+static const TCHAR* const GM1Tex_16_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_000.T_spr_c16k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_001.T_spr_c16k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_002.T_spr_c16k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_003.T_spr_c16k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_004.T_spr_c16k0_004"),
+};
+
+static const TCHAR* const GM1Tex_16_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_000.T_spr_c16k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_027.T_spr_c16k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_001.T_spr_c16k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_028.T_spr_c16k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_002.T_spr_c16k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_029.T_spr_c16k0_029"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_003.T_spr_c16k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_030.T_spr_c16k0_030"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_004.T_spr_c16k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_031.T_spr_c16k0_031"),
+};
+
+static const TCHAR* const GM1Tex_16_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_000.T_spr_c16k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_011.T_spr_c16k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_012.T_spr_c16k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_001.T_spr_c16k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_009.T_spr_c16k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_010.T_spr_c16k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_002.T_spr_c16k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_017.T_spr_c16k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_018.T_spr_c16k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_003.T_spr_c16k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_019.T_spr_c16k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_020.T_spr_c16k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_004.T_spr_c16k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_023.T_spr_c16k0_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k0_024.T_spr_c16k0_024"),
+};
+
+static const TCHAR* const GM1Tex_17_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_000.T_spr_c16k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_001.T_spr_c16k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_002.T_spr_c16k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_003.T_spr_c16k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_004.T_spr_c16k1_004"),
+};
+
+static const TCHAR* const GM1Tex_17_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_000.T_spr_c16k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_027.T_spr_c16k1_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_001.T_spr_c16k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_028.T_spr_c16k1_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_002.T_spr_c16k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_029.T_spr_c16k1_029"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_003.T_spr_c16k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_030.T_spr_c16k1_030"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_004.T_spr_c16k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_031.T_spr_c16k1_031"),
+};
+
+static const TCHAR* const GM1Tex_17_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_000.T_spr_c16k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_011.T_spr_c16k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_012.T_spr_c16k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_001.T_spr_c16k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_009.T_spr_c16k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_010.T_spr_c16k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_002.T_spr_c16k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_017.T_spr_c16k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_018.T_spr_c16k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_003.T_spr_c16k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_019.T_spr_c16k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_020.T_spr_c16k1_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_004.T_spr_c16k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_023.T_spr_c16k1_023"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c16k1_024.T_spr_c16k1_024"),
+};
+
+static const TCHAR* const GM1Tex_18_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_021.T_spr_c15k0_021"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_016.T_spr_c15k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_020.T_spr_c15k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_033.T_spr_c15k0_033"),
+};
+
+static const TCHAR* const GM1Tex_18_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_000.T_spr_c15k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_001.T_spr_c15k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_002.T_spr_c15k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_003.T_spr_c15k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_018.T_spr_c15k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_019.T_spr_c15k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_004.T_spr_c15k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_005.T_spr_c15k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_006.T_spr_c15k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_007.T_spr_c15k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_026.T_spr_c15k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_028.T_spr_c15k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_035.T_spr_c15k0_035"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_034.T_spr_c15k0_034"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_037.T_spr_c15k0_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_036.T_spr_c15k0_036"),
+};
+
+static const TCHAR* const GM1Tex_18_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_000.T_spr_c15k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_001.T_spr_c15k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_002.T_spr_c15k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_003.T_spr_c15k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_018.T_spr_c15k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_019.T_spr_c15k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_004.T_spr_c15k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_005.T_spr_c15k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_006.T_spr_c15k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_007.T_spr_c15k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_026.T_spr_c15k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_028.T_spr_c15k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_035.T_spr_c15k0_035"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_034.T_spr_c15k0_034"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_037.T_spr_c15k0_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_036.T_spr_c15k0_036"),
+};
+
+static const TCHAR* const GM1Tex_19_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_021.T_spr_c15k0_021"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_016.T_spr_c15k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_020.T_spr_c15k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_033.T_spr_c15k0_033"),
+};
+
+static const TCHAR* const GM1Tex_19_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_000.T_spr_c15k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_001.T_spr_c15k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_002.T_spr_c15k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_003.T_spr_c15k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_018.T_spr_c15k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_019.T_spr_c15k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_004.T_spr_c15k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_005.T_spr_c15k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_006.T_spr_c15k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_007.T_spr_c15k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_026.T_spr_c15k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_028.T_spr_c15k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_035.T_spr_c15k0_035"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_034.T_spr_c15k0_034"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_037.T_spr_c15k0_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_036.T_spr_c15k0_036"),
+};
+
+static const TCHAR* const GM1Tex_19_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_000.T_spr_c15k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_001.T_spr_c15k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_002.T_spr_c15k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_003.T_spr_c15k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_018.T_spr_c15k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_017.T_spr_c15k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_019.T_spr_c15k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_004.T_spr_c15k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_005.T_spr_c15k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_006.T_spr_c15k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_007.T_spr_c15k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_026.T_spr_c15k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_027.T_spr_c15k0_027"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_028.T_spr_c15k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_035.T_spr_c15k0_035"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_034.T_spr_c15k0_034"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_037.T_spr_c15k0_037"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c15k0_036.T_spr_c15k0_036"),
+};
+
+static const TCHAR* const GM1Tex_20_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_029.T_spr_c05k0_029"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_030.T_spr_c05k0_030"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_031.T_spr_c05k0_031"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_032.T_spr_c05k0_032"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_033.T_spr_c05k0_033"),
+};
+
+static const TCHAR* const GM1Tex_20_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_000.T_spr_c05k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_001.T_spr_c05k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_002.T_spr_c05k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_003.T_spr_c05k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_004.T_spr_c05k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_005.T_spr_c05k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_006.T_spr_c05k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_007.T_spr_c05k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_008.T_spr_c05k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_009.T_spr_c05k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_010.T_spr_c05k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_011.T_spr_c05k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_012.T_spr_c05k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_013.T_spr_c05k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_014.T_spr_c05k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_015.T_spr_c05k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_016.T_spr_c05k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_017.T_spr_c05k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_018.T_spr_c05k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_019.T_spr_c05k0_019"),
+};
+
+static const TCHAR* const GM1Tex_20_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_028.T_spr_c05k0_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k0_028.T_spr_c05k0_028"),
+};
+
+static const TCHAR* const GM1Tex_21_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_029.T_spr_c05k1_029"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_030.T_spr_c05k1_030"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_031.T_spr_c05k1_031"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_032.T_spr_c05k1_032"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_033.T_spr_c05k1_033"),
+};
+
+static const TCHAR* const GM1Tex_21_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_000.T_spr_c05k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_001.T_spr_c05k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_002.T_spr_c05k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_003.T_spr_c05k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_004.T_spr_c05k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_005.T_spr_c05k1_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_006.T_spr_c05k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_007.T_spr_c05k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_008.T_spr_c05k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_009.T_spr_c05k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_010.T_spr_c05k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_011.T_spr_c05k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_012.T_spr_c05k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_013.T_spr_c05k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_014.T_spr_c05k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_015.T_spr_c05k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_016.T_spr_c05k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_017.T_spr_c05k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_018.T_spr_c05k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_019.T_spr_c05k1_019"),
+};
+
+static const TCHAR* const GM1Tex_21_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_028.T_spr_c05k1_028"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c05k1_028.T_spr_c05k1_028"),
+};
+
+static const TCHAR* const GM1Tex_22_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_000.T_spr_c21k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_009.T_spr_c21k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_005.T_spr_c21k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_017.T_spr_c21k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_013.T_spr_c21k0_013"),
+};
+
+static const TCHAR* const GM1Tex_22_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_000.T_spr_c21k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_009.T_spr_c21k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_005.T_spr_c21k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_017.T_spr_c21k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_013.T_spr_c21k0_013"),
+};
+
+static const TCHAR* const GM1Tex_22_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c21k0_001.T_spr_c21k0_001"),
+};
+
+static const TCHAR* const GM1Tex_24_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_002.T_spr_c03k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_003.T_spr_c03k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_006.T_spr_c03k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_007.T_spr_c03k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_010.T_spr_c03k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_011.T_spr_c03k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_014.T_spr_c03k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_015.T_spr_c03k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_012.T_spr_c03k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_013.T_spr_c03k0_013"),
+};
+
+static const TCHAR* const GM1Tex_24_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_002.T_spr_c03k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_003.T_spr_c03k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_006.T_spr_c03k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_007.T_spr_c03k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_010.T_spr_c03k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_011.T_spr_c03k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_014.T_spr_c03k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_015.T_spr_c03k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_012.T_spr_c03k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_013.T_spr_c03k0_013"),
+};
+
+static const TCHAR* const GM1Tex_24_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_016.T_spr_c03k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_017.T_spr_c03k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k0_018.T_spr_c03k0_018"),
+};
+
+static const TCHAR* const GM1Tex_25_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_002.T_spr_c03k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_003.T_spr_c03k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_006.T_spr_c03k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_007.T_spr_c03k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_010.T_spr_c03k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_011.T_spr_c03k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_014.T_spr_c03k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_015.T_spr_c03k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_012.T_spr_c03k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_013.T_spr_c03k1_013"),
+};
+
+static const TCHAR* const GM1Tex_25_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_002.T_spr_c03k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_003.T_spr_c03k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_006.T_spr_c03k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_007.T_spr_c03k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_010.T_spr_c03k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_011.T_spr_c03k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_014.T_spr_c03k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_015.T_spr_c03k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_012.T_spr_c03k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_013.T_spr_c03k1_013"),
+};
+
+static const TCHAR* const GM1Tex_25_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_016.T_spr_c03k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_017.T_spr_c03k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_018.T_spr_c03k1_018"),
+};
+
+static const TCHAR* const GM1Tex_26_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_002.T_spr_c03k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_003.T_spr_c03k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_006.T_spr_c03k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_007.T_spr_c03k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_010.T_spr_c03k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_011.T_spr_c03k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_014.T_spr_c03k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_015.T_spr_c03k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_012.T_spr_c03k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_013.T_spr_c03k1_013"),
+};
+
+static const TCHAR* const GM1Tex_26_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_002.T_spr_c03k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_003.T_spr_c03k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_006.T_spr_c03k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_007.T_spr_c03k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_010.T_spr_c03k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_011.T_spr_c03k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_014.T_spr_c03k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_015.T_spr_c03k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_012.T_spr_c03k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_013.T_spr_c03k1_013"),
+};
+
+static const TCHAR* const GM1Tex_26_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_016.T_spr_c03k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_017.T_spr_c03k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c03k1_018.T_spr_c03k1_018"),
+};
+
+static const TCHAR* const GM1Tex_27_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+};
+
+static const TCHAR* const GM1Tex_27_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_000.T_spr_c22k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_001.T_spr_c22k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_002.T_spr_c22k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_004.T_spr_c22k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_003.T_spr_c22k0_003"),
+};
+
+static const TCHAR* const GM1Tex_27_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k0_024.T_spr_c22k0_024"),
+};
+
+static const TCHAR* const GM1Tex_30_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_020.T_spr_c26k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_022.T_spr_c26k0_022"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_024.T_spr_c26k0_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_026.T_spr_c26k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_028.T_spr_c26k0_028"),
+};
+
+static const TCHAR* const GM1Tex_30_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_000.T_spr_c26k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_001.T_spr_c26k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_002.T_spr_c26k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_003.T_spr_c26k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_004.T_spr_c26k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_005.T_spr_c26k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_006.T_spr_c26k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_007.T_spr_c26k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_008.T_spr_c26k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_009.T_spr_c26k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_010.T_spr_c26k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_011.T_spr_c26k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_012.T_spr_c26k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_013.T_spr_c26k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_014.T_spr_c26k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_015.T_spr_c26k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_016.T_spr_c26k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_017.T_spr_c26k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_019.T_spr_c26k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_018.T_spr_c26k0_018"),
+};
+
+static const TCHAR* const GM1Tex_30_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_000.T_spr_c26k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_001.T_spr_c26k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_002.T_spr_c26k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_003.T_spr_c26k0_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_004.T_spr_c26k0_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_005.T_spr_c26k0_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_006.T_spr_c26k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_007.T_spr_c26k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_008.T_spr_c26k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_009.T_spr_c26k0_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_010.T_spr_c26k0_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_011.T_spr_c26k0_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_012.T_spr_c26k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_013.T_spr_c26k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_014.T_spr_c26k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_015.T_spr_c26k0_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_016.T_spr_c26k0_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_017.T_spr_c26k0_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_019.T_spr_c26k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k0_018.T_spr_c26k0_018"),
+};
+
+static const TCHAR* const GM1Tex_31_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_020.T_spr_c26k1_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_022.T_spr_c26k1_022"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_024.T_spr_c26k1_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_026.T_spr_c26k1_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_028.T_spr_c26k1_028"),
+};
+
+static const TCHAR* const GM1Tex_31_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_000.T_spr_c26k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_001.T_spr_c26k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_002.T_spr_c26k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_003.T_spr_c26k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_004.T_spr_c26k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_005.T_spr_c26k1_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_006.T_spr_c26k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_007.T_spr_c26k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_008.T_spr_c26k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_009.T_spr_c26k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_010.T_spr_c26k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_011.T_spr_c26k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_012.T_spr_c26k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_013.T_spr_c26k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_014.T_spr_c26k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_015.T_spr_c26k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_016.T_spr_c26k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_017.T_spr_c26k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_019.T_spr_c26k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_018.T_spr_c26k1_018"),
+};
+
+static const TCHAR* const GM1Tex_31_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_000.T_spr_c26k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_001.T_spr_c26k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_002.T_spr_c26k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_003.T_spr_c26k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_004.T_spr_c26k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_005.T_spr_c26k1_005"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_006.T_spr_c26k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_007.T_spr_c26k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_008.T_spr_c26k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_009.T_spr_c26k1_009"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_010.T_spr_c26k1_010"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_011.T_spr_c26k1_011"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_012.T_spr_c26k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_013.T_spr_c26k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_014.T_spr_c26k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_015.T_spr_c26k1_015"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_016.T_spr_c26k1_016"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_017.T_spr_c26k1_017"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_019.T_spr_c26k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c26k1_018.T_spr_c26k1_018"),
+};
+
+static const TCHAR* const GM1Tex_32_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_000.T_spr_c27k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_001.T_spr_c27k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_002.T_spr_c27k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_001.T_spr_c27k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_008.T_spr_c27k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_007.T_spr_c27k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_006.T_spr_c27k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_007.T_spr_c27k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_012.T_spr_c27k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_013.T_spr_c27k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_014.T_spr_c27k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_013.T_spr_c27k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_018.T_spr_c27k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_019.T_spr_c27k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_020.T_spr_c27k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_019.T_spr_c27k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_026.T_spr_c27k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_025.T_spr_c27k0_025"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_024.T_spr_c27k0_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_025.T_spr_c27k0_025"),
+};
+
+static const TCHAR* const GM1Tex_32_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_000.T_spr_c27k0_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_001.T_spr_c27k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_002.T_spr_c27k0_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_001.T_spr_c27k0_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_008.T_spr_c27k0_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_007.T_spr_c27k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_006.T_spr_c27k0_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_007.T_spr_c27k0_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_012.T_spr_c27k0_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_013.T_spr_c27k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_014.T_spr_c27k0_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_013.T_spr_c27k0_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_018.T_spr_c27k0_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_019.T_spr_c27k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_020.T_spr_c27k0_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_019.T_spr_c27k0_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_026.T_spr_c27k0_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_025.T_spr_c27k0_025"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_024.T_spr_c27k0_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_025.T_spr_c27k0_025"),
+};
+
+static const TCHAR* const GM1Tex_32_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_054.T_spr_c27k0_054"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k0_054.T_spr_c27k0_054"),
+};
+
+static const TCHAR* const GM1Tex_33_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_000.T_spr_c27k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_001.T_spr_c27k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_002.T_spr_c27k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_001.T_spr_c27k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_008.T_spr_c27k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_007.T_spr_c27k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_006.T_spr_c27k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_007.T_spr_c27k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_012.T_spr_c27k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_013.T_spr_c27k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_014.T_spr_c27k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_013.T_spr_c27k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_018.T_spr_c27k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_019.T_spr_c27k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_020.T_spr_c27k1_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_019.T_spr_c27k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_026.T_spr_c27k1_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_025.T_spr_c27k1_025"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_024.T_spr_c27k1_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_025.T_spr_c27k1_025"),
+};
+
+static const TCHAR* const GM1Tex_33_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_000.T_spr_c27k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_001.T_spr_c27k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_002.T_spr_c27k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_001.T_spr_c27k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_008.T_spr_c27k1_008"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_007.T_spr_c27k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_006.T_spr_c27k1_006"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_007.T_spr_c27k1_007"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_012.T_spr_c27k1_012"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_013.T_spr_c27k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_014.T_spr_c27k1_014"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_013.T_spr_c27k1_013"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_018.T_spr_c27k1_018"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_019.T_spr_c27k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_020.T_spr_c27k1_020"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_019.T_spr_c27k1_019"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_026.T_spr_c27k1_026"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_025.T_spr_c27k1_025"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_024.T_spr_c27k1_024"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_025.T_spr_c27k1_025"),
+};
+
+static const TCHAR* const GM1Tex_33_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_054.T_spr_c27k1_054"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c27k1_054.T_spr_c27k1_054"),
+};
+
+static const TCHAR* const GM1Tex_38_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c29k0_000.T_spr_c29k0_000"),
+};
+
+static const TCHAR* const GM1Tex_38_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c29k0_000.T_spr_c29k0_000"),
+};
+
+static const TCHAR* const GM1Tex_38_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c29k0_002.T_spr_c29k0_002"),
+};
+
+static const TCHAR* const GM1Tex_39_stand[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+};
+
+static const TCHAR* const GM1Tex_39_walk[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_000.T_spr_c22k1_000"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_001.T_spr_c22k1_001"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_002.T_spr_c22k1_002"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_004.T_spr_c22k1_004"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_003.T_spr_c22k1_003"),
+};
+
+static const TCHAR* const GM1Tex_39_dead[] =
+{
+	TEXT("/Game/Sprites/Monsters/T_spr_c22k1_024.T_spr_c22k1_024"),
+};
+
 static const FM1MonsterRow GM1MonsterTable[] =
 {
-	{ 1, TEXT("Civilian (Assimilated)"), 30.00f, 19.92f, 79.98f, 149.41f, 1500.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_chatter_01415.A_human_chatter_01415"), TEXT("/Game/Audio/Monster/A_rocket_exploding.A_rocket_exploding"), TEXT("/Game/Sprites/Monsters/T_mon1"), 4, 0.10f, 26.56f, 78.12f },
-	{ 2, TEXT("Fighter (Minor)"), 40.00f, 19.92f, 79.98f, 99.61f, 3000.00f, 100.00f, 4.00f, 22.50f, false, 0.00f, TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), TEXT("/Game/Sprites/Monsters/T_mon2"), 4, 0.10f, 50.39f, 87.89f },
-	{ 3, TEXT("Fighter (Major)"), 80.00f, 19.92f, 79.98f, 105.47f, 3000.00f, 100.00f, 2.00f, 22.50f, false, 0.00f, TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), TEXT("/Game/Sprites/Monsters/T_mon3"), 4, 0.10f, 50.39f, 87.89f },
-	{ 4, TEXT("Fighter (Minor Projectile)"), 80.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 100.00f, 4.00f, 22.50f, false, 0.00f, TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), TEXT("/Game/Sprites/Monsters/T_mon4"), 4, 0.10f, 50.39f, 87.89f },
-	{ 5, TEXT("Fighter (Major Projectile)"), 80.00f, 19.92f, 79.98f, 123.05f, 3000.00f, 100.00f, 3.00f, 22.50f, false, 0.00f, TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), TEXT("/Game/Sprites/Monsters/T_mon5"), 4, 0.10f, 50.39f, 87.89f },
-	{ 6, TEXT("Civilian (Crew)"), 30.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_chatter.A_human_chatter"), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), TEXT("/Game/Sprites/Monsters/T_mon6"), 4, 0.10f, 26.56f, 78.12f },
-	{ 7, TEXT("Civilian (Science)"), 20.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), TEXT("/Game/Sprites/Monsters/T_mon7"), 4, 0.10f, 26.56f, 78.12f },
-	{ 8, TEXT("Civilian (Security)"), 60.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), TEXT("/Game/Sprites/Monsters/T_mon8"), 4, 0.10f, 26.56f, 78.12f },
-	{ 9, TEXT("Civilian (Misc)"), 30.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), TEXT("/Game/Sprites/Monsters/T_mon9"), 4, 0.10f, 26.56f, 78.12f },
-	{ 12, TEXT("Enforcer (Minor)"), 120.00f, 19.92f, 79.98f, 123.05f, 3000.00f, 2000.00f, 4.00f, 14.00f, true, 3000.00f, TEXT("/Game/Audio/Projectile/A_enforcer_activate.A_enforcer_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), TEXT("/Game/Sprites/Monsters/T_mon12"), 4, 0.17f, 32.23f, 90.33f },
-	{ 13, TEXT("Enforcer (Major)"), 160.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 2000.00f, 2.00f, 14.00f, true, 3000.00f, TEXT("/Game/Audio/Projectile/A_enforcer_activate.A_enforcer_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), TEXT("/Game/Sprites/Monsters/T_mon13"), 4, 0.17f, 32.23f, 90.33f },
-	{ 14, TEXT("Compiler (Minor)"), 160.00f, 19.92f, 100.00f, 105.47f, 3000.00f, 2000.00f, 3.00f, 45.00f, true, 375.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), TEXT("/Game/Sprites/Monsters/T_mon14"), 2, 0.33f, 30.76f, 83.98f },
-	{ 15, TEXT("Compiler (Major)"), 200.00f, 19.92f, 100.00f, 114.26f, 3000.00f, 2000.00f, 4.00f, 45.00f, true, 249.02f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), TEXT("/Game/Sprites/Monsters/T_mon15"), 2, 0.33f, 30.76f, 83.98f },
-	{ 16, TEXT("Compiler (Minor Invisible)"), 160.00f, 19.92f, 100.00f, 123.05f, 3000.00f, 2000.00f, 3.00f, 45.00f, true, 375.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), TEXT("/Game/Sprites/Monsters/T_mon16"), 2, 0.33f, 30.76f, 83.98f },
-	{ 17, TEXT("Compiler (Major Invisible)"), 200.00f, 19.92f, 100.00f, 134.77f, 3000.00f, 2000.00f, 4.00f, 45.00f, true, 249.02f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), TEXT("/Game/Sprites/Monsters/T_mon17"), 2, 0.33f, 30.76f, 83.98f },
-	{ 18, TEXT("Hulk (Minor)"), 750.00f, 50.00f, 100.00f, 58.59f, 3000.00f, 100.00f, 0.25f, 64.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_yeti_dying.A_yeti_dying"), TEXT("/Game/Sprites/Monsters/T_mon18"), 4, 0.13f, 95.70f, 99.61f },
-	{ 19, TEXT("Hulk (Major)"), 1000.00f, 50.00f, 100.00f, 73.24f, 3000.00f, 100.00f, 0.25f, 64.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_yeti_dying.A_yeti_dying"), TEXT("/Game/Sprites/Monsters/T_mon19"), 4, 0.13f, 95.70f, 99.61f },
-	{ 20, TEXT("Hunter (Minor)"), 200.00f, 19.92f, 79.98f, 99.61f, 3000.00f, 1200.00f, 2.00f, 17.50f, true, 750.00f, TEXT("/Game/Audio/Monster/A_hunter_activate.A_hunter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Misc/A_hunter_exploding.A_hunter_exploding"), TEXT("/Game/Sprites/Monsters/T_mon20"), 4, 0.13f, 41.70f, 80.66f },
-	{ 21, TEXT("Hunter (Major)"), 300.00f, 19.92f, 79.98f, 99.61f, 3000.00f, 1200.00f, 2.00f, 17.50f, true, 750.00f, TEXT("/Game/Audio/Monster/A_hunter_activate.A_hunter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Misc/A_hunter_exploding.A_hunter_exploding"), TEXT("/Game/Sprites/Monsters/T_mon21"), 4, 0.13f, 41.70f, 80.66f },
-	{ 22, TEXT("Juggernaut"), 2000.00f, 100.00f, 150.00f, 99.61f, 3000.00f, 300.00f, 2.00f, 17.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Sprites/Monsters/T_mon22"), 1, 0.03f, 183.20f, 151.76f },
-	{ 24, TEXT("Looker (Minor)"), 1.00f, 19.92f, 25.00f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT("/Game/Audio/Weapon/A_tick_chatter.A_tick_chatter"), TEXT("/Game/Audio/Weapon/A_tick_chatter.A_tick_chatter"), TEXT("/Game/Audio/Effect/A_tick_exploding.A_tick_exploding"), TEXT("/Game/Sprites/Monsters/T_mon24"), 2, 0.17f, 47.36f, 31.25f },
-	{ 25, TEXT("Looker (Major)"), 1.00f, 19.92f, 25.00f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Effect/A_tick_exploding.A_tick_exploding"), TEXT("/Game/Sprites/Monsters/T_mon25"), 2, 0.17f, 47.36f, 31.25f },
-	{ 26, TEXT("Looker (Slow)"), 1.00f, 19.92f, 25.00f, 105.47f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Effect/A_tick_exploding.A_tick_exploding"), TEXT("/Game/Sprites/Monsters/T_mon26"), 2, 0.17f, 47.36f, 31.25f },
-	{ 27, TEXT("Defense Drone (Minor)"), 200.00f, 19.92f, 50.00f, 123.05f, 3000.00f, 800.00f, 2.00f, 12.00f, true, 3000.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Weapon/A_grenade_exploding.A_grenade_exploding"), TEXT("/Game/Sprites/Monsters/T_mon27"), 4, 0.13f, 67.38f, 46.29f },
-	{ 30, TEXT("Trooper (Minor)"), 110.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 300.00f, 4.00f, 17.00f, false, 0.00f, TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), TEXT("/Game/Sprites/Monsters/T_mon30"), 4, 0.13f, 29.88f, 84.38f },
-	{ 31, TEXT("Trooper (Major)"), 200.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 300.00f, 2.00f, 17.00f, false, 0.00f, TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), TEXT("/Game/Sprites/Monsters/T_mon31"), 4, 0.13f, 29.88f, 84.38f },
-	{ 32, TEXT("Wasp (Minor)"), 15.00f, 19.92f, 50.00f, 149.41f, 3000.00f, 100.00f, 2.00f, 34.00f, false, 0.00f, TEXT("/Game/Audio/Misc/A_enforcer_projectile_hit.A_enforcer_projectile_hit"), TEXT("/Game/Audio/Misc/A_hummer_start_attack.A_hummer_start_attack"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), TEXT("/Game/Sprites/Monsters/T_mon32"), 4, 0.10f, 49.22f, 49.22f },
-	{ 33, TEXT("Wasp (Major)"), 60.00f, 19.92f, 50.00f, 149.41f, 3000.00f, 100.00f, 2.00f, 34.00f, false, 0.00f, TEXT("/Game/Audio/Misc/A_enforcer_projectile_hit.A_enforcer_projectile_hit"), TEXT("/Game/Audio/Misc/A_hummer_start_attack.A_hummer_start_attack"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), TEXT("/Game/Sprites/Monsters/T_mon33"), 4, 0.10f, 49.22f, 49.22f },
-	{ 38, TEXT("Minion"), 100.00f, 33.30f, 100.00f, 0.00f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Sprites/Monsters/T_mon38"), 1, 0.33f, 76.56f, 122.66f },
-	{ 39, TEXT("Defense Drone (Major)"), 400.00f, 19.92f, 50.00f, 149.41f, 3000.00f, 200.00f, 2.00f, 12.00f, false, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Weapon/A_grenade_exploding.A_grenade_exploding"), TEXT("/Game/Sprites/Monsters/T_mon39"), 4, 0.13f, 67.38f, 46.29f },
+	{ 1, TEXT("Civilian (Assimilated)"), 30.00f, 19.92f, 79.98f, 149.41f, 1500.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_wail.A_human_wail"), TEXT(""), TEXT("/Game/Audio/Monster/A_human_chatter_01415.A_human_chatter_01415"), TEXT("/Game/Audio/Monster/A_rocket_exploding.A_rocket_exploding"), { 5, 1, 2, GM1Tex_1_stand }, { 5, 4, 3, GM1Tex_1_walk }, { 1, 2, 10, GM1Tex_1_dead }, 24.22f, 78.12f },
+	{ 2, TEXT("Fighter (Minor)"), 40.00f, 19.92f, 79.98f, 99.61f, 3000.00f, 120.00f, 4.00f, 22.50f, true, 22.50f, 120.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), { 5, 1, 2, GM1Tex_2_stand }, { 5, 4, 3, GM1Tex_2_walk }, { 1, 2, 1, GM1Tex_2_dead }, 34.57f, 84.38f },
+	{ 3, TEXT("Fighter (Major)"), 80.00f, 19.92f, 79.98f, 105.47f, 3000.00f, 120.00f, 2.00f, 22.50f, true, 22.50f, 120.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), { 5, 1, 2, GM1Tex_3_stand }, { 5, 4, 3, GM1Tex_3_walk }, { 1, 2, 1, GM1Tex_3_dead }, 34.57f, 84.38f },
+	{ 4, TEXT("Fighter (Minor Projectile)"), 80.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 120.00f, 4.00f, 22.50f, true, 22.50f, 120.00f, true, 5, 32.50f, 375.00f, 0.00f, 1200.00f, TEXT("/Game/Audio/Weapon/A_fighter_flyby.A_fighter_flyby"), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), { 5, 1, 2, GM1Tex_4_stand }, { 5, 4, 3, GM1Tex_4_walk }, { 1, 2, 1, GM1Tex_4_dead }, 34.57f, 84.38f },
+	{ 5, TEXT("Fighter (Major Projectile)"), 80.00f, 19.92f, 79.98f, 123.05f, 3000.00f, 120.00f, 3.00f, 22.50f, true, 22.50f, 120.00f, true, 5, 32.50f, 375.00f, 0.00f, 1200.00f, TEXT("/Game/Audio/Weapon/A_fighter_flyby.A_fighter_flyby"), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_exploding.A_body_exploding"), { 5, 1, 2, GM1Tex_5_stand }, { 5, 4, 3, GM1Tex_5_walk }, { 1, 2, 1, GM1Tex_5_dead }, 34.57f, 84.38f },
+	{ 6, TEXT("Civilian (Crew)"), 30.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_wail.A_human_wail"), TEXT(""), TEXT("/Game/Audio/Monster/A_human_chatter.A_human_chatter"), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), { 5, 1, 2, GM1Tex_6_stand }, { 5, 4, 3, GM1Tex_6_walk }, { 1, 2, 10, GM1Tex_6_dead }, 24.22f, 78.12f },
+	{ 7, TEXT("Civilian (Science)"), 20.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_wail.A_human_wail"), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), { 5, 1, 2, GM1Tex_7_stand }, { 5, 4, 3, GM1Tex_7_walk }, { 1, 2, 10, GM1Tex_7_dead }, 24.22f, 78.12f },
+	{ 8, TEXT("Civilian (Security)"), 60.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_wail.A_human_wail"), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), { 5, 1, 2, GM1Tex_8_stand }, { 5, 4, 3, GM1Tex_8_walk }, { 1, 2, 10, GM1Tex_8_dead }, 24.22f, 78.12f },
+	{ 9, TEXT("Civilian (Misc)"), 30.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT("/Game/Audio/Monster/A_human_wail.A_human_wail"), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_human_scream.A_human_scream"), { 5, 1, 2, GM1Tex_9_stand }, { 5, 4, 3, GM1Tex_9_walk }, { 1, 2, 10, GM1Tex_9_dead }, 24.22f, 78.12f },
+	{ 12, TEXT("Enforcer (Minor)"), 120.00f, 19.92f, 79.98f, 123.05f, 3000.00f, 2000.00f, 4.00f, 14.00f, false, 0.00f, 0.00f, true, 12, 14.00f, 3000.00f, 0.00f, 2000.00f, TEXT(""), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_enforcer_activate.A_enforcer_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), { 5, 1, 2, GM1Tex_12_stand }, { 5, 4, 5, GM1Tex_12_walk }, { 1, 4, 1, GM1Tex_12_dead }, 31.74f, 89.84f },
+	{ 13, TEXT("Enforcer (Major)"), 160.00f, 19.92f, 79.98f, 149.41f, 3000.00f, 2000.00f, 2.00f, 14.00f, false, 0.00f, 0.00f, true, 12, 14.00f, 3000.00f, 0.00f, 2000.00f, TEXT(""), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_enforcer_activate.A_enforcer_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), { 5, 1, 2, GM1Tex_13_stand }, { 5, 4, 5, GM1Tex_13_walk }, { 1, 4, 1, GM1Tex_13_dead }, 31.74f, 89.84f },
+	{ 14, TEXT("Compiler (Minor)"), 160.00f, 19.92f, 100.00f, 105.47f, 3000.00f, 2000.00f, 3.00f, 45.00f, false, 0.00f, 0.00f, true, 10, 45.00f, 375.00f, 0.00f, 2000.00f, TEXT("/Game/Audio/Monster/A_compiler_projectile_flyby.A_compiler_projectile_flyby"), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), { 5, 1, 10, GM1Tex_14_stand }, { 5, 2, 10, GM1Tex_14_walk }, { 5, 3, 4, GM1Tex_14_dead }, 30.76f, 83.98f },
+	{ 15, TEXT("Compiler (Major)"), 200.00f, 19.92f, 100.00f, 114.26f, 3000.00f, 2000.00f, 4.00f, 45.00f, false, 0.00f, 0.00f, true, 11, 45.00f, 249.02f, 0.00f, 2000.00f, TEXT("/Game/Audio/Monster/A_compiler_projectile_flyby.A_compiler_projectile_flyby"), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), { 5, 1, 10, GM1Tex_15_stand }, { 5, 2, 10, GM1Tex_15_walk }, { 5, 3, 4, GM1Tex_15_dead }, 30.76f, 83.98f },
+	{ 16, TEXT("Compiler (Minor Invisible)"), 160.00f, 19.92f, 100.00f, 123.05f, 3000.00f, 2000.00f, 3.00f, 45.00f, false, 0.00f, 0.00f, true, 10, 45.00f, 375.00f, 0.00f, 2000.00f, TEXT("/Game/Audio/Monster/A_compiler_projectile_flyby.A_compiler_projectile_flyby"), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), { 5, 1, 10, GM1Tex_16_stand }, { 5, 2, 10, GM1Tex_16_walk }, { 5, 3, 4, GM1Tex_16_dead }, 30.76f, 83.98f },
+	{ 17, TEXT("Compiler (Major Invisible)"), 200.00f, 19.92f, 100.00f, 134.77f, 3000.00f, 2000.00f, 4.00f, 45.00f, false, 0.00f, 0.00f, true, 11, 45.00f, 249.02f, 0.00f, 2000.00f, TEXT("/Game/Audio/Monster/A_compiler_projectile_flyby.A_compiler_projectile_flyby"), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_compiler_death.A_compiler_death"), { 5, 1, 10, GM1Tex_17_stand }, { 5, 2, 10, GM1Tex_17_walk }, { 5, 3, 4, GM1Tex_17_dead }, 30.76f, 83.98f },
+	{ 18, TEXT("Hulk (Minor)"), 750.00f, 50.00f, 100.00f, 58.59f, 3000.00f, 120.00f, 0.50f, 64.00f, true, 64.00f, 120.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_yeti_dying.A_yeti_dying"), { 5, 1, 4, GM1Tex_18_stand }, { 5, 4, 4, GM1Tex_18_walk }, { 5, 4, 4, GM1Tex_18_dead }, 95.70f, 100.59f },
+	{ 19, TEXT("Hulk (Major)"), 1000.00f, 50.00f, 100.00f, 73.24f, 3000.00f, 120.00f, 0.50f, 64.00f, true, 64.00f, 120.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Monster/A_yeti_dying.A_yeti_dying"), { 5, 1, 4, GM1Tex_19_stand }, { 5, 4, 4, GM1Tex_19_walk }, { 5, 4, 4, GM1Tex_19_dead }, 95.70f, 100.59f },
+	{ 20, TEXT("Hunter (Minor)"), 200.00f, 19.92f, 79.98f, 99.61f, 3000.00f, 1200.00f, 2.00f, 17.50f, false, 0.00f, 0.00f, true, 15, 17.50f, 750.00f, 0.00f, 1200.00f, TEXT("/Game/Audio/Effect/A_hunter_projectile_flyby.A_hunter_projectile_flyby"), TEXT(""), TEXT("/Game/Audio/Monster/A_hunter_activate.A_hunter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Misc/A_hunter_exploding.A_hunter_exploding"), { 5, 1, 10, GM1Tex_20_stand }, { 5, 4, 4, GM1Tex_20_walk }, { 1, 2, 10, GM1Tex_20_dead }, 58.11f, 88.18f },
+	{ 21, TEXT("Hunter (Major)"), 300.00f, 19.92f, 79.98f, 99.61f, 3000.00f, 1200.00f, 2.00f, 17.50f, false, 0.00f, 0.00f, true, 15, 17.50f, 750.00f, 0.00f, 1200.00f, TEXT("/Game/Audio/Effect/A_hunter_projectile_flyby.A_hunter_projectile_flyby"), TEXT(""), TEXT("/Game/Audio/Monster/A_hunter_activate.A_hunter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Misc/A_hunter_exploding.A_hunter_exploding"), { 5, 1, 10, GM1Tex_21_stand }, { 5, 4, 4, GM1Tex_21_walk }, { 1, 2, 10, GM1Tex_21_dead }, 58.11f, 88.18f },
+	{ 22, TEXT("Juggernaut"), 2000.00f, 100.00f, 150.00f, 99.61f, 3000.00f, 300.00f, 2.00f, 17.00f, true, 17.00f, 300.00f, true, 24, 50.00f, 597.66f, 75.00f, 2500.00f, TEXT("/Game/Audio/Weapon/A_grenade_flyby.A_grenade_flyby"), TEXT(""), TEXT(""), TEXT(""), TEXT(""), { 5, 1, 1, GM1Tex_22_stand }, { 5, 1, 1, GM1Tex_22_walk }, { 1, 1, 1, GM1Tex_22_dead }, 183.20f, 151.76f },
+	{ 24, TEXT("Looker (Minor)"), 1.00f, 19.92f, 25.00f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Weapon/A_tick_chatter.A_tick_chatter"), TEXT("/Game/Audio/Weapon/A_tick_chatter.A_tick_chatter"), TEXT("/Game/Audio/Effect/A_tick_exploding.A_tick_exploding"), { 5, 2, 5, GM1Tex_24_stand }, { 5, 2, 5, GM1Tex_24_walk }, { 1, 3, 5, GM1Tex_24_dead }, 47.36f, 31.25f },
+	{ 25, TEXT("Looker (Major)"), 1.00f, 19.92f, 25.00f, 149.41f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Effect/A_tick_exploding.A_tick_exploding"), { 5, 2, 5, GM1Tex_25_stand }, { 5, 2, 5, GM1Tex_25_walk }, { 1, 3, 5, GM1Tex_25_dead }, 47.36f, 31.25f },
+	{ 26, TEXT("Looker (Slow)"), 1.00f, 19.92f, 25.00f, 105.47f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Effect/A_tick_exploding.A_tick_exploding"), { 5, 2, 5, GM1Tex_26_stand }, { 5, 2, 5, GM1Tex_26_walk }, { 1, 3, 5, GM1Tex_26_dead }, 47.36f, 31.25f },
+	{ 27, TEXT("Defense Drone (Minor)"), 200.00f, 19.92f, 50.00f, 123.05f, 3000.00f, 800.00f, 2.00f, 12.00f, false, 0.00f, 0.00f, true, 3, 12.00f, 3000.00f, 0.00f, 800.00f, TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Weapon/A_grenade_exploding.A_grenade_exploding"), { 5, 4, 4, GM1Tex_27_stand }, { 5, 4, 4, GM1Tex_27_walk }, { 1, 1, 1, GM1Tex_27_dead }, 67.38f, 46.29f },
+	{ 30, TEXT("Trooper (Minor)"), 110.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 300.00f, 4.00f, 17.00f, true, 17.00f, 300.00f, true, 21, 50.00f, 597.66f, 75.00f, 600.00f, TEXT("/Game/Audio/Weapon/A_grenade_flyby.A_grenade_flyby"), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), { 5, 1, 3, GM1Tex_30_stand }, { 5, 4, 4, GM1Tex_30_walk }, { 5, 4, 4, GM1Tex_30_dead }, 35.16f, 73.24f },
+	{ 31, TEXT("Trooper (Major)"), 200.00f, 19.92f, 79.98f, 114.26f, 3000.00f, 300.00f, 2.00f, 17.00f, true, 17.00f, 300.00f, true, 21, 50.00f, 597.66f, 75.00f, 800.00f, TEXT("/Game/Audio/Weapon/A_grenade_flyby.A_grenade_flyby"), TEXT("/Game/Audio/Weapon/A_yeti_projectile_attack.A_yeti_projectile_attack"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Projectile/A_fighter_activate.A_fighter_activate"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), { 5, 1, 3, GM1Tex_31_stand }, { 5, 4, 4, GM1Tex_31_walk }, { 5, 4, 4, GM1Tex_31_dead }, 35.16f, 73.24f },
+	{ 32, TEXT("Wasp (Minor)"), 15.00f, 19.92f, 50.00f, 149.41f, 3000.00f, 120.00f, 2.00f, 34.00f, true, 34.00f, 120.00f, true, 23, 24.00f, 498.05f, 0.00f, 400.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Misc/A_enforcer_projectile_hit.A_enforcer_projectile_hit"), TEXT("/Game/Audio/Misc/A_hummer_start_attack.A_hummer_start_attack"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), { 5, 4, 3, GM1Tex_32_stand }, { 5, 4, 3, GM1Tex_32_walk }, { 1, 2, 10, GM1Tex_32_dead }, 49.22f, 49.22f },
+	{ 33, TEXT("Wasp (Major)"), 60.00f, 19.92f, 50.00f, 149.41f, 3000.00f, 120.00f, 2.00f, 34.00f, true, 34.00f, 120.00f, true, 23, 24.00f, 498.05f, 0.00f, 1200.00f, TEXT(""), TEXT(""), TEXT("/Game/Audio/Misc/A_enforcer_projectile_hit.A_enforcer_projectile_hit"), TEXT("/Game/Audio/Misc/A_hummer_start_attack.A_hummer_start_attack"), TEXT("/Game/Audio/Monster/A_body_falling.A_body_falling"), { 5, 4, 3, GM1Tex_33_stand }, { 5, 4, 3, GM1Tex_33_walk }, { 1, 2, 10, GM1Tex_33_dead }, 49.22f, 49.22f },
+	{ 38, TEXT("Minion"), 100.00f, 33.30f, 100.00f, 0.00f, 3000.00f, 0.00f, 2.00f, 0.00f, false, 0.00f, 0.00f, false, -1, 0.00f, 0.00f, 0.00f, 0.00f, TEXT(""), TEXT(""), TEXT(""), TEXT(""), TEXT(""), { 1, 1, 10, GM1Tex_38_stand }, { 1, 1, 10, GM1Tex_38_walk }, { 1, 1, 10, GM1Tex_38_dead }, 76.56f, 122.66f },
+	{ 39, TEXT("Defense Drone (Major)"), 400.00f, 19.92f, 50.00f, 149.41f, 3000.00f, 200.00f, 2.00f, 12.00f, true, 12.00f, 200.00f, true, 1, 90.00f, 750.00f, 75.00f, 800.00f, TEXT("/Game/Audio/Weapon/A_grenade_flyby.A_grenade_flyby"), TEXT(""), TEXT(""), TEXT(""), TEXT("/Game/Audio/Weapon/A_grenade_exploding.A_grenade_exploding"), { 5, 4, 4, GM1Tex_39_stand }, { 5, 4, 4, GM1Tex_39_walk }, { 1, 1, 1, GM1Tex_39_dead }, 67.38f, 46.29f },
 };
 
 static const int32 GM1MonsterTableCount = UE_ARRAY_COUNT(GM1MonsterTable);
