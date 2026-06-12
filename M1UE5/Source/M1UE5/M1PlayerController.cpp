@@ -42,6 +42,103 @@ void AM1PlayerController::BeginPlay()
 	{
 		ShowMainMenu();
 	}
+	else
+	{
+		MaybeShowChapterScreen();
+	}
+}
+
+void AM1PlayerController::MaybeShowChapterScreen()
+{
+	// Level index lives in the map name as "L_<NN>_..." (e.g. L_00_Arrival).
+	const FString Map = GetWorld() ? GetWorld()->GetMapName() : FString();
+	const int32 P = Map.Find(TEXT("L_"));
+	if (P == INDEX_NONE)
+	{
+		return;
+	}
+	const FString Digits = Map.Mid(P + 2, 2);
+	if (Digits.Len() < 2 || !Digits.IsNumeric())
+	{
+		return;
+	}
+	const int32 Idx = FCString::Atoi(*Digits);
+
+	// Only six story-beat levels ship a chapter screen; LoadObject returns null
+	// for the rest, which silently skips the splash.
+	const FString TexPath =
+		FString::Printf(TEXT("/Game/UI/Chapters/T_chapter_%02d.T_chapter_%02d"), Idx, Idx);
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *TexPath);
+	if (!Tex)
+	{
+		return;
+	}
+
+	ChapterBrush = MakeShareable(new FSlateBrush());
+	ChapterBrush->SetResourceObject(Tex);
+	ChapterBrush->ImageSize = FVector2D(Tex->GetSizeX(), Tex->GetSizeY());
+	ChapterBrush->DrawAs = ESlateBrushDrawType::Image;
+
+	// Full-screen click-catcher: invisible button over the whole viewport so a
+	// click (or Enter/Space while focused) dismisses the splash.
+	static const FButtonStyle ClearBtn = FButtonStyle()
+		.SetNormal(FSlateNoResource()).SetHovered(FSlateNoResource()).SetPressed(FSlateNoResource())
+		.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
+
+	TSharedRef<SButton> Splash = SNew(SButton).ButtonStyle(&ClearBtn)
+		.OnClicked_Lambda([this]() { DismissChapterScreen(); return FReply::Handled(); })
+		[
+			SNew(SOverlay)
+			+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+			[
+				SNew(SImage).Image(&GMenuBg).ColorAndOpacity(FLinearColor::Black)
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+			[
+				// 640x480 chapter art, aspect-locked + pillarboxed to any screen.
+				SNew(SScaleBox).Stretch(EStretch::ScaleToFit)
+				.HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(SImage).Image(ChapterBrush.Get())
+				]
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(FMargin(0.0f, 0.0f, 0.0f, 22.0f))
+			[
+				SNew(STextBlock).Text(LOCTEXT("Continue", "click to continue"))
+				.Font(MenuFont(15)).ColorAndOpacity(FSlateColor(FLinearColor(0.30f, 1.0f, 0.40f, 0.85f)))
+			]
+		];
+
+	ChapterWidget = Splash;
+	if (GEngine && GEngine->GameViewport)
+	{
+		// ZOrder 200 -> above the HUD (which draws at default order).
+		GEngine->GameViewport->AddViewportWidgetContent(Splash, 200);
+	}
+	bShowMouseCursor = true;
+	FInputModeUIOnly Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(Mode);
+	FSlateApplication::Get().SetKeyboardFocus(Splash); // so Enter/Space also dismiss
+	UGameplayStatics::SetGamePaused(this, true);
+	bChapterOpen = true;
+}
+
+void AM1PlayerController::DismissChapterScreen()
+{
+	if (!bChapterOpen)
+	{
+		return;
+	}
+	if (GEngine && GEngine->GameViewport && ChapterWidget.IsValid())
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(ChapterWidget.ToSharedRef());
+	}
+	ChapterWidget.Reset();
+	bChapterOpen = false;
+	bShowMouseCursor = false;
+	SetInputMode(FInputModeGameOnly());
+	UGameplayStatics::SetGamePaused(this, false);
 }
 
 void AM1PlayerController::SetupInputComponent()

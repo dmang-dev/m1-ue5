@@ -22,6 +22,11 @@ private:
 	void TogglePauseMenu();
 	void CloseMenu();
 
+	// Marathon shows a full-screen chapter splash (level name baked in) when the
+	// player enters a story-beat level. Shown on top, game paused, until clicked.
+	void MaybeShowChapterScreen();
+	void DismissChapterScreen();
+
 	void OnNewGame();
 	void OnQuitGame();
 	void OnReturnToMenu();
@@ -34,6 +39,10 @@ private:
 	// Holds the authentic M1 main-menu bitmap (Coll_10 bitmap 001) for the Slate
 	// SImage; must outlive the widget, so it lives on the controller.
 	TSharedPtr<struct FSlateBrush> MenuBrush;
+	// Chapter-splash widget + its texture brush (must outlive the widget).
+	TSharedPtr<class SWidget> ChapterWidget;
+	TSharedPtr<struct FSlateBrush> ChapterBrush;
 	bool bMenuOpen = false;
+	bool bChapterOpen = false;
 	bool bOnMenuLevel = false;
 };
