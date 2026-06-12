@@ -23,4 +23,7 @@ public:
 private:
 	/** Spawn every monster placement for the current map (M1SpawnTable.h). */
 	void SpawnMonsters();
+
+	/** Spawn the current map's door panels (M1PlatformTable.h). */
+	void SpawnDoors();
 };

@@ -2,8 +2,10 @@
 #include "M1Character.h"
 #include "M1PlayerController.h"
 #include "M1Enemy.h"
+#include "M1Platform.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
+#include "M1PlatformTable.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
@@ -19,6 +21,35 @@ void AM1GameMode::BeginPlay()
 {
 	Super::BeginPlay();
 	SpawnMonsters();
+	SpawnDoors();
+}
+
+void AM1GameMode::SpawnDoors()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const FString MapName = World->GetMapName();
+	const TArrayView<const FM1Door> Doors = M1DoorsForLevel(MapName);
+
+	int32 Spawned = 0;
+	for (const FM1Door& D : Doors)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AM1Platform* Door = World->SpawnActor<AM1Platform>(
+			AM1Platform::StaticClass(), FVector(D.X, D.Y, D.Z), FRotator::ZeroRotator, Params);
+		if (Door)
+		{
+			Door->InitFromDoor(D);
+			++Spawned;
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d doors for %s"),
+		Spawned, Doors.Num(), *MapName);
 }
 
 void AM1GameMode::SpawnMonsters()
