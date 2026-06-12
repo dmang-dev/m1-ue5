@@ -46,6 +46,9 @@ public:
 	/** Current shields, for the HUD shield bar (M1HUD.cpp). */
 	float GetHealth() const { return Health; }
 
+	/** Top up shields toward Cap (1x/2x/3x charger); never reduces. */
+	void RefillShields(float Cap);
+
 	/** --- Terminal (lore) viewer, read by the HUD to draw the active page. --- */
 	bool IsTerminalOpen() const { return bTerminalOpen; }
 	int32 GetTerminalTextureId() const { return ActiveTermId; }
@@ -119,6 +122,8 @@ private:
 
 	/** Search for a usable terminal in front of the player and open it. */
 	void OpenNearestTerminal();
+	/** Activate the nearest charger / pattern buffer in front. Returns true if one fired. */
+	bool UseNearestPanel();
 	/** Restore movement when the terminal closes. */
 	void CloseTerminal();
 };

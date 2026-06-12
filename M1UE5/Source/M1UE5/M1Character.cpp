@@ -16,6 +16,8 @@
 #include "M1Tuning.h"
 #include "M1TerminalTable.h"
 #include "M1SaveGame.h"
+#include "M1Panel.h"
+#include "EngineUtils.h"  // TActorIterator
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -204,7 +206,54 @@ void AM1Character::OnUse()
 		}
 		return;
 	}
+	// A wall panel (charger / pattern buffer) takes priority when you're right at
+	// one; otherwise fall through to the terminal reader.
+	if (UseNearestPanel())
+	{
+		return;
+	}
 	OpenNearestTerminal();
+}
+
+bool AM1Character::UseNearestPanel()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const FVector Eye = GetActorLocation();
+	const FVector Forward = GetActorForwardVector();
+	AM1Panel* Best = nullptr;
+	float BestDistSq = TNumericLimits<float>::Max();
+	for (TActorIterator<AM1Panel> It(World); It; ++It)
+	{
+		AM1Panel* Panel = *It;
+		const FVector To = Panel->GetActorLocation() - Eye;
+		const float DistSq = To.SizeSquared();
+		const float R = Panel->GetUseRadius();
+		if (DistSq > R * R)
+		{
+			continue;
+		}
+		// Must be roughly in front (don't trigger panels behind the player).
+		if (FVector::DotProduct(Forward, To.GetSafeNormal2D()) < 0.3f)
+		{
+			continue;
+		}
+		if (DistSq < BestDistSq)
+		{
+			BestDistSq = DistSq;
+			Best = Panel;
+		}
+	}
+	return Best && Best->Activate(this);
+}
+
+void AM1Character::RefillShields(float Cap)
+{
+	Health = FMath::Max(Health, Cap);  // top up only -- never reduce an overcharge
+	ShowShields();
 }
 
 void AM1Character::OpenNearestTerminal()

@@ -3,9 +3,11 @@
 #include "M1PlayerController.h"
 #include "M1Enemy.h"
 #include "M1Platform.h"
+#include "M1Panel.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
 #include "M1PlatformTable.h"
+#include "M1PanelTable.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
@@ -22,6 +24,39 @@ void AM1GameMode::BeginPlay()
 	Super::BeginPlay();
 	SpawnMonsters();
 	SpawnDoors();
+	SpawnPanels();
+}
+
+void AM1GameMode::SpawnPanels()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const FString MapName = World->GetMapName();
+	const TArrayView<const FM1Panel> Panels = M1PanelsForLevel(MapName);
+
+	int32 Spawned = 0;
+	for (const FM1Panel& P : Panels)
+	{
+		if (P.Kind < 0)
+		{
+			continue;  // sentinel (level has no panels)
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AM1Panel* Panel = World->SpawnActor<AM1Panel>(
+			AM1Panel::StaticClass(), FVector(P.X, P.Y, P.Z), FRotator::ZeroRotator, Params);
+		if (Panel)
+		{
+			Panel->InitFromPanel(P);
+			++Spawned;
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d panels for %s"),
+		Spawned, Panels.Num(), *MapName);
 }
 
 void AM1GameMode::SpawnDoors()
