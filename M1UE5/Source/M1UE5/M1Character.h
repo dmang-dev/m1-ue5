@@ -38,6 +38,12 @@ public:
 	/** Current shields, for the HUD shield bar (M1HUD.cpp). */
 	float GetHealth() const { return Health; }
 
+	/** --- Terminal (lore) viewer, read by the HUD to draw the active page. --- */
+	bool IsTerminalOpen() const { return bTerminalOpen; }
+	int32 GetTerminalTextureId() const { return ActiveTermId; }
+	int32 GetTerminalPage() const { return ActiveTermPage; }
+	int32 GetTerminalPageCount() const { return ActiveTermPages; }
+
 	/** Full shields = the canonical starting pool (M1Tuning::GPlayerShields).
 	 *  Used as the shield bar's 100% width. NOTE: canisters can push real M1
 	 *  shields to 2x/3x; until that pickup system exists this is the 1x cap. */
@@ -53,6 +59,9 @@ protected:
 	void NextLevel();
 	void PrevLevel();
 	void CycleLevel(int32 Direction);
+
+	/** Use (E): page through the nearest terminal, or open/close it. */
+	void OnUse();
 
 	/** Fire (LMB press/release) / reload (R) the current weapon. */
 	void OnFire();
@@ -92,4 +101,16 @@ private:
 
 	/** HUD key 11: "Shields  NNN" readout (updated on BeginPlay + every hit). */
 	void ShowShields() const;
+
+	/** --- Terminal viewer state. While open the player is frozen (movement
+	 *  disabled, weapon fire suppressed) and the HUD draws the page art. --- */
+	bool bTerminalOpen = false;
+	int32 ActiveTermId = -1;
+	int32 ActiveTermPage = 0;
+	int32 ActiveTermPages = 0;
+
+	/** Search for a usable terminal in front of the player and open it. */
+	void OpenNearestTerminal();
+	/** Restore movement when the terminal closes. */
+	void CloseTerminal();
 };

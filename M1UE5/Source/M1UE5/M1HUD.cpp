@@ -57,7 +57,20 @@ void AM1HUD::DrawHUD()
 
 	AM1Character* Player = Cast<AM1Character>(GetOwningPawn());
 	UM1WeaponComponent* Weapon = Player ? Player->GetWeaponComponent() : nullptr;
-	if (!Weapon || !GetWorld() || !Canvas)
+	if (!Player || !GetWorld() || !Canvas)
+	{
+		return;
+	}
+
+	// While reading a terminal, the lore page replaces the gun + panel entirely
+	// (don't draw the weapon over the terminal).
+	if (Player->IsTerminalOpen())
+	{
+		DrawTerminal(Player);
+		return;
+	}
+
+	if (!Weapon)
 	{
 		return;
 	}
@@ -66,6 +79,46 @@ void AM1HUD::DrawHUD()
 	// chrome draws on top along the bottom so the gun reads as held above it.
 	DrawViewmodel(Weapon);
 	DrawInterfacePanel(Player, Weapon);
+}
+
+void AM1HUD::DrawTerminal(AM1Character* Player)
+{
+	// Full-screen dark backdrop so the room behind doesn't bleed through.
+	DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.9f), 0.0f, 0.0f,
+		Canvas->SizeX, Canvas->SizeY);
+
+	const int32 TermId = Player->GetTerminalTextureId();
+	const int32 Page = Player->GetTerminalPage();
+
+	// Page art: centered, scaled to fit the viewport height (renders are ~640
+	// wide). Null-guard: if the texture isn't imported yet, just show the hint.
+	UTexture2D* Tex = GetTerminalTexture(TermId, Page);
+	if (Tex)
+	{
+		const int32 TexW = FMath::Max(1, Tex->GetSizeX());
+		const int32 TexH = FMath::Max(1, Tex->GetSizeY());
+		// Fit to ~90% of viewport height, never upscaling past the width either.
+		const float ScaleH = (Canvas->SizeY * 0.9f) / TexH;
+		const float ScaleW = (Canvas->SizeX * 0.95f) / TexW;
+		const float Scale = FMath::Min(ScaleH, ScaleW);
+		const float W = TexW * Scale;
+		const float H = TexH * Scale;
+		DrawTexture(Tex, (Canvas->SizeX - W) * 0.5f, (Canvas->SizeY - H) * 0.5f,
+			W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+	}
+
+	// Paging hint, terminal green, bottom-center: "PAGE n/N  -  [E] continue".
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	if (Font)
+	{
+		const int32 Pages = FMath::Max(1, Player->GetTerminalPageCount());
+		const FString Hint = FString::Printf(
+			TEXT("PAGE %d/%d   -   [E] continue"), Page + 1, Pages);
+		const float TextScale = FMath::Max(1.0f, (Canvas->SizeY / 480.0f) * 1.2f);
+		DrawText(Hint, FLinearColor(0.2f, 1.0f, 0.2f, 1.0f),
+			Canvas->SizeX * 0.5f - 120.0f * TextScale, Canvas->SizeY * 0.94f,
+			Font, TextScale);
+	}
 }
 
 void AM1HUD::DrawViewmodel(UM1WeaponComponent* Weapon)
@@ -258,6 +311,23 @@ UTexture2D* AM1HUD::GetFrameTexture(const FString& AssetBase, int32 Frame)
 		TEXT("/Game/Sprites/Weapons/%s.%s"), *Key, *Key);
 	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *Path);
 	FrameCache.Add(Key, Tex);  // cache nulls too: one failed load, not 60/s
+	return Tex;
+}
+
+UTexture2D* AM1HUD::GetTerminalTexture(int32 TermId, int32 Page)
+{
+	const FString Key = FString::Printf(TEXT("term_%d_%d"), TermId, Page);
+	if (UTexture2D** Found = FrameCache.Find(Key))
+	{
+		return *Found;
+	}
+	// The page asset is T_term<id>_p<page> under /Game/UI/Terminals (imported by
+	// ue5_import_terminals.py). Missing until the orchestrator runs that import.
+	const FString Leaf = FString::Printf(TEXT("T_term%d_p%d"), TermId, Page);
+	const FString Path = FString::Printf(
+		TEXT("/Game/UI/Terminals/%s.%s"), *Leaf, *Leaf);
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, *Path);
+	FrameCache.Add(Key, Tex);  // cache nulls too (art may not exist yet)
 	return Tex;
 }
 

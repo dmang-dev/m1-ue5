@@ -35,6 +35,14 @@ private:
 	/** Marathon interface panel: bottom-strip chrome + shield bar + ammo. */
 	void DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon);
 
+	/** Terminal (lore) overlay: dark backdrop + the active green-on-black page
+	 *  art, centered + scaled to the viewport, with a paging hint. Drawn instead
+	 *  of the viewmodel/panel while the player is reading a terminal. */
+	void DrawTerminal(AM1Character* Player);
+
+	/** Terminal page loader: /Game/UI/Terminals/T_term<id>_p<page>. Cached. */
+	UTexture2D* GetTerminalTexture(int32 TermId, int32 Page);
+
 	/** Viewmodel frame loader: /Game/Sprites/Weapons/<AssetBase><Frame>. */
 	UTexture2D* GetFrameTexture(const FString& AssetBase, int32 Frame);
 

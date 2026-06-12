@@ -14,6 +14,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "M1WeaponComponent.h"
 #include "M1Tuning.h"
+#include "M1TerminalTable.h"
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -131,6 +132,7 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction("AltFire", IE_Pressed, this, &AM1Character::OnAltFire);
 	PlayerInputComponent->BindAction("AltFire", IE_Released, this, &AM1Character::OnAltFireStop);
 	PlayerInputComponent->BindAction("Reload", IE_Pressed, this, &AM1Character::OnReload);
+	PlayerInputComponent->BindAction("Use", IE_Pressed, this, &AM1Character::OnUse);
 
 	// Weapon selection: number keys 1-7 -> slots 0-6, scroll wheel cycles.
 	PlayerInputComponent->BindAction("Weapon1", IE_Pressed, this, &AM1Character::OnSelectWeapon1);
@@ -146,7 +148,8 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 void AM1Character::OnFire()
 {
-	if (Weapon)
+	// Reading a terminal suppresses weapon fire (the gun isn't even drawn).
+	if (!bTerminalOpen && Weapon)
 	{
 		Weapon->StartFire();
 	}
@@ -162,7 +165,7 @@ void AM1Character::OnFireStop()
 
 void AM1Character::OnAltFire()
 {
-	if (Weapon)
+	if (!bTerminalOpen && Weapon)
 	{
 		Weapon->StartAltFire();
 	}
@@ -181,6 +184,107 @@ void AM1Character::OnReload()
 	if (Weapon)
 	{
 		Weapon->Reload();
+	}
+}
+
+void AM1Character::OnUse()
+{
+	// Open -> page forward; past the last page -> close. Closed -> try to open
+	// the terminal the player is standing at and facing.
+	if (bTerminalOpen)
+	{
+		if (ActiveTermPage + 1 < ActiveTermPages)
+		{
+			++ActiveTermPage;
+		}
+		else
+		{
+			CloseTerminal();
+		}
+		return;
+	}
+	OpenNearestTerminal();
+}
+
+void AM1Character::OpenNearestTerminal()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Match the running map (possibly PIE-prefixed) to its terminal list.
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(World->GetMapName());
+	if (Terms.Num() == 0)
+	{
+		return;
+	}
+
+	// Use proximity (XY) within ~180cm AND "roughly in front" (camera forward
+	// dotted with the direction to the panel is positive). Pick the closest.
+	constexpr float kReachCm = 180.0f;
+	const FVector Loc = GetActorLocation();
+	const FVector Fwd = FirstPersonCamera
+		? FirstPersonCamera->GetForwardVector()
+		: GetActorForwardVector();
+
+	const FM1Terminal* Best = nullptr;
+	float BestDistSq = kReachCm * kReachCm;
+	for (const FM1Terminal& T : Terms)
+	{
+		if (T.PageCount <= 0)
+		{
+			continue;
+		}
+		const FVector ToPanel(T.X - Loc.X, T.Y - Loc.Y, 0.0f);  // XY only
+		const float DistSq = ToPanel.SizeSquared2D();
+		if (DistSq > BestDistSq)
+		{
+			continue;
+		}
+		// Facing test in the XY plane (ignore pitch so looking slightly up/down
+		// at a wall panel still counts).
+		const FVector FwdFlat(Fwd.X, Fwd.Y, 0.0f);
+		if (FVector::DotProduct(FwdFlat.GetSafeNormal(), ToPanel.GetSafeNormal()) <= 0.0f)
+		{
+			continue;
+		}
+		Best = &T;
+		BestDistSq = DistSq;
+	}
+
+	if (!Best)
+	{
+		return;
+	}
+
+	bTerminalOpen = true;
+	ActiveTermId = Best->TermId;
+	ActiveTermPage = 0;
+	ActiveTermPages = Best->PageCount;
+
+	// Freeze the player: stop the pawn and disable movement input while reading.
+	// (No canonical computer-interface logon sound is mapped in m1_sound_names.json,
+	// so we skip the SFX rather than invent one.)
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->DisableMovement();
+	}
+}
+
+void AM1Character::CloseTerminal()
+{
+	bTerminalOpen = false;
+	ActiveTermId = -1;
+	ActiveTermPage = 0;
+	ActiveTermPages = 0;
+
+	// Restore walking.
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->SetMovementMode(MOVE_Walking);
 	}
 }
 
@@ -333,7 +437,7 @@ void AM1Character::CycleLevel(int32 Direction)
 
 void AM1Character::MoveForward(float Value)
 {
-	if (Controller && Value != 0.0f)
+	if (!bTerminalOpen && Controller && Value != 0.0f)
 	{
 		const FRotator YawRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
 		AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X), Value);
@@ -342,7 +446,7 @@ void AM1Character::MoveForward(float Value)
 
 void AM1Character::MoveRight(float Value)
 {
-	if (Controller && Value != 0.0f)
+	if (!bTerminalOpen && Controller && Value != 0.0f)
 	{
 		const FRotator YawRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
 		AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y), Value);
