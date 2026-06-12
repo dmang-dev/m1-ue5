@@ -1,5 +1,7 @@
 #include "M1Enemy.h"
 
+#include "M1Audio.h"
+
 #include "M1MonsterTable.h"
 #include "M1Projectile.h"
 #include "Components/CapsuleComponent.h"
@@ -230,7 +232,7 @@ void AM1Enemy::Activate(float Now)
 	State = EM1EnemyState::Chase;
 	if (ActivationSound)
 	{
-		UGameplayStatics::SpawnSoundAtLocation(this, ActivationSound, GetActorLocation());
+		UGameplayStatics::SpawnSoundAtLocation(this, ActivationSound, GetActorLocation(), FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 	}
 	NextRandomSoundTime = Now + FMath::FRandRange(4.0f, 8.0f);
 	NextAttackTime = Now + 0.5f;  // brief reaction beat before the first attack
@@ -301,7 +303,7 @@ void AM1Enemy::Tick(float DeltaSeconds)
 		NextRandomSoundTime = Now + FMath::FRandRange(4.0f, 8.0f);
 		if (FMath::FRand() < 0.3f)
 		{
-			UGameplayStatics::SpawnSoundAtLocation(this, RandomSound, MyLoc);
+			UGameplayStatics::SpawnSoundAtLocation(this, RandomSound, MyLoc, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 		}
 	}
 
@@ -441,7 +443,7 @@ void AM1Enemy::Die()
 
 	if (DeathSound)
 	{
-		UGameplayStatics::SpawnSoundAtLocation(this, DeathSound, GetActorLocation());
+		UGameplayStatics::SpawnSoundAtLocation(this, DeathSound, GetActorLocation(), FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 	}
 
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())

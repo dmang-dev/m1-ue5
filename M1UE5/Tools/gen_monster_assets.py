@@ -157,9 +157,15 @@ def load_collection(coll):
     return data
 
 
-def resolve_state(coll_data, coll, shape_ref):
+def resolve_state(coll_data, coll, clut, shape_ref, render_list):
     """shape_ref ({'shape': N, ...} or None) -> dict with the FRONT (view 0)
-    frame list, or None. Each frame: png path, world box in cm."""
+    frame list, or None. Each frame: png path, world box in cm.
+
+    Frame pngs point at CLUT-correct renders under Reference/Sprites/png/
+    (produced by Tools/render_sprites.py from Shapes.shps with the monster's
+    color table + forced index-0 alpha); each needed (coll, clut, bitmap) is
+    recorded in render_list. The clut-0 extraction under Reference/Shapes is
+    only used to verify the source bitmap exists."""
     if not shape_ref:
         return None
     idx = shape_ref.get("shape", -1)
@@ -180,13 +186,15 @@ def resolve_state(coll_data, coll, shape_ref):
         if low_idx < 0 or low_idx >= len(lows):
             return None
         low = lows[low_idx]
-        png = os.path.join(SHAPES, "Coll_%02d" % coll, "bitmaps",
-                           "%03d.png" % low["bitmap_index"])
-        if not os.path.isfile(png):
+        bmp = low["bitmap_index"]
+        src = os.path.join(SHAPES, "Coll_%02d" % coll, "bitmaps", "%03d.png" % bmp)
+        if not os.path.isfile(src):
             return None
+        png = os.path.join(SPRITES_OUT, "png", "c%02d_k%d_%03d.png" % (coll, clut, bmp))
+        render_list.append({"coll": coll, "clut": clut, "bitmap": bmp, "out": png})
         frames.append({
             "png": png,
-            "bitmap_index": low["bitmap_index"],
+            "bitmap_index": bmp,
             "width_cm": round((low["world_right"] - low["world_left"]) * CM_PER_INTERNAL, 2),
             "height_cm": round((low["world_top"] - low["world_bottom"]) * CM_PER_INTERNAL, 2),
         })
@@ -247,6 +255,7 @@ def build():
     manifest = {}
     rows = []          # for M1MonsterTable.h
     import_list = []   # for ue5_import_sprites.py
+    render_list = []   # for render_sprites.py (clut-correct, alpha-forced pngs)
     skipped = {}
 
     for mtype in sorted(type_counts):
@@ -262,14 +271,14 @@ def build():
             continue
 
         states = {}
-        states["stationary"] = resolve_state(coll_data, coll, mon.get("stationary_shape"))
-        states["moving"] = resolve_state(coll_data, coll, mon.get("moving_shape"))
-        states["hit"] = resolve_state(coll_data, coll, mon.get("hit_shape"))
+        states["stationary"] = resolve_state(coll_data, coll, clut, mon.get("stationary_shape"), render_list)
+        states["moving"] = resolve_state(coll_data, coll, clut, mon.get("moving_shape"), render_list)
+        states["hit"] = resolve_state(coll_data, coll, clut, mon.get("hit_shape"), render_list)
         # Hard variants first (the canonical violent death look), soft as fallback.
-        states["dying"] = (resolve_state(coll_data, coll, mon.get("hard_dying_shape"))
-                           or resolve_state(coll_data, coll, mon.get("soft_dying_shape")))
-        states["dead"] = (resolve_state(coll_data, coll, mon.get("hard_dead_shape"))
-                          or resolve_state(coll_data, coll, mon.get("soft_dead_shape")))
+        states["dying"] = (resolve_state(coll_data, coll, clut, mon.get("hard_dying_shape"), render_list)
+                           or resolve_state(coll_data, coll, clut, mon.get("soft_dying_shape"), render_list))
+        states["dead"] = (resolve_state(coll_data, coll, clut, mon.get("hard_dead_shape"), render_list)
+                          or resolve_state(coll_data, coll, clut, mon.get("soft_dead_shape"), render_list))
 
         if not states["moving"] and not states["stationary"]:
             skipped[mtype] = "no usable stationary/moving shapes"
@@ -332,7 +341,12 @@ def build():
             "row": row,
         }
 
-    return rows, manifest, import_list, skipped, type_counts
+    # Dedupe render entries (states share bitmaps within a type).
+    seen = set()
+    render_list = [r for r in render_list
+                   if (key := (r["coll"], r["clut"], r["bitmap"])) not in seen
+                   and not seen.add(key)]
+    return rows, manifest, import_list, render_list, skipped, type_counts
 
 
 # ---------------------------------------------------------------------------
@@ -494,7 +508,7 @@ def write_spawn_table(levels):
 # ---------------------------------------------------------------------------
 
 def main():
-    rows, manifest, import_list, skipped, type_counts = build()
+    rows, manifest, import_list, render_list, skipped, type_counts = build()
     usable = set(r["type"] for r in rows)
     levels, dropped = build_spawns(usable)
 
@@ -505,6 +519,9 @@ def main():
     import_path = os.path.join(SPRITES_OUT, "import_list.json")
     with open(import_path, "w", encoding="utf-8") as fh:
         json.dump(import_list, fh, indent=1)
+    render_path = os.path.join(SPRITES_OUT, "render_list_monsters.json")
+    with open(render_path, "w", encoding="utf-8") as fh:
+        json.dump(render_list, fh, indent=1)
 
     table_path = write_monster_table(rows)
     spawn_path = write_spawn_table(levels)
@@ -518,8 +535,9 @@ def main():
     print("sprite imports              : %d" % len(import_list))
     print("levels                      : %d, spawn rows %d (dropped %d unusable)"
           % (len(levels), total_spawns, dropped))
+    print("render entries (coll,clut,bitmap): %d" % len(render_list))
     print("wrote:")
-    for p in (manifest_path, import_path, table_path, spawn_path):
+    for p in (manifest_path, import_path, render_path, table_path, spawn_path):
         print("  " + p)
     print("\nsample rows:")
     for r in rows[:4] + [r for r in rows if r["type"] in (18, 22, 30)]:

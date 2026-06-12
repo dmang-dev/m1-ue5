@@ -1,5 +1,7 @@
 #include "M1Projectile.h"
 
+#include "M1Audio.h"
+
 #include "Components/SphereComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -73,7 +75,7 @@ void AM1Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
 
 	if (ExplosionSound)
 	{
-		UGameplayStatics::SpawnSoundAtLocation(World, ExplosionSound, ImpactPoint);
+		UGameplayStatics::SpawnSoundAtLocation(World, ExplosionSound, ImpactPoint, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 	}
 
 	if (World)

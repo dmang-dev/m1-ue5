@@ -8,6 +8,8 @@ Canonical sources:
 Outputs:
   Reference/Sprites/weapon_import_list.json   png -> T_wpn<i>_<state><frame>
                                               (consumed by ue5_import_sprites.py)
+  Reference/Sprites/render_list_weapons.json  (coll,clut,bitmap)->png for
+                                              render_sprites.py (forced alpha)
   Source/M1UE5/M1WeaponSpriteTable.h          generated per-weapon frame table
 
 Run with a real Windows python (e.g. UE's ThirdParty python) -- an MSYS python
@@ -21,7 +23,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REF = os.path.join(ROOT, "Reference")
 PHYSICS = os.path.join(REF, "Physics", "physics.json")
 COLL1 = os.path.join(REF, "Shapes", "Coll_01")
+PNG_OUT = os.path.join(REF, "Sprites", "png")
 OUT_LIST = os.path.join(REF, "Sprites", "weapon_import_list.json")
+OUT_RENDER = os.path.join(REF, "Sprites", "render_list_weapons.json")
 OUT_HEADER = os.path.join(ROOT, "Source", "M1UE5", "M1WeaponSpriteTable.h")
 
 # Cap animation frames per state (fire anims are 1-4 frames in M1 anyway).
@@ -44,10 +48,13 @@ def main():
     low = shapes["low_shapes"]
 
     imports = []
+    renders = []
     rows = []
 
     def frames_of(shape_idx, weapon_idx, state):
-        """Resolve a high_shape's frame pngs -> (asset stem, count, w, h, fps)."""
+        """Resolve a high_shape's frame pngs -> (asset stem, count, w, h, fps).
+        Import paths point at the render_sprites.py output (forced index-0
+        alpha); the extracted bitmap is only checked for existence + size."""
         if shape_idx is None or shape_idx < 0 or shape_idx >= len(high):
             return None
         hs = high[shape_idx]
@@ -60,12 +67,14 @@ def main():
         w = h = 0
         count = 0
         for i, li in enumerate(idxs):
-            png = os.path.join(COLL1, "bitmaps",
-                               "%03d.png" % low[li]["bitmap_index"])
-            if not os.path.isfile(png):
+            bmp = low[li]["bitmap_index"]
+            src = os.path.join(COLL1, "bitmaps", "%03d.png" % bmp)
+            if not os.path.isfile(src):
                 continue
             if count == 0:
-                w, h = png_size(png)
+                w, h = png_size(src)
+            png = os.path.join(PNG_OUT, "c01_k0_%03d.png" % bmp)
+            renders.append({"coll": 1, "clut": 0, "bitmap": bmp, "out": png})
             imports.append({"png_path": png, "asset_name": "%s%d" % (base, i)})
             count += 1
         if count == 0:
@@ -82,6 +91,9 @@ def main():
 
     os.makedirs(os.path.dirname(OUT_LIST), exist_ok=True)
     json.dump(imports, open(OUT_LIST, "w", encoding="utf-8"), indent=1)
+    seen = set()
+    renders = [r for r in renders if (k := r["bitmap"]) not in seen and not seen.add(k)]
+    json.dump(renders, open(OUT_RENDER, "w", encoding="utf-8"), indent=1)
 
     def cseq(entry):
         if entry is None:

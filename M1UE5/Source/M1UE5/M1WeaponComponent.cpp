@@ -1,5 +1,7 @@
 #include "M1WeaponComponent.h"
 
+#include "M1Audio.h"
+
 #include "M1Projectile.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
@@ -425,7 +427,7 @@ void UM1WeaponComponent::FireSecondaryShot()
 			{
 				if (W.SecImpactSound && i == 0)  // one impact sound per burst, not 15
 				{
-					UGameplayStatics::SpawnSoundAtLocation(World, W.SecImpactSound, ImpactPoint);
+					UGameplayStatics::SpawnSoundAtLocation(World, W.SecImpactSound, ImpactPoint, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 				}
 				DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Cyan, false, 2.0f);
 				if (AActor* HitActor = Hit.GetActor())
@@ -516,7 +518,7 @@ void UM1WeaponComponent::FireShot()
 		{
 			if (W.ImpactSound)
 			{
-				UGameplayStatics::SpawnSoundAtLocation(World, W.ImpactSound, ImpactPoint);
+				UGameplayStatics::SpawnSoundAtLocation(World, W.ImpactSound, ImpactPoint, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 			}
 			DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Yellow, false, 2.0f);
 			// Standard point-damage path: AM1Enemy (and anything else with a
