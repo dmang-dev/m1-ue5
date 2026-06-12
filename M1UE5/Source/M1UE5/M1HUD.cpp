@@ -190,30 +190,18 @@ void AM1HUD::DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon
 	//     If the texture is absent (not yet rendered/imported) we skip it but
 	//     still draw the bars/ammo at the placement they WOULD occupy, so the
 	//     HUD is informative even before the art lands. ---
-	UTexture2D* Panel = GetHudTexture(TEXT("T_hud_panel"));
-
-	// The panel rect we lay everything else out against. With art present we use
-	// its native aspect; without art we fall back to a bottom strip ~1/3 tall
-	// (matching AO's {0,320,640,160} interface blit) so the bars still position.
+	// IMPORTANT: Marathon's in-game status-bar art is NOT in our extracted Shapes.
+	// The "interface" collection we have (Coll_10) is the TITLE/MENU screens --
+	// "T_hud_panel" (Coll_10 bitmap 001) is literally the main-menu bitmap, so
+	// drawing it as the HUD panel slapped the whole menu over gameplay. Until the
+	// real in-game bezel is sourced, draw NO panel chrome: the shields + ammo lay
+	// out against an invisible bottom strip (AO's {0,320,640,160} interface blit
+	// proportion), anchored to the screen edges.
 	const float ViewScale = Canvas->SizeY / kPanelDesignH;
-	float PanelW, PanelH, PanelX, PanelY;
-	if (Panel)
-	{
-		const float Scale = ViewScale * 1.4f;  // fill a chunk of the lower screen
-		PanelW = Panel->GetSizeX() * Scale;
-		PanelH = Panel->GetSizeY() * Scale;
-		PanelX = (Canvas->SizeX - PanelW) * 0.5f;
-		PanelY = Canvas->SizeY - PanelH;
-		DrawTexture(Panel, PanelX, PanelY, PanelW, PanelH,
-			0.0f, 0.0f, 1.0f, 1.0f);
-	}
-	else
-	{
-		PanelW = Canvas->SizeX;
-		PanelH = Canvas->SizeY * (160.0f / 480.0f);
-		PanelX = 0.0f;
-		PanelY = Canvas->SizeY - PanelH;
-	}
+	const float PanelW = Canvas->SizeX;
+	const float PanelH = Canvas->SizeY * (160.0f / 480.0f);
+	const float PanelX = 0.0f;
+	const float PanelY = Canvas->SizeY - PanelH;
 
 	// --- Shield bar. width = (health/max) * full, fill left-to-right.
 	//     Marathon shield color is cyan. DrawRect a dim back-rail then the fill,
