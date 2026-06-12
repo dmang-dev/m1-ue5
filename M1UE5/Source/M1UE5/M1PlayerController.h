@@ -27,9 +27,13 @@ private:
 	void OnReturnToMenu();
 
 	TSharedRef<class SWidget> BuildMenu(const FText& Title, bool bPauseMenu);
+	TSharedRef<class SWidget> BuildMainMenuScreen();
 	void PresentMenu(TSharedRef<class SWidget> Menu, bool bPause);
 
 	TSharedPtr<class SWidget> MenuWidget;
+	// Holds the authentic M1 main-menu bitmap (Coll_10 bitmap 001) for the Slate
+	// SImage; must outlive the widget, so it lives on the controller.
+	TSharedPtr<struct FSlateBrush> MenuBrush;
 	bool bMenuOpen = false;
 	bool bOnMenuLevel = false;
 };

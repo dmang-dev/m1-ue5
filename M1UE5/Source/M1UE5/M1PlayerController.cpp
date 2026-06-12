@@ -6,9 +6,14 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Images/SImage.h"
+#include "Widgets/Layout/SConstraintCanvas.h"
+#include "Widgets/Layout/SScaleBox.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Styling/CoreStyle.h"
+#include "Styling/SlateTypes.h"
 #include "Brushes/SlateColorBrush.h"
+#include "Brushes/SlateNoResource.h"
+#include "Engine/Texture2D.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
@@ -56,7 +61,7 @@ void AM1PlayerController::ShowMainMenu()
 	{
 		return;
 	}
-	PresentMenu(BuildMenu(LOCTEXT("Title", "MARATHON"), /*bPause*/ false), /*bPause*/ false);
+	PresentMenu(BuildMainMenuScreen(), /*bPause*/ false);
 }
 
 void AM1PlayerController::TogglePauseMenu()
@@ -125,6 +130,77 @@ void AM1PlayerController::OnReturnToMenu()
 {
 	CloseMenu();
 	UGameplayStatics::OpenLevel(this, FName("/Game/Levels/M1/L_MainMenu"));
+}
+
+TSharedRef<SWidget> AM1PlayerController::BuildMainMenuScreen()
+{
+	// Authentic M1 title screen (Shapes collection 10, bitmap 001). The option
+	// labels (BEGIN NEW GAME ... QUIT) are baked into the bitmap; we lay invisible
+	// click hotspots over the two options we actually implement.
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr, TEXT("/Game/UI/Menu/T_menu_main.T_menu_main"));
+	if (!Tex)
+	{
+		// Never strand the player on a black screen -- fall back to the text menu.
+		return BuildMenu(LOCTEXT("Title", "MARATHON"), /*bPause*/ false);
+	}
+
+	MenuBrush = MakeShareable(new FSlateBrush());
+	MenuBrush->SetResourceObject(Tex);
+	MenuBrush->ImageSize = FVector2D(Tex->GetSizeX(), Tex->GetSizeY());
+	MenuBrush->DrawAs = ESlateBrushDrawType::Image;
+
+	// Invisible at rest, faint white wash on hover/press so the player can tell
+	// the baked-in label under the cursor is live.
+	static const FButtonStyle HotspotStyle = FButtonStyle()
+		.SetNormal(FSlateNoResource())
+		.SetHovered(FSlateColorBrush(FLinearColor(1.0f, 1.0f, 1.0f, 0.16f)))
+		.SetPressed(FSlateColorBrush(FLinearColor(1.0f, 1.0f, 1.0f, 0.28f)))
+		.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
+
+	TSharedRef<SConstraintCanvas> Canvas = SNew(SConstraintCanvas);
+	auto AddHotspot = [&Canvas](float X0, float Y0, float X1, float Y1, TFunction<void()> Fn)
+	{
+		Canvas->AddSlot()
+			.Anchors(FAnchors(X0, Y0, X1, Y1))
+			.Offset(FMargin(0, 0, 0, 0))
+			.Alignment(FVector2D(0, 0))
+			[
+				SNew(SButton).ButtonStyle(&HotspotStyle)
+				.OnClicked_Lambda([Fn]() { Fn(); return FReply::Handled(); })
+			];
+	};
+
+	// Normalized rects measured off the 435x325 bitmap.
+	AddHotspot(0.345f, 0.085f, 0.793f, 0.175f, [this]() { OnNewGame(); });  // BEGIN NEW GAME
+	AddHotspot(0.420f, 0.815f, 0.595f, 0.910f, [this]() { OnQuitGame(); }); // QUIT
+
+	return SNew(SOverlay)
+		// Black backdrop fills the pillarbox bars around the 4:3 bitmap.
+		+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+		[
+			SNew(SImage).Image(&GMenuBg).ColorAndOpacity(FLinearColor::Black)
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+		[
+			SNew(SScaleBox).Stretch(EStretch::ScaleToFit)
+			.HAlign(HAlign_Center).VAlign(VAlign_Center)
+			[
+				// Fixed 870x650 (=435x325 x2) design box keeps the hotspot anchors
+				// aligned to the bitmap; SScaleBox fits it to any screen.
+				SNew(SBox).WidthOverride(870.0f).HeightOverride(650.0f)
+				[
+					SNew(SOverlay)
+					+ SOverlay::Slot()[ SNew(SImage).Image(MenuBrush.Get()) ]
+					+ SOverlay::Slot()[ Canvas ]
+				]
+			]
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(FMargin(10.0f, 0.0f, 0.0f, 6.0f))
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString(FString::Printf(TEXT("BUILD %s"), *AM1Character::GetBuildStamp())))
+			.Font(MenuFont(11)).ColorAndOpacity(FSlateColor(FLinearColor(0.40f, 0.70f, 0.40f, 0.65f)))
+		];
 }
 
 TSharedRef<SWidget> AM1PlayerController::BuildMenu(const FText& Title, bool bPauseMenu)
