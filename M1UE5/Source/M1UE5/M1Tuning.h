@@ -24,10 +24,11 @@ namespace M1Tuning
 	// levels (Minf env bit 0 -- in M1 that's just L08 "G4 Sunbathing"). 100 = full
 	// = the gauge max (a clean unit, not a canonical M1 value).
 	constexpr float GPlayerOxygen = 100.0f;
-	// Vacuum drain: full empties in ~150s. Out of air -> suffocation damage to
-	// shields per second until the player refills (oxygen recharger) -- there is
-	// no leaving vacuum mid-level since the whole level is vacuum.
-	constexpr float GOxygenDrainPerSec = 0.67f;
+	// Vacuum drain rate (per second). Gentle enough that L08 is tense but fair
+	// given its 3 oxygen rechargers. Oxygen is NOT carried between levels -- M1
+	// resets the suit on each teleport, so BeginPlay refills to full (faithful;
+	// that's why it isn't in the checkpoint). Out of air -> suffocation damage.
+	constexpr float GOxygenDrainPerSec = 0.5f;
 	constexpr float GSuffocationDmgPerSec = 8.0f;
 
 	// --- Player movement / camera feel (consolidated here for playtest iteration;
@@ -38,9 +39,10 @@ namespace M1Tuning
 	// closer to the original and keeps off-axis wall terminals readable. The bezel
 	// SceneCapture uses the same value so the framed view matches the camera.
 	constexpr float GPlayerFOV = 75.0f;
-	// Ground move speed. NOTE: Marathon's canonical max-forward maps to ~430 cm/s
-	// at 100cm/WU; 600 is a touch arcadey -- a candidate to lower in a feel pass.
-	constexpr float GWalkSpeed = 600.0f;
+	// Ground move speed. Marathon's canonical max-forward (physics.json 0.143
+	// WU/frame @ 30fps) maps to ~430 cm/s at 100cm/WU -- set to that for fidelity
+	// (was an arcadey 600). Raise back toward 600 if play-testing wants more pace.
+	constexpr float GWalkSpeed = 430.0f;
 	constexpr float GJumpZVelocity = 420.0f;
 	constexpr float GAirControl = 0.5f;
 	// Near clip: tight Marathon rooms (~1m) need a small near plane so the camera
