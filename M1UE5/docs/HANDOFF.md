@@ -198,6 +198,24 @@ Packaged build (cooks `L_MainMenu` + the 37 campaign levels):
   to verify an asset cooked, check `Saved/Cooked/.../Content/...`, not the pak.
 - Close the editor before packaging (Live Coding locks). Don't pass
   `-nocompileeditor`.
+- ⚠ **Editor target build needs the .NET Framework SDK (≥4.6).** On a box without
+  it, `BuildCookRun -build` dies with `Unable to instantiate module 'SwarmInterface'
+  ... Could not find NetFxSDK install dir` (RulesError) while compiling the
+  **editor** target it uses to run the cook commandlet. Install the .NET Framework
+  4.x Developer Pack to do a full repackage there. The **game** target compiles
+  fine without it (`Engine\Build\BatchFiles\Build.bat M1UE5 Win64 Development`).
+- **C++-only change shortcut (no asset edits → no re-cook needed):** the shipped
+  HUD/gameplay logic lives in the monolithic game binary, not in cooked assets.
+  So after a code-only change you can skip the full (editor-dependent) repackage:
+  rebuild the game target, then copy the fresh `Binaries\Win64\M1UE5.exe` over the
+  staged `Build\Windows\M1UE5\Binaries\Win64\M1UE5.exe`. The existing cooked
+  `Content\Paks\*.utoc/.ucas/.pak` stay valid (same engine version, unchanged
+  assets). Used this for the HUD-meter commit; verified the packaged build boots
+  on Arrival and renders the tuned bezel. (Do a real BuildCookRun once assets
+  change or the .NET SDK is available.)
+- Running a build for HUD/QA without the cooked `.exe`: `UnrealEditor.exe <proj>
+  <map> -game -windowed -ResX=1280 -ResY=720` runs uncooked from `Content/` — fast
+  for iterating C++ (see the HUD-capture gotchas in §8).
 
 **Coordinate / data conventions** (constant across the pipeline):
 - M1 unit → UE cm: `S = 100/1024`. Final imported frame: `X = mx*S`, `Y = my*S`
