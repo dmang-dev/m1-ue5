@@ -3,6 +3,7 @@
 #include "M1Audio.h"
 
 #include "M1Projectile.h"
+#include "M1Impact.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
@@ -432,6 +433,7 @@ void UM1WeaponComponent::FireSecondaryShot()
 #if WITH_EDITOR
 				DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Cyan, false, 2.0f);
 #endif
+				AM1Impact::Spawn(World, ImpactPoint, 8.0f, FLinearColor(1.6f, 3.2f, 4.0f, 1.0f));
 				if (AActor* HitActor = Hit.GetActor())
 				{
 					UGameplayStatics::ApplyPointDamage(HitActor, W.SecDamage, AimDir, Hit, Ctrl, Pawn, nullptr);
@@ -527,6 +529,7 @@ void UM1WeaponComponent::FireShot()
 #if WITH_EDITOR
 			DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Yellow, false, 2.0f);
 #endif
+			AM1Impact::Spawn(World, ImpactPoint, 9.0f, FLinearColor(4.0f, 3.0f, 1.2f, 1.0f));
 			// Standard point-damage path: AM1Enemy (and anything else with a
 			// TakeDamage override) handles the rest.
 			if (AActor* HitActor = Hit.GetActor())

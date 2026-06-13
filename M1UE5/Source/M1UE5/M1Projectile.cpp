@@ -1,6 +1,7 @@
 #include "M1Projectile.h"
 
 #include "M1Audio.h"
+#include "M1Impact.h"
 
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -128,6 +129,10 @@ void AM1Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
 		DrawDebugSphere(World, ImpactPoint, BurstRadius, 12, FColor::Orange, false, 2.0f);
 	}
 #endif
+	// Impact spark: a bigger flash for a blast, a small one for a point hit.
+	AM1Impact::Spawn(World, ImpactPoint,
+		BlastRadius > 0.0f ? FMath::Min(BlastRadius * 0.4f, 45.0f) : 11.0f,
+		FLinearColor(4.0f, 2.4f, 0.8f, 1.0f));
 
 	if (World && BlastRadius > 0.0f)
 	{

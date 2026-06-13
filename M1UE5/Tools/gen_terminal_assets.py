@@ -32,7 +32,7 @@ import os
 import re
 import sys
 
-from marathon_utils import macbinary, wad, maps, terminals
+from marathon_utils import macbinary, wad, maps, terminals, strings
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REF = os.path.join(ROOT, "Reference")
@@ -40,6 +40,18 @@ TERM_DIR = os.path.join(REF, "Terminals")
 GEO = os.path.join(REF, "Geometry")
 SRC = os.path.join(ROOT, "Source", "M1UE5")
 MAP_SCEN = r"C:\m1-ue5\M1SOURCE\Marathon-20250829\Map.scen"
+APPL = r"C:\m1-ue5\M1SOURCE\Marathon-20250829\Marathon.appl"
+
+# Exit-terminal heuristic: M1 carries NO teleport directive in the data (the
+# term scripts have only logon/information/checkpoint groupings -- verified), so
+# the level exit can't be derived exactly. The best signal is a teleport-ACTION
+# phrase in the terminal text ("teleport now", "teleporter pad", ...). Terminals
+# matching this are flagged bExit; AM1Character treats the most-paged flagged one
+# as the exit, falling back to the most-paged terminal overall when none match.
+EXIT_PHRASE = re.compile(
+    r"teleport now|teleport when ready|ready to teleport|teleporter pad|"
+    r"teleport terminal|prepare to teleport|will teleport|teleporting you|"
+    r"teleport you (to|out)", re.I)
 
 S = 100.0 / 1024.0      # Marathon internal unit -> UE cm
 MESH_FY = 1.0           # net y sign after the geometry/OBJ double-flip
@@ -78,6 +90,18 @@ def page_count(term_id):
     return n
 
 
+def is_exit_terminal(term_id, scripts):
+    """True if this terminal's text shows a teleport ACTION (-> level exit)."""
+    s = scripts.get(term_id)
+    if not s:
+        return False
+    try:
+        text = terminals.compile_m1_script(s).get("text", "")
+    except Exception:
+        text = s
+    return bool(EXIT_PHRASE.search(text))
+
+
 def line_floor_map(lvl):
     """Build line_index -> floor_height (Marathon units). The terminal location's
     own `poly` field can be out of range in the M1 data; the line's owner polys
@@ -108,6 +132,7 @@ def line_floor_map(lvl):
 
 def build():
     names = level_names()
+    term_scripts = strings.extract(APPL).get("term", {}) if os.path.isfile(APPL) else {}
 
     blob = open(MAP_SCEN, "rb").read()
     data, rsrc, _ = macbinary.unwrap(blob)
@@ -146,6 +171,7 @@ def build():
             rows.append({
                 "x": x_cm, "y": y_cm, "z": z_cm,
                 "term_id": term_id, "pages": pages,
+                "exit": is_exit_terminal(term_id, term_scripts),
             })
             total_terms += 1
             for page in range(pages):
@@ -182,6 +208,7 @@ def write_terminal_table(levels):
     lines.append("\tfloat Z;")
     lines.append("\tint32 TermId;")
     lines.append("\tint32 PageCount;")
+    lines.append("\tbool bExit;  // teleport-action text -> finishing it advances the level")
     lines.append("};\n")
     lines.append("struct FM1LevelTerminals")
     lines.append("{")
@@ -195,11 +222,11 @@ def write_terminal_table(levels):
         lines.append("{")
         if rows:
             for r in rows:
-                lines.append("\t{ %s, %s, %s, %d, %d }," % (
+                lines.append("\t{ %s, %s, %s, %d, %d, %s }," % (
                     fmt_f(r["x"]), fmt_f(r["y"]), fmt_f(r["z"]),
-                    r["term_id"], r["pages"]))
+                    r["term_id"], r["pages"], "true" if r["exit"] else "false"))
         else:
-            lines.append("\t{ 0.00f, 0.00f, 0.00f, -1, 0 },  // no terminals; keep array non-empty")
+            lines.append("\t{ 0.00f, 0.00f, 0.00f, -1, 0, false },  // no terminals; keep array non-empty")
         lines.append("};\n")
 
     lines.append("static const FM1LevelTerminals GM1LevelTerminalTable[] =")

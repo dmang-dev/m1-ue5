@@ -26,6 +26,9 @@ public:
 
 	virtual void BeginPlay() override;
 
+	/** Drives the vacuum oxygen drain on vacuum levels (no-op elsewhere). */
+	virtual void Tick(float DeltaSeconds) override;
+
 	/** Monster melee/projectile damage lands here (ApplyDamage and friends). */
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
 		AController* EventInstigator, AActor* DamageCauser) override;
@@ -54,6 +57,9 @@ public:
 
 	/** Top up shields toward Cap (1x/2x/3x charger); never reduces. */
 	void RefillShields(float Cap);
+
+	/** Top up suit oxygen toward Cap (oxygen recharger); never reduces. */
+	void RefillOxygen(float Cap);
 
 	/** --- Terminal (lore) viewer, read by the HUD to draw the active page. --- */
 	bool IsTerminalOpen() const { return bTerminalOpen; }
@@ -141,10 +147,13 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Health")
 	float Health = 150.0f;  // set from M1Tuning::GPlayerShields in BeginPlay
 
-	/** Suit oxygen pool (HUD left gauge). Full until a vacuum-drain system exists
-	 *  (Marathon drains oxygen only in vacuum polygons). */
+	/** Suit oxygen pool (HUD left gauge). Drains in vacuum (see bIsVacuumLevel). */
 	UPROPERTY(VisibleAnywhere, Category = "Health")
 	float Oxygen = 100.0f;  // set from M1Tuning::GPlayerOxygen in BeginPlay
+
+	/** Cached on BeginPlay: is this a vacuum level (Minf env bit 0)? Only then does
+	 *  oxygen drain. In M1 that's just L08 "G4 Sunbathing". */
+	bool bIsVacuumLevel = false;
 
 	/** HUD key 11: "Shields  NNN" readout (updated on BeginPlay + every hit). */
 	void ShowShields() const;
@@ -163,10 +172,10 @@ private:
 	/** Restore movement when the terminal closes. */
 	void CloseTerminal();
 
-	/** True if TermId is the current level's exit terminal. Heuristic: M1 stores
-	 *  no teleport target in the map (terminal text/teleport lived in the appl,
-	 *  which carries no usable directive), so we treat the level's MAIN terminal
-	 *  -- the one with the most pages -- as the control-room exit. Reading it to
-	 *  the end calls AdvanceLevel(). [ / ] cycling remains as a safety fallback. */
+	/** True if TermId is the current level's exit terminal. M1 stores no teleport
+	 *  directive in the data, so the generated table flags terminals whose text
+	 *  shows a teleport action (bExit); the most-paged flagged terminal is the
+	 *  exit, falling back to the most-paged terminal overall on levels with none
+	 *  flagged. Reading it to the end calls AdvanceLevel(); [ / ] stays a fallback. */
 	bool IsLevelExitTerminal(int32 TermId) const;
 };

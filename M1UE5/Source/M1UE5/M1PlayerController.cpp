@@ -245,6 +245,63 @@ void AM1PlayerController::OnReturnToMenu()
 	UGameplayStatics::OpenLevel(this, FName("/Game/Levels/M1/L_MainMenu"));
 }
 
+void AM1PlayerController::ShowEpilogue()
+{
+	if (bMenuOpen)
+	{
+		return;
+	}
+	// Original epilogue text (Marathon's voice, not Bungie's verbatim wording --
+	// final shipped lore is rewritten per the license policy).
+	static const TCHAR* const Lines[] = {
+		TEXT("THE PFHOR FLEET BURNS."),
+		TEXT(""),
+		TEXT("You have done what no one believed possible -- driven the alien"),
+		TEXT("horde from the Marathon and back into the dark between stars."),
+		TEXT(""),
+		TEXT("Durandal is gone, fled into the deep with secrets of his own."),
+		TEXT("The colony is safe. For now."),
+		TEXT(""),
+		TEXT("Sleep, soldier. You have earned it."),
+	};
+
+	TSharedRef<SVerticalBox> Text = SNew(SVerticalBox);
+	for (const TCHAR* L : Lines)
+	{
+		Text->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0.0f, 4.0f)
+		[
+			SNew(STextBlock).Text(FText::FromString(L))
+				.Font(MenuFont(L[0] == TEXT('T') ? 26 : 18))  // title line larger
+				.ColorAndOpacity(FSlateColor(M1Green))
+		];
+	}
+
+	static const FButtonStyle ClearBtn = FButtonStyle()
+		.SetNormal(FSlateNoResource()).SetHovered(FSlateNoResource()).SetPressed(FSlateNoResource())
+		.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
+
+	TSharedRef<SButton> Screen = SNew(SButton).ButtonStyle(&ClearBtn)
+		.OnClicked_Lambda([this]() { OnReturnToMenu(); return FReply::Handled(); })
+		[
+			SNew(SOverlay)
+			+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+			[
+				SNew(SImage).Image(&GMenuBg).ColorAndOpacity(FLinearColor::Black)
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+			[
+				Text
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(FMargin(0, 0, 0, 28))
+			[
+				SNew(STextBlock).Text(LOCTEXT("EpiContinue", "click to return to the Marathon"))
+					.Font(MenuFont(15)).ColorAndOpacity(FSlateColor(FLinearColor(0.30f, 1.0f, 0.40f, 0.85f)))
+			]
+		];
+
+	PresentMenu(Screen, /*bPause*/ true);
+}
+
 TSharedRef<SWidget> AM1PlayerController::BuildMainMenuScreen()
 {
 	// Authentic M1 title screen (Shapes collection 10, bitmap 001). The option

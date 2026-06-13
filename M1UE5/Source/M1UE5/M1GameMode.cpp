@@ -8,6 +8,7 @@
 #include "M1SpawnTable.h"
 #include "M1PlatformTable.h"
 #include "M1PanelTable.h"
+#include "M1LevelEnvTable.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
@@ -45,14 +46,16 @@ void AM1GameMode::PlayLevelMusic()
 		return;
 	}
 
-	// Deterministic level->track map (no canonical M1 mapping exists). Campaign
-	// maps use their story index; test/experimental maps (index -1) get track 0.
-	int32 Idx = AM1Character::M1LevelIndexForMap(MapName);
-	if (Idx < 0)
+	// Canonical per-level music: each level's Minf carries a song_index (0-15)
+	// into the 16-track set -- that IS Marathon's mapping. Test/experimental maps
+	// (no env row) get no music.
+	const FM1LevelEnv* Env = M1LevelEnvForMap(MapName);
+	int32 Track = Env ? Env->SongIndex : -1;
+	if (Track < 0)
 	{
-		Idx = 0;
+		return;
 	}
-	const int32 Track = ((Idx % 16) + 16) % 16;
+	Track = ((Track % 16) + 16) % 16;
 	const FString Path = FString::Printf(
 		TEXT("/Game/Audio/Music/A_music_%02d.A_music_%02d"), Track, Track);
 	USoundBase* Song = LoadObject<USoundBase>(nullptr, *Path);
@@ -64,8 +67,8 @@ void AM1GameMode::PlayLevelMusic()
 	// 2D, looping (the wave asset is flagged looping). The component does not
 	// persist across level transition, so the next level starts its own track.
 	Music = UGameplayStatics::SpawnSound2D(World, Song, MusicVolume);
-	UE_LOG(LogTemp, Log, TEXT("M1GameMode: music track %d (level idx %d) for %s"),
-		Track, Idx, *MapName);
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: music track %d (song_index) for %s"),
+		Track, *MapName);
 }
 
 void AM1GameMode::SpawnPanels()

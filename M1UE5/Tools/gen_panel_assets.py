@@ -10,8 +10,10 @@ panel_type selects behaviour:
 v1 emits the clean, high-value interactables:
   * shield rechargers (1/2/3) -> refill shields toward 1x/2x/3x cap on use
   * pattern buffers (6)        -> save the campaign checkpoint on use
+  * oxygen rechargers (0)      -> refill suit oxygen to full on use (matters on
+                                  vacuum levels, e.g. L08 G4 Sunbathing)
 Terminals (8) are already placed by gen_terminal_assets.py; switches (4/5/7)
-and oxygen (0, no oxygen system yet) are follow-ups.
+are follow-ups.
 
 Run:  C:\\m1-ue5\\.venv\\Scripts\\python.exe Tools/gen_panel_assets.py
 
@@ -31,9 +33,11 @@ OUT = os.path.join(ROOT, "Source", "M1UE5", "M1PanelTable.h")
 S = 100.0 / 1024.0
 PANEL_Z = 55.0   # cm above the floor (matches the terminal panel height)
 
-# panel_type -> (Kind, Cap).  Kind 0 = shield charger, 1 = pattern buffer.
+# panel_type -> (Kind, Cap). Kind 0 = shield charger, 1 = pattern buffer,
+# 2 = oxygen recharger (Cap = M1Tuning::GPlayerOxygen).
 SHIELD_CAP = {1: 150.0, 2: 300.0, 3: 450.0}
 BUFFER_TYPES = {6, 13}
+OXY_CAP = 100.0
 
 
 def safe(stem):
@@ -54,8 +58,10 @@ def panels_for_level(data):
             kind, cap = 0, SHIELD_CAP[pt]
         elif pt in BUFFER_TYPES:
             kind, cap = 1, 0.0
+        elif pt == 0:
+            kind, cap = 2, OXY_CAP  # oxygen recharger
         else:
-            continue  # terminal / switch / oxygen -> handled elsewhere or deferred
+            continue  # terminal / switch -> handled elsewhere or deferred
         li = s.get("line_index", -1)
         if not (0 <= li < len(lins)):
             continue
@@ -81,7 +87,7 @@ def main():
     files = sorted(f for f in glob.glob(os.path.join(MAPS, "*.json"))
                    if not f.endswith("manifest.json"))
     levels = []
-    total = chargers = buffers = 0
+    total = chargers = buffers = oxygen = 0
     for f in files:
         d = json.load(open(f, encoding="utf-8"))
         stem = safe(os.path.splitext(os.path.basename(f))[0])
@@ -89,6 +95,7 @@ def main():
         total += len(panels)
         chargers += sum(1 for p in panels if p["kind"] == 0)
         buffers += sum(1 for p in panels if p["kind"] == 1)
+        oxygen += sum(1 for p in panels if p["kind"] == 2)
         levels.append(("L_" + stem, panels))
 
     lines = [
@@ -101,7 +108,8 @@ def main():
         "#include \"Containers/ArrayView.h\"",
         "",
         "/** One Marathon wall control panel. Kind: 0 = shield charger (refill to",
-        " *  Cap on use), 1 = pattern buffer (save on use). Position in UE cm. */",
+        " *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger",
+        " *  (refill suit oxygen to Cap on use). Position in UE cm. */",
         "struct FM1Panel",
         "{",
         "\tfloat X, Y, Z;",
@@ -154,8 +162,8 @@ def main():
         fh.write("\n".join(lines))
 
     print("wrote %s" % OUT)
-    print("%d panels across %d levels: %d chargers, %d save buffers"
-          % (total, len(levels), chargers, buffers))
+    print("%d panels across %d levels: %d chargers, %d save buffers, %d oxygen"
+          % (total, len(levels), chargers, buffers, oxygen))
 
 
 if __name__ == "__main__":

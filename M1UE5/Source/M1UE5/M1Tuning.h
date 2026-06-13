@@ -20,11 +20,15 @@ namespace M1Tuning
 	// Marathon's starting shields are 150 (1x; canisters take it to 2x/3x).
 	constexpr float GPlayerShields = 150.0f;
 
-	// Suit oxygen pool (HUD's left gauge). Marathon drains oxygen ONLY in vacuum
-	// polygons; the current 37 levels have no vacuum media, so this stays full
-	// until a vacuum-detection + drain pass lands. 100 = full = a clean meter max
-	// (placeholder, not a canonical M1 unit).
+	// Suit oxygen pool (HUD's left gauge). Marathon drains oxygen ONLY on VACUUM
+	// levels (Minf env bit 0 -- in M1 that's just L08 "G4 Sunbathing"). 100 = full
+	// = the gauge max (a clean unit, not a canonical M1 value).
 	constexpr float GPlayerOxygen = 100.0f;
+	// Vacuum drain: full empties in ~150s. Out of air -> suffocation damage to
+	// shields per second until the player refills (oxygen recharger) -- there is
+	// no leaving vacuum mid-level since the whole level is vacuum.
+	constexpr float GOxygenDrainPerSec = 0.67f;
+	constexpr float GSuffocationDmgPerSec = 8.0f;
 
 	// --- Player movement / camera feel (consolidated here for playtest iteration;
 	//     these were scattered magic numbers in AM1Character). No behaviour change

@@ -38,13 +38,17 @@ void AM1Panel::InitFromPanel(const FM1Panel& Panel)
 	Cap = Panel.Cap;
 	// Small wall plaque (~48 x 14 x 56 cm). Chargers a touch taller than buffers
 	// so the two read differently until real panel art lands.
+	// Chargers tallest, oxygen mid, buffers shortest, so the three read apart
+	// until real panel art lands.
 	Mesh->SetWorldScale3D(Kind == 0 ? FVector(0.48f, 0.14f, 0.56f)
-	                                 : FVector(0.48f, 0.14f, 0.40f));
+	                    : Kind == 2 ? FVector(0.48f, 0.14f, 0.48f)
+	                                : FVector(0.48f, 0.14f, 0.40f));
 	SetActorLocation(FVector(Panel.X, Panel.Y, Panel.Z));
 
-	const TCHAR* SoundPath = (Kind == 0)
-		? TEXT("/Game/Audio/Monster/A_got_powerup.A_got_powerup")
-		: TEXT("/Game/Audio/Monster/A_got_item.A_got_item");
+	// Charger/oxygen = powerup chime; pattern buffer = item chime.
+	const TCHAR* SoundPath = (Kind == 1)
+		? TEXT("/Game/Audio/Monster/A_got_item.A_got_item")
+		: TEXT("/Game/Audio/Monster/A_got_powerup.A_got_powerup");
 	Sound = LoadObject<USoundBase>(nullptr, SoundPath);
 }
 
@@ -62,6 +66,15 @@ bool AM1Panel::Activate(AM1Character* Player)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor::Cyan, TEXT("Shields recharged"));
+		}
+	}
+	else if (Kind == 2)
+	{
+		// Oxygen recharger: refill the suit toward full (matters on vacuum levels).
+		Player->RefillOxygen(Cap);
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor(0, 220, 60), TEXT("Oxygen recharged"));
 		}
 	}
 	else

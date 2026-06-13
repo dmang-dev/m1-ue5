@@ -103,7 +103,8 @@ Two stages everywhere: a **gen** script (project venv, reads `M1SOURCE` /
 | `gen_terminal_assets.py` → `ue5_import_terminals.py` | both | `M1TerminalTable.h` + page art → `/Game/UI/Terminals` |
 | `gen_chapter_assets.py` → `ue5_import_chapters.py` | both | chapter splashes → `/Game/UI/Chapters` |
 | `gen_platform_assets.py` | venv | `M1PlatformTable.h` (doors) |
-| `gen_panel_assets.py` | venv | `M1PanelTable.h` (chargers + save buffers) |
+| `gen_panel_assets.py` | venv | `M1PanelTable.h` (chargers + save buffers + oxygen rechargers) |
+| `gen_level_env.py` | venv | `M1LevelEnvTable.h` (per-level `song_index` + vacuum flag from Minf) |
 | `gen_music_assets.py` → `ue5_import_music.py` | both | 16 M1 OGG→WAV → looping SoundWaves `/Game/Audio/Music/A_music_NN` |
 | `ue5_import_vfx.py` | editor | procedural muzzle-flash sprite → `/Game/Sprites/VFX/T_muzzle_flash` (source PNG generated, no M1 extraction) |
 | `ue5_import_menu.py` / `ue5_import_hud_bezel.py` | editor | `/Game/UI/Menu/T_menu_main`, `/Game/UI/HUD/T_hud_bezel` |
@@ -160,29 +161,33 @@ teardown is a benign editor-shutdown crash, not a failure.)
 |--------|-------|-------|
 | Extraction / converter / headless import | ✅ | all 37 levels, 0 errors |
 | Sprites (enemies, weapons, HUD icons) | ✅ | CLUT-correct, index-0 transparent |
-| Audio | ✅ v1 | 104 sounds + **16 looping level-music tracks** (`gen_music_assets.py`→`ue5_import_music.py`, played per level idx in `AM1GameMode::PlayLevelMusic`); door open/close SFX already wired; platform-move loop SFX TODO |
-| Weapons | ✅ v1 | 7 + secondaries; **muzzle-flash overlay** (`AM1HUD::DrawMuzzleFlash`, additive, fire-window); decal/Niagara VFX still TODO. Debug hit spheres/lines now `#if WITH_EDITOR` (out of shipped feel) |
+| Audio | ✅ v1 | 104 sounds + **16 looping level-music tracks**, played per level by the canonical **`Minf.song_index`** (`M1LevelEnvTable.h` → `AM1GameMode::PlayLevelMusic`); door open/close SFX wired; platform-move loop SFX TODO |
+| Weapons | ✅ v1 | 7 + secondaries; **muzzle-flash overlay** + **impact sparks** (`AM1Impact`, emissive engine-sphere pop on hitscan/projectile hits). Persistent scorch decals still TODO; debug hit spheres/lines now `#if WITH_EDITOR` |
 | Enemies | ✅ v1 | 2232 placements, ranged + 8-dir |
 | Terminals (lore) | ✅ | readable pages, paging |
 | Main menu + chapter screens | ✅ | authentic bitmaps |
 | **Doors** (#11) | ✅ v1 | 473 narrow authored-open doors as panels |
 | **Save / Continue** (#12) | ✅ | shield carry-over, menu Continue |
 | **Control panels** (#13) | ✅ v1 | 42 chargers + 48 save buffers (press E) |
-| **HUD bezel** (#14) | ✅ | PICT-128 framed view; oxygen/shield meter rects verified in-engine. **Oxygen gauge now dynamic** (`AM1Character::Oxygen`/`GetOxygen`; reads full until vacuum drain exists) |
-| Polish (#15) | 🟡 | ✅ music, ✅ muzzle flash, ✅ dynamic O2 meter, ✅ exit-terminal progression (v1), ✅ movement-param consolidation. TODO: decal/impact VFX, platform-move SFX, vacuum O2 drain, movement feel pass, epilogue |
+| **HUD bezel** (#14) | ✅ | PICT-128 framed view; meter rects verified in-engine. **Oxygen gauge dynamic + drains in vacuum** (`AM1Character::Oxygen`, drain in `Tick` on vacuum levels) |
+| Polish (#15) | ✅ v1 | music (song_index), muzzle flash + impact sparks, dynamic O2 meter + **vacuum drain & oxygen rechargers**, **exit-terminal progression** (data-flagged), **epilogue**, movement-param consolidation. TODO: persistent decals, platform-move SFX, movement feel pass, O2 checkpoint persistence |
 
 **Deferred / known follow-ups** (tracked in memory + commit bodies):
 - Doors: authored-**closed** doors (need converter floor-rebake), **ride-on
   elevators** (floor itself must move), **switch→door** wiring (panel types
   4/5/7 extracted but inert), door panel **textures** (plain box now).
-- Campaign exit terminal: **v1 shipped** — finishing a level's MAIN terminal
-  (most pages) calls `AM1Character::AdvanceLevel`; `[`/`]` cycling kept as a
-  fallback. M1 carries no teleport target in the map (no `term` chunk; appl has
-  no usable directive), so the "main terminal = exit" rule is a **heuristic** —
-  a per-level exit-terminal curation pass would make it exact.
-- Oxygen: gauge is dynamic but **drains nowhere yet** (needs vacuum-polygon
-  detection + per-tick drain + `M1SaveGame.Oxygen`). `M1SetOxygen <v>` console
-  exec exercises the gauge. Marathon's media data shows no vacuum in the 37 levels.
+- Campaign exit terminal: finishing a level's exit terminal calls
+  `AM1Character::AdvanceLevel` (last level → `AM1PlayerController::ShowEpilogue`);
+  `[`/`]` cycling kept as a fallback. M1 carries **no teleport directive** in the
+  data (verified: terminal scripts have only logon/information/checkpoint
+  groupings), so the exit is identified by a **`bExit` flag** the terminal
+  generator sets from teleport-action TEXT ("teleport now", "teleporter pad", …;
+  7 levels), falling back to the most-paged terminal. A per-level curation pass
+  would make the other ~14 levels exact.
+- Oxygen: drains on **vacuum levels only** (`Minf` env bit 0 — in M1 just L08
+  "G4 Sunbathing"); refill at oxygen rechargers (panel Kind 2, 3 on L08); 0 O2 →
+  suffocation damage. NOT yet checkpointed (`M1SaveGame.Oxygen` is a follow-up).
+  `M1SetOxygen <v>` console exec exercises the gauge.
 - Movement: params consolidated in `M1Tuning.h` (`GWalkSpeed` etc.); a feel pass
   may lower `GWalkSpeed` (600) toward Marathon's canonical ~430 cm/s.
 
@@ -286,9 +291,19 @@ end bodies with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## 10. Immediate next step
 
-HUD bezel meter tuning (the prior next step) is **done & verified in-engine**
-(`M1HUD.cpp::DrawReadouts`: shields→right well, oxygen→left well, fill spans the
-"10"→"1" scale). Proceed to the **polish tier (#15 in §6)**: muzzle/decal VFX,
-music + door/platform SFX, oxygen system (wire the static green meter to a real
-vacuum mechanic), movement feel, epilogue. See also the deferred door/campaign
-follow-ups in §6.
+The **polish tier (#15)** is done v1: faithful music (song_index), muzzle flash +
+impact sparks, vacuum oxygen (drain + rechargers + suffocation), exit-terminal
+progression + epilogue, movement-param consolidation — built and the high-value
+ones verified in-engine (music log = track 7 on Arrival; O2 drains full→~40% over
+~40s on L08). `Build\Windows` is current via an exe-swap (all changes were
+code-only — no re-cook).
+
+Remaining, in rough priority (see §6 deferred):
+1. **Persistent impact decals** (scorch/blood) — needs a decal material; sparks
+   are the v1 stand-in.
+2. **Oxygen checkpoint persistence** (`M1SaveGame.Oxygen`) + tune
+   `GOxygenDrainPerSec` (L08 currently empties in ~75–100s).
+3. **Movement feel pass** — lower `GWalkSpeed` (600) toward canonical ~430 cm/s.
+4. **Door follow-ups** — closed doors / ride-on elevators / switch→door wiring.
+5. **Platform-move loop SFX**; per-level exit-terminal curation for the ~14
+   levels without a teleport-action phrase.

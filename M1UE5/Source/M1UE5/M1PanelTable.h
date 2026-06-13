@@ -7,7 +7,8 @@
 #include "Containers/ArrayView.h"
 
 /** One Marathon wall control panel. Kind: 0 = shield charger (refill to
- *  Cap on use), 1 = pattern buffer (save on use). Position in UE cm. */
+ *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger
+ *  (refill suit oxygen to Cap on use). Position in UE cm. */
 struct FM1Panel
 {
 	float X, Y, Z;
@@ -89,7 +90,10 @@ static const FM1Panel GM1Panels_L_08_G4_Sunbathing[] =
 {
 	{ -1375.00f, 125.00f, 55.00f, 0, 150.0f },
 	{ 750.00f, -2050.00f, 55.00f, 1, 0.0f },
+	{ 1125.00f, -300.00f, 55.00f, 2, 100.0f },
 	{ 1125.00f, 350.00f, 55.00f, 0, 300.0f },
+	{ 2592.38f, -81.54f, 55.00f, 2, 100.0f },
+	{ 2461.18f, 423.34f, 55.00f, 2, 100.0f },
 	{ 600.00f, -250.00f, 55.00f, 1, 0.0f },
 };
 
@@ -108,6 +112,7 @@ static const FM1Panel GM1Panels_L_10_Bob_B_Q[] =
 	{ -1525.00f, 575.00f, 55.00f, 1, 0.0f },
 	{ -925.00f, 1250.00f, 55.00f, 0, 150.0f },
 	{ 2000.00f, 1825.00f, 55.00f, 0, 300.0f },
+	{ -1625.00f, 400.00f, 55.00f, 2, 100.0f },
 	{ 2650.00f, 1225.00f, 55.00f, 1, 0.0f },
 };
 
@@ -281,9 +286,9 @@ static const FM1LevelPanels GM1LevelPanelTable[] =
 	{ TEXT("L_05_The_Rose"), GM1Panels_L_05_The_Rose, 3 },
 	{ TEXT("L_06_Smells_Like_Napalm_Tastes_Like_Chicken"), GM1Panels_L_06_Smells_Like_Napalm_Tastes_Like_Chicken, 3 },
 	{ TEXT("L_07_Cool_Fusion"), GM1Panels_L_07_Cool_Fusion, 5 },
-	{ TEXT("L_08_G4_Sunbathing"), GM1Panels_L_08_G4_Sunbathing, 4 },
+	{ TEXT("L_08_G4_Sunbathing"), GM1Panels_L_08_G4_Sunbathing, 7 },
 	{ TEXT("L_09_Blaspheme_Quarantine"), GM1Panels_L_09_Blaspheme_Quarantine, 5 },
-	{ TEXT("L_10_Bob_B_Q"), GM1Panels_L_10_Bob_B_Q, 5 },
+	{ TEXT("L_10_Bob_B_Q"), GM1Panels_L_10_Bob_B_Q, 6 },
 	{ TEXT("L_11_Shake_Before_Using"), GM1Panels_L_11_Shake_Before_Using, 4 },
 	{ TEXT("L_12_Fire_Fire_Fire_Fire_Fire"), GM1Panels_L_12_Fire_Fire_Fire_Fire_Fire, 3 },
 	{ TEXT("L_13_Colony_Ship_For_Sale_Cheap"), GM1Panels_L_13_Colony_Ship_For_Sale_Cheap, 2 },

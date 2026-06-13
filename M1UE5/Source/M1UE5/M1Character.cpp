@@ -15,8 +15,10 @@
 #include "Engine/DamageEvents.h"
 #include "UObject/ConstructorHelpers.h"
 #include "M1WeaponComponent.h"
+#include "M1PlayerController.h"
 #include "M1Tuning.h"
 #include "M1TerminalTable.h"
+#include "M1LevelEnvTable.h"
 #include "M1SaveGame.h"
 #include "M1Panel.h"
 #include "EngineUtils.h"  // TActorIterator
@@ -73,7 +75,7 @@ namespace
 
 AM1Character::AM1Character()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;  // vacuum oxygen drain (no-op off-vacuum)
 
 	// Mouse yaw turns the whole pawn; pitch is camera-only (typical FPS).
 	bUseControllerRotationYaw = true;
@@ -276,6 +278,35 @@ void AM1Character::RefillShields(float Cap)
 	ShowShields();
 }
 
+void AM1Character::RefillOxygen(float Cap)
+{
+	// Top up toward Cap (clamped to the suit max); never reduce.
+	Oxygen = FMath::Clamp(FMath::Max(Oxygen, Cap), 0.0f, M1Tuning::GPlayerOxygen);
+}
+
+void AM1Character::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// Oxygen only matters on vacuum levels, and not while a terminal is open
+	// (movement is frozen there -- don't tick the suffocation clock).
+	if (!bIsVacuumLevel || bTerminalOpen)
+	{
+		return;
+	}
+	if (Oxygen > 0.0f)
+	{
+		Oxygen = FMath::Max(0.0f, Oxygen - M1Tuning::GOxygenDrainPerSec * DeltaSeconds);
+	}
+	else
+	{
+		// Out of air: suffocate through the normal damage path (which handles the
+		// restart-on-death). Small per-frame bite -> a steady drain on shields.
+		UGameplayStatics::ApplyDamage(this, M1Tuning::GSuffocationDmgPerSec * DeltaSeconds,
+			GetController(), this, nullptr);
+	}
+}
+
 void AM1Character::OpenNearestTerminal()
 {
 	UWorld* World = GetWorld();
@@ -409,9 +440,14 @@ void AM1Character::BeginPlay()
 		return;
 	}
 
-	// Full suit oxygen on level start (drains only in vacuum, which no level has
-	// yet; not checkpointed until a real drain system exists).
+	// Full suit oxygen on level start. It only drains on vacuum levels (Minf env
+	// bit 0 -- in M1, just L08 "G4 Sunbathing"); cache that here.
 	Oxygen = M1Tuning::GPlayerOxygen;
+	if (UWorld* W = GetWorld())
+	{
+		const FM1LevelEnv* Env = M1LevelEnvForMap(W->GetMapName());
+		bIsVacuumLevel = Env && Env->bVacuum;
+	}
 
 	// Carry shields forward from the checkpoint. The checkpoint is stamped with
 	// the level it belongs to (written on transition / New Game), so a stale save
@@ -562,9 +598,12 @@ void AM1Character::AdvanceLevel()
 	const int32 Next = Index + 1;
 	if (Next >= GM1LevelCount)
 	{
-		// Campaign complete. No epilogue/credits yet -- the final exit terminal
-		// just closes; that screen is a later polish item.
+		// Campaign complete: show the epilogue (click returns to the main menu).
 		UE_LOG(LogTemp, Log, TEXT("AdvanceLevel: campaign complete (final level %d)"), Index);
+		if (AM1PlayerController* PC = Cast<AM1PlayerController>(GetController()))
+		{
+			PC->ShowEpilogue();
+		}
 		return;
 	}
 	M1WriteCheckpoint(Next, Health);  // carry shields forward (no regen)
@@ -579,13 +618,24 @@ bool AM1Character::IsLevelExitTerminal(int32 TermId) const
 	{
 		return false;
 	}
-	// M1 carries no teleport target in the map data, so pick the level's MAIN
-	// terminal (most pages) as the exit. Ties resolve to the first encountered.
+	// M1 carries no teleport directive in the data, so identify the exit from the
+	// generated bExit flag (terminals whose text shows a teleport action). Among
+	// flagged terminals -- or all of them, when a level has none flagged -- the
+	// most-paged one is the exit (the level's main/control-room terminal).
 	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(World->GetMapName());
-	int32 BestPages = 0;
+	bool bAnyExit = false;
+	for (const FM1Terminal& T : Terms)
+	{
+		if (T.bExit) { bAnyExit = true; break; }
+	}
+	int32 BestPages = -1;
 	int32 BestId = -1;
 	for (const FM1Terminal& T : Terms)
 	{
+		if (bAnyExit && !T.bExit)
+		{
+			continue;  // a flagged exit exists -> only consider flagged terminals
+		}
 		if (T.PageCount > BestPages)
 		{
 			BestPages = T.PageCount;

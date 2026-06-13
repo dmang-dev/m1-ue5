@@ -35,7 +35,7 @@ private:
 	UStaticMeshComponent* Mesh = nullptr;
 
 	USoundBase* Sound = nullptr;
-	int32 Kind = 0;            // 0 = shield charger, 1 = pattern buffer
+	int32 Kind = 0;            // 0 = shield charger, 1 = pattern buffer, 2 = oxygen
 	float Cap = 150.0f;        // charger fill target
 	float UseRadius = 170.0f;
 };

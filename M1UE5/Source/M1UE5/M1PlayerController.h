@@ -17,6 +17,11 @@ public:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 
+	/** Campaign-complete screen: a green-on-black victory message, shown when the
+	 *  final level's exit terminal fires (AM1Character::AdvanceLevel). Click to
+	 *  return to the main menu. */
+	void ShowEpilogue();
+
 private:
 	void ShowMainMenu();
 	void TogglePauseMenu();
