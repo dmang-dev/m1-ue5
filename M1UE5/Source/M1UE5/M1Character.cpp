@@ -96,13 +96,13 @@ AM1Character::AM1Character()
 	// badly exaggerates perspective shear on off-axis surfaces (wall terminals
 	// look "slanted" until you square up). 75 reads closer to the original and
 	// keeps inset panels readable; tune to taste.
-	FirstPersonCamera->SetFieldOfView(75.0f);
+	FirstPersonCamera->SetFieldOfView(M1Tuning::GPlayerFOV);
 
 	if (UCharacterMovementComponent* Move = GetCharacterMovement())
 	{
-		Move->JumpZVelocity = 420.0f;
-		Move->AirControl = 0.5f;
-		Move->MaxWalkSpeed = 600.0f;
+		Move->JumpZVelocity = M1Tuning::GJumpZVelocity;
+		Move->AirControl = M1Tuning::GAirControl;
+		Move->MaxWalkSpeed = M1Tuning::GWalkSpeed;
 	}
 
 	// Canonical Marathon teleport-in (sound code 1, 'snd ' resource id 2020),
@@ -126,7 +126,7 @@ AM1Character::AM1Character()
 	SceneCapture->bCaptureEveryFrame = true;
 	SceneCapture->bCaptureOnMovement = false;
 	SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-	SceneCapture->FOVAngle = 75.0f;  // match the camera; tune with the hole aspect
+	SceneCapture->FOVAngle = M1Tuning::GPlayerFOV;  // match the camera (bezel hole aspect already fits)
 	SceneCapture->bAlwaysPersistRenderingState = true;
 }
 
@@ -214,7 +214,15 @@ void AM1Character::OnUse()
 		}
 		else
 		{
+			// Finishing the level's exit (main) terminal teleports onward, like
+			// Marathon's control-room terminal. Capture before CloseTerminal()
+			// clears ActiveTermId.
+			const bool bExit = IsLevelExitTerminal(ActiveTermId);
 			CloseTerminal();
+			if (bExit)
+			{
+				AdvanceLevel();
+			}
 		}
 		return;
 	}
@@ -380,14 +388,14 @@ void AM1Character::BeginPlay()
 
 	// Tight Marathon spaces (~1m rooms): a small near-clip stops the camera from
 	// seeing through a wall when the player is pressed right against it.
-	GNearClippingPlane = 5.0f;
+	GNearClippingPlane = M1Tuning::GNearClipCm;
 
 	// Re-assert the narrow FOV at runtime. Setting it only in the constructor does
 	// NOT stick — the PlayerCameraManager's 90 default wins, which badly sheared
 	// off-axis wall terminals. Applying it in BeginPlay makes it actually take.
 	if (FirstPersonCamera)
 	{
-		FirstPersonCamera->SetFieldOfView(75.0f);
+		FirstPersonCamera->SetFieldOfView(M1Tuning::GPlayerFOV);
 	}
 
 	// The L_MainMenu level runs the MENU game mode (spectator pawn). If it ever
@@ -400,6 +408,10 @@ void AM1Character::BeginPlay()
 	{
 		return;
 	}
+
+	// Full suit oxygen on level start (drains only in vacuum, which no level has
+	// yet; not checkpointed until a real drain system exists).
+	Oxygen = M1Tuning::GPlayerOxygen;
 
 	// Carry shields forward from the checkpoint. The checkpoint is stamped with
 	// the level it belongs to (written on transition / New Game), so a stale save
@@ -493,6 +505,17 @@ float AM1Character::GetMaxHealth() const
 	return M1Tuning::GPlayerShields;
 }
 
+float AM1Character::GetMaxOxygen() const
+{
+	return M1Tuning::GPlayerOxygen;
+}
+
+void AM1Character::M1SetOxygen(float NewOxygen)
+{
+	Oxygen = FMath::Clamp(NewOxygen, 0.0f, M1Tuning::GPlayerOxygen);
+	UE_LOG(LogTemp, Log, TEXT("M1SetOxygen -> %.0f / %.0f"), Oxygen, M1Tuning::GPlayerOxygen);
+}
+
 FString AM1Character::GetBuildStamp()
 {
 	// __DATE__/__TIME__ are this translation unit's compile time. Routing the menu
@@ -522,6 +545,54 @@ void AM1Character::CycleLevel(int32 Direction)
 	// shields never regenerate, so the next level starts where this one left off).
 	M1WriteCheckpoint(Next, Health);
 	UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+}
+
+void AM1Character::AdvanceLevel()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const int32 Index = M1LevelIndexForMap(World->GetMapName());
+	if (Index < 0)
+	{
+		return;  // test / experimental map, not part of the campaign order
+	}
+	const int32 Next = Index + 1;
+	if (Next >= GM1LevelCount)
+	{
+		// Campaign complete. No epilogue/credits yet -- the final exit terminal
+		// just closes; that screen is a later polish item.
+		UE_LOG(LogTemp, Log, TEXT("AdvanceLevel: campaign complete (final level %d)"), Index);
+		return;
+	}
+	M1WriteCheckpoint(Next, Health);  // carry shields forward (no regen)
+	UE_LOG(LogTemp, Log, TEXT("AdvanceLevel: %d -> %d via exit terminal"), Index, Next);
+	UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+}
+
+bool AM1Character::IsLevelExitTerminal(int32 TermId) const
+{
+	UWorld* World = GetWorld();
+	if (!World || TermId < 0)
+	{
+		return false;
+	}
+	// M1 carries no teleport target in the map data, so pick the level's MAIN
+	// terminal (most pages) as the exit. Ties resolve to the first encountered.
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(World->GetMapName());
+	int32 BestPages = 0;
+	int32 BestId = -1;
+	for (const FM1Terminal& T : Terms)
+	{
+		if (T.PageCount > BestPages)
+		{
+			BestPages = T.PageCount;
+			BestId = T.TermId;
+		}
+	}
+	return BestId >= 0 && TermId == BestId;
 }
 
 int32 AM1Character::M1LevelCount()

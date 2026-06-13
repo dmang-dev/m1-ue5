@@ -4,6 +4,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "M1GameMode.generated.h"
 
+class UAudioComponent;
+
 /** Default GameMode: spawns the first-person walking pawn at the PlayerStart
  *  and populates the level's monsters from the generated spawn table. */
 UCLASS()
@@ -29,4 +31,18 @@ private:
 
 	/** Spawn the current map's wall control panels (M1PanelTable.h). */
 	void SpawnPanels();
+
+	/** Pick a music track by campaign level index and play it looping (2D).
+	 *  M1 has no canonical per-level music, so this maps level i -> track i%16
+	 *  deterministically; non-campaign/test maps fall back to track 0. */
+	void PlayLevelMusic();
+
+	/** The looping level-music component (held for GC; the world destroys it on
+	 *  level transition, which stops the track so the next level starts fresh). */
+	UPROPERTY()
+	UAudioComponent* Music = nullptr;
+
+	/** Music bed volume, below the SFX so cues stay legible. */
+	UPROPERTY(EditAnywhere, Category = "Audio", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float MusicVolume = 0.55f;
 };

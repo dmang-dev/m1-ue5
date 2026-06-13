@@ -66,16 +66,33 @@ public:
 	 *  shields to 2x/3x; until that pickup system exists this is the 1x cap. */
 	float GetMaxHealth() const;
 
+	/** Current suit oxygen + its full pool, for the HUD oxygen gauge (M1HUD.cpp).
+	 *  Drains only in vacuum (no vacuum levels yet, so it reads full for now). */
+	float GetOxygen() const { return Oxygen; }
+	float GetMaxOxygen() const;
+
+	/** Debug: set suit oxygen from the console ("M1SetOxygen 50") to exercise the
+	 *  HUD gauge before the vacuum drain system exists. */
+	UFUNCTION(Exec)
+	void M1SetOxygen(float NewOxygen);
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	void MoveForward(float Value);
 	void MoveRight(float Value);
 
-	/** Roam the campaign: jump to the next/previous Marathon level ([ and ]). */
+	/** Roam the campaign: jump to the next/previous Marathon level ([ and ]).
+	 *  Kept as a dev/fallback nav alongside the story exit-terminal progression
+	 *  so a level can never soft-lock if its exit terminal isn't recognised. */
 	void NextLevel();
 	void PrevLevel();
 	void CycleLevel(int32 Direction);
+
+	/** Story progression: checkpoint the NEXT campaign level (carrying shields)
+	 *  and open it. Triggered by finishing the level's exit terminal; no-op past
+	 *  the last level (epilogue is a later system). */
+	void AdvanceLevel();
 
 	/** Use (E): page through the nearest terminal, or open/close it. */
 	void OnUse();
@@ -124,6 +141,11 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Health")
 	float Health = 150.0f;  // set from M1Tuning::GPlayerShields in BeginPlay
 
+	/** Suit oxygen pool (HUD left gauge). Full until a vacuum-drain system exists
+	 *  (Marathon drains oxygen only in vacuum polygons). */
+	UPROPERTY(VisibleAnywhere, Category = "Health")
+	float Oxygen = 100.0f;  // set from M1Tuning::GPlayerOxygen in BeginPlay
+
 	/** HUD key 11: "Shields  NNN" readout (updated on BeginPlay + every hit). */
 	void ShowShields() const;
 
@@ -140,4 +162,11 @@ private:
 	bool UseNearestPanel();
 	/** Restore movement when the terminal closes. */
 	void CloseTerminal();
+
+	/** True if TermId is the current level's exit terminal. Heuristic: M1 stores
+	 *  no teleport target in the map (terminal text/teleport lived in the appl,
+	 *  which carries no usable directive), so we treat the level's MAIN terminal
+	 *  -- the one with the most pages -- as the control-room exit. Reading it to
+	 *  the end calls AdvanceLevel(). [ / ] cycling remains as a safety fallback. */
+	bool IsLevelExitTerminal(int32 TermId) const;
 };

@@ -11,6 +11,9 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
 
 AM1GameMode::AM1GameMode()
 {
@@ -25,6 +28,44 @@ void AM1GameMode::BeginPlay()
 	SpawnMonsters();
 	SpawnDoors();
 	SpawnPanels();
+	PlayLevelMusic();
+}
+
+void AM1GameMode::PlayLevelMusic()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const FString MapName = World->GetMapName();
+	// The menu runs its own game mode; never lay a campaign track over it.
+	if (MapName.Contains(TEXT("MainMenu")))
+	{
+		return;
+	}
+
+	// Deterministic level->track map (no canonical M1 mapping exists). Campaign
+	// maps use their story index; test/experimental maps (index -1) get track 0.
+	int32 Idx = AM1Character::M1LevelIndexForMap(MapName);
+	if (Idx < 0)
+	{
+		Idx = 0;
+	}
+	const int32 Track = ((Idx % 16) + 16) % 16;
+	const FString Path = FString::Printf(
+		TEXT("/Game/Audio/Music/A_music_%02d.A_music_%02d"), Track, Track);
+	USoundBase* Song = LoadObject<USoundBase>(nullptr, *Path);
+	if (!Song)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("M1GameMode: music track missing: %s"), *Path);
+		return;
+	}
+	// 2D, looping (the wave asset is flagged looping). The component does not
+	// persist across level transition, so the next level starts its own track.
+	Music = UGameplayStatics::SpawnSound2D(World, Song, MusicVolume);
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: music track %d (level idx %d) for %s"),
+		Track, Idx, *MapName);
 }
 
 void AM1GameMode::SpawnPanels()

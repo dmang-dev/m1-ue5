@@ -142,9 +142,9 @@ void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
 	// columns). The art labels the LEFT well OXYGEN and the RIGHT well SHIELDS;
 	// each is a 1..10 scale with the tick numbers down its left edge. We fill the
 	// plot area to the RIGHT of those numbers, from the "10" tick (top) down, so
-	// the bar clears the silver frame and the scale. Right well = shields
-	// (dynamic, fills bottom-up); left well = oxygen (static full until the
-	// vacuum system exists).
+	// the bar clears the silver frame and the scale. Both wells fill bottom-up from
+	// live pawn values: right = shields, left = oxygen (oxygen reads full until a
+	// vacuum-drain system exists, since no current level has vacuum media).
 	const float MeterTop = 132.0f, MeterH = 124.0f;
 	{
 		const float Frac = FMath::Clamp(
@@ -155,10 +155,12 @@ void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
 		DrawRect(FLinearColor(0.0f, 0.85f, 1.0f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
 	}
 	{
+		const float Frac = FMath::Clamp(
+			Player->GetOxygen() / FMath::Max(1.0f, Player->GetMaxOxygen()), 0.0f, 1.0f);
 		const float X = BX + 92.0f * Scale, Y = BY + MeterTop * Scale;
 		const float W = 28.0f * Scale, H = MeterH * Scale;
 		DrawRect(FLinearColor(0.0f, 0.10f, 0.0f, 0.9f), X, Y, W, H);
-		DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), X, Y, W, H);
+		DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
 	}
 
 	// Ammo readout in the message panel (bezel px ~x[238,615] y[386,448]).
@@ -195,6 +197,19 @@ UTexture2D* AM1HUD::GetBezelTexture()
 	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr,
 		TEXT("/Game/UI/HUD/T_hud_bezel.T_hud_bezel"));
 	FrameCache.Add(Key, Tex);
+	return Tex;
+}
+
+UTexture2D* AM1HUD::GetFlashTexture()
+{
+	const FString Key = TEXT("__flash");
+	if (UTexture2D** Found = FrameCache.Find(Key))
+	{
+		return *Found;
+	}
+	UTexture2D* Tex = LoadObject<UTexture2D>(nullptr,
+		TEXT("/Game/Sprites/VFX/T_muzzle_flash.T_muzzle_flash"));
+	FrameCache.Add(Key, Tex);  // cache nulls too (art may not be imported yet)
 	return Tex;
 }
 
@@ -288,8 +303,44 @@ void AM1HUD::DrawViewmodel(UM1WeaponComponent* Weapon, float RX, float RY, float
 	const float Scale = (RH / kPanelDesignH) * 2.0f;
 	const float W = Seq->PixelW * Scale;
 	const float H = Seq->PixelH * Scale;
-	DrawTexture(Tex, RX + (RW - W) * 0.5f, RY + RH - H,
-		W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+	const float GX = RX + (RW - W) * 0.5f;
+	const float GY = RY + RH - H;
+	DrawTexture(Tex, GX, GY, W, H, 0.0f, 0.0f, 1.0f, 1.0f);
+
+	// Muzzle flash pops over the gun for the first ~70ms after a shot.
+	DrawMuzzleFlash(Weapon, GX, GY, W, H);
+}
+
+void AM1HUD::DrawMuzzleFlash(UM1WeaponComponent* Weapon, float GX, float GY, float GW, float GH)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Canvas)
+	{
+		return;
+	}
+	constexpr float kFlashDur = 0.07f;
+	const float Since = World->GetTimeSeconds() - Weapon->GetLastFireTime();
+	if (Since < 0.0f || Since > kFlashDur)
+	{
+		return;  // not in the fire window (and skip the initial pre-fire frame)
+	}
+
+	UTexture2D* Flash = GetFlashTexture();
+	if (!Flash)
+	{
+		return;
+	}
+
+	// Fade out + grow slightly over the window; additive so it reads as light.
+	const float T = Since / kFlashDur;             // 0 -> 1 across the flash
+	const float Alpha = FMath::Clamp(1.0f - T, 0.0f, 1.0f);
+	const float Size = GW * (0.55f + 0.20f * T);   // sized to the gun width
+	// Anchor near the barrel: horizontally centered on the gun, upper region.
+	const float MX = GX + GW * 0.5f;
+	const float MY = GY + GH * 0.20f;
+	Canvas->K2_DrawTexture(Flash, FVector2D(MX - Size * 0.5f, MY - Size * 0.5f),
+		FVector2D(Size, Size), FVector2D(0.0f, 0.0f), FVector2D(1.0f, 1.0f),
+		FLinearColor(1.0f, 1.0f, 1.0f, Alpha), EBlendMode::BLEND_Additive);
 }
 
 void AM1HUD::DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon)

@@ -121,11 +121,13 @@ void AM1Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
 		UGameplayStatics::SpawnSoundAtLocation(World, ExplosionSound, ImpactPoint, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 	}
 
+#if WITH_EDITOR
 	if (World)
 	{
 		const float BurstRadius = BlastRadius > 0.0f ? BlastRadius : 12.0f;
 		DrawDebugSphere(World, ImpactPoint, BurstRadius, 12, FColor::Orange, false, 2.0f);
 	}
+#endif
 
 	if (World && BlastRadius > 0.0f)
 	{

@@ -2,3 +2,5 @@
 # Extraction/conversion of M1 data files is handled by the published package:
 #   https://pypi.org/project/py-marathon-utils/  (https://github.com/dmang-dev/py-marathon-utils)
 py-marathon-utils[images]>=0.1.0
+# Decode the Marathon music OGGs to WAV for UE import (gen_music_assets.py).
+soundfile>=0.12

@@ -104,6 +104,8 @@ Two stages everywhere: a **gen** script (project venv, reads `M1SOURCE` /
 | `gen_chapter_assets.py` → `ue5_import_chapters.py` | both | chapter splashes → `/Game/UI/Chapters` |
 | `gen_platform_assets.py` | venv | `M1PlatformTable.h` (doors) |
 | `gen_panel_assets.py` | venv | `M1PanelTable.h` (chargers + save buffers) |
+| `gen_music_assets.py` → `ue5_import_music.py` | both | 16 M1 OGG→WAV → looping SoundWaves `/Game/Audio/Music/A_music_NN` |
+| `ue5_import_vfx.py` | editor | procedural muzzle-flash sprite → `/Game/Sprites/VFX/T_muzzle_flash` (source PNG generated, no M1 extraction) |
 | `ue5_import_menu.py` / `ue5_import_hud_bezel.py` | editor | `/Game/UI/Menu/T_menu_main`, `/Game/UI/HUD/T_hud_bezel` |
 | `ue5_mrq_render.py` | editor | top-down / FP debug renders (QA) |
 
@@ -158,26 +160,31 @@ teardown is a benign editor-shutdown crash, not a failure.)
 |--------|-------|-------|
 | Extraction / converter / headless import | ✅ | all 37 levels, 0 errors |
 | Sprites (enemies, weapons, HUD icons) | ✅ | CLUT-correct, index-0 transparent |
-| Audio | ✅ v1 | 104 sounds, attenuated; music + door/platform SFX TODO |
-| Weapons | ✅ v1 | 7 + secondaries; muzzle/decal VFX TODO |
+| Audio | ✅ v1 | 104 sounds + **16 looping level-music tracks** (`gen_music_assets.py`→`ue5_import_music.py`, played per level idx in `AM1GameMode::PlayLevelMusic`); door open/close SFX already wired; platform-move loop SFX TODO |
+| Weapons | ✅ v1 | 7 + secondaries; **muzzle-flash overlay** (`AM1HUD::DrawMuzzleFlash`, additive, fire-window); decal/Niagara VFX still TODO. Debug hit spheres/lines now `#if WITH_EDITOR` (out of shipped feel) |
 | Enemies | ✅ v1 | 2232 placements, ranged + 8-dir |
 | Terminals (lore) | ✅ | readable pages, paging |
 | Main menu + chapter screens | ✅ | authentic bitmaps |
 | **Doors** (#11) | ✅ v1 | 473 narrow authored-open doors as panels |
 | **Save / Continue** (#12) | ✅ | shield carry-over, menu Continue |
 | **Control panels** (#13) | ✅ v1 | 42 chargers + 48 save buffers (press E) |
-| **HUD bezel** (#14) | ✅ | PICT-128 framed view; oxygen/shield meter rects measured off the art's two LED wells and **verified in-engine** (left well = oxygen/green, right = shields/cyan). Capture FOV/aspect (RT 960×582 ≈ hole 1.646) already matched — no change |
-| Polish (#15) | 🔲 | VFX, music, oxygen, movement feel, epilogue |
+| **HUD bezel** (#14) | ✅ | PICT-128 framed view; oxygen/shield meter rects verified in-engine. **Oxygen gauge now dynamic** (`AM1Character::Oxygen`/`GetOxygen`; reads full until vacuum drain exists) |
+| Polish (#15) | 🟡 | ✅ music, ✅ muzzle flash, ✅ dynamic O2 meter, ✅ exit-terminal progression (v1), ✅ movement-param consolidation. TODO: decal/impact VFX, platform-move SFX, vacuum O2 drain, movement feel pass, epilogue |
 
 **Deferred / known follow-ups** (tracked in memory + commit bodies):
 - Doors: authored-**closed** doors (need converter floor-rebake), **ride-on
   elevators** (floor itself must move), **switch→door** wiring (panel types
   4/5/7 extracted but inert), door panel **textures** (plain box now).
-- Campaign: faithful **exit-terminal** trigger (M1 has no teleport directive in
-  the appl scripts — exit is the control-room terminal; currently advance via
-  `[`/`]` + checkpoint).
-- HUD: tune meter/ammo rects + capture FOV against a real screenshot; oxygen
-  meter is static until the oxygen system exists.
+- Campaign exit terminal: **v1 shipped** — finishing a level's MAIN terminal
+  (most pages) calls `AM1Character::AdvanceLevel`; `[`/`]` cycling kept as a
+  fallback. M1 carries no teleport target in the map (no `term` chunk; appl has
+  no usable directive), so the "main terminal = exit" rule is a **heuristic** —
+  a per-level exit-terminal curation pass would make it exact.
+- Oxygen: gauge is dynamic but **drains nowhere yet** (needs vacuum-polygon
+  detection + per-tick drain + `M1SaveGame.Oxygen`). `M1SetOxygen <v>` console
+  exec exercises the gauge. Marathon's media data shows no vacuum in the 37 levels.
+- Movement: params consolidated in `M1Tuning.h` (`GWalkSpeed` etc.); a feel pass
+  may lower `GWalkSpeed` (600) toward Marathon's canonical ~430 cm/s.
 
 ---
 

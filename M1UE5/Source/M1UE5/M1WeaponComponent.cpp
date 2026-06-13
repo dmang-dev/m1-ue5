@@ -429,13 +429,17 @@ void UM1WeaponComponent::FireSecondaryShot()
 				{
 					UGameplayStatics::SpawnSoundAtLocation(World, W.SecImpactSound, ImpactPoint, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 				}
+#if WITH_EDITOR
 				DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Cyan, false, 2.0f);
+#endif
 				if (AActor* HitActor = Hit.GetActor())
 				{
 					UGameplayStatics::ApplyPointDamage(HitActor, W.SecDamage, AimDir, Hit, Ctrl, Pawn, nullptr);
 				}
 			}
+#if WITH_EDITOR
 			DrawDebugLine(World, ViewLoc, ImpactPoint, FColor::Cyan, false, 0.25f, 0, 0.5f);
+#endif
 		}
 	}
 
@@ -520,7 +524,9 @@ void UM1WeaponComponent::FireShot()
 			{
 				UGameplayStatics::SpawnSoundAtLocation(World, W.ImpactSound, ImpactPoint, FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
 			}
+#if WITH_EDITOR
 			DrawDebugSphere(World, ImpactPoint, 6.0f, 8, FColor::Yellow, false, 2.0f);
+#endif
 			// Standard point-damage path: AM1Enemy (and anything else with a
 			// TakeDamage override) handles the rest.
 			if (AActor* HitActor = Hit.GetActor())
@@ -528,7 +534,9 @@ void UM1WeaponComponent::FireShot()
 				UGameplayStatics::ApplyPointDamage(HitActor, W.Damage, AimDir, Hit, Ctrl, Pawn, nullptr);
 			}
 		}
+#if WITH_EDITOR
 		DrawDebugLine(World, ViewLoc, ImpactPoint, FColor::Red, false, 0.25f, 0, 0.5f);
+#endif
 	}
 
 	ShowAmmo();

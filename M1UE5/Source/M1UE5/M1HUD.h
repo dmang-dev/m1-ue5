@@ -47,6 +47,9 @@ private:
 	/** Bezel texture loader (/Game/UI/HUD/T_hud_bezel), cached. */
 	UTexture2D* GetBezelTexture();
 
+	/** Muzzle-flash sprite loader (/Game/Sprites/VFX/T_muzzle_flash), cached. */
+	UTexture2D* GetFlashTexture();
+
 	/** Fallback HUD (no bezel/RT): bottom-strip shield bar + ammo. */
 	void DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon);
 
@@ -57,6 +60,11 @@ private:
 
 	/** Terminal page loader: /Game/UI/Terminals/T_term<id>_p<page>. Cached. */
 	UTexture2D* GetTerminalTexture(int32 TermId, int32 Page);
+
+	/** Brief additive muzzle-flash pop near the gun barrel during the fire window,
+	 *  drawn over the viewmodel (GX,GY,GW,GH = the gun's draw rect). Gives every
+	 *  weapon firing feedback -- incl. ones with no canonical fire-frame art. */
+	void DrawMuzzleFlash(UM1WeaponComponent* Weapon, float GX, float GY, float GW, float GH);
 
 	/** Viewmodel frame loader: /Game/Sprites/Weapons/<AssetBase><Frame>. */
 	UTexture2D* GetFrameTexture(const FString& AssetBase, int32 Frame);
