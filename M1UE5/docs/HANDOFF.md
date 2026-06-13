@@ -53,17 +53,29 @@ assets) — that is the established pattern.
 
 ## 3. Environment & prerequisites
 
-| Thing | This machine | Notes |
+> ⚠ **Two machines seen so far — paths differ.** The original author's box (per
+> the rows below) put UE on `I:\`. The current box (Windows 10) has UE at
+> **`C:\Program Files\Epic Games\UE_5.7`** and the project `.venv` is **broken**
+> (its shim points at a missing `C:\Users\dusti\...python.exe`). On the current
+> box: editor python = `C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe`;
+> for PNG/measurement work, system `python` (3.12, `py -3`) has `py-marathon-utils`
+> and `pip install pillow numpy` covers the rest. Adjust the `I:\` rows below to
+> whichever box you're on.
+
+| Thing | Original author's box | Notes |
 |-------|-------------|-------|
-| Unreal Engine | **5.7.4** at `I:\Epic Games\UE_5.7` | Editor-Cmd + RunUAT live here |
-| Project python (extract/render) | `C:\m1-ue5\.venv\Scripts\python.exe` | has **py-marathon-utils 0.1.0** + Pillow |
+| Unreal Engine | **5.7.4** at `I:\Epic Games\UE_5.7` | Editor-Cmd + RunUAT live here (current box: `C:\Program Files\Epic Games\UE_5.7`) |
+| Project python (extract/render) | `C:\m1-ue5\.venv\Scripts\python.exe` | has **py-marathon-utils 0.1.0** + Pillow (broken on current box — use system python) |
 | Editor python (header/asset gen, UE import) | `I:\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe` | Py 3.11; handles Windows paths |
-| Shell | PowerShell (primary) + bash | Windows 11 |
+| Shell | PowerShell (primary) + bash | Win 11 (author) / Win 10 (current) |
 
 **Pitfalls when porting to a new machine:**
 - All tool paths are currently **hard-coded absolute** (`C:\m1-ue5\...`,
   `I:\Epic Games\UE_5.7\...`) in the `Tools/*.py` scripts and the build command.
-  Grep + update them for a new layout.
+  Grep + update them for a new layout. (For HUD tuning above I compiled the
+  `M1UE5` game target directly with `Engine\Build\BatchFiles\Build.bat` and ran
+  the editor's `UnrealEditor.exe <proj> <map> -game` — neither needs the cooked
+  `.exe` nor the Tools scripts, so the `I:\` hard-coding didn't block it.)
 - **`py-marathon-utils`** is the whole extraction backbone
   (`pip install py-marathon-utils[images]`, or `-r Tools/requirements.txt`).
   Published at https://github.com/dmang-dev/py-marathon-utils.
@@ -154,7 +166,7 @@ teardown is a benign editor-shutdown crash, not a failure.)
 | **Doors** (#11) | ✅ v1 | 473 narrow authored-open doors as panels |
 | **Save / Continue** (#12) | ✅ | shield carry-over, menu Continue |
 | **Control panels** (#13) | ✅ v1 | 42 chargers + 48 save buffers (press E) |
-| **HUD bezel** (#14) | ✅ v1 ⚠ | PICT-128 framed view — **needs screenshot tuning** (meter rects, capture FOV) |
+| **HUD bezel** (#14) | ✅ | PICT-128 framed view; oxygen/shield meter rects measured off the art's two LED wells and **verified in-engine** (left well = oxygen/green, right = shields/cyan). Capture FOV/aspect (RT 960×582 ≈ hole 1.646) already matched — no change |
 | Polish (#15) | 🔲 | VFX, music, oxygen, movement feel, epilogue |
 
 **Deferred / known follow-ups** (tracked in memory + commit bodies):
@@ -217,6 +229,20 @@ Packaged build (cooks `L_MainMenu` + the 37 campaign levels):
   7 tag-switch, 8 terminal.
 - M1 **platforms** = narrow `plat`-chunk polygons whose floor rises to seal a
   passage (door); `min/max_height = -1` means "use native polygon heights".
+- **Capturing the HUD for QA:** the framed bezel only draws AFTER the chapter
+  splash is dismissed. On level entry `AM1PlayerController::MaybeShowChapterScreen`
+  puts a full-viewport "click to continue" Slate button up (`FInputModeUIOnly`,
+  game paused). A screenshot taken before clicking shows the splash (a dark scene
+  + fullscreen gun), NOT the HUD — this looks like a bezel failure but isn't.
+  Click anywhere (or it has keyboard focus for Enter/Space) to reveal the HUD.
+- **`HighResShot` does NOT capture the Canvas HUD** (`AM1HUD::DrawHUD`) — it grabs
+  only the 3D scene. To screenshot the HUD headlessly, run
+  `UnrealEditor.exe <proj> <map> -game -windowed -ResX=1280 -ResY=720`, then GDI
+  CopyFromScreen the window client rect (PowerShell + System.Drawing). Foreground
+  the window first via `(New-Object -ComObject WScript.Shell).AppActivate($pid)`
+  (`SetForegroundWindow` alone is blocked by Windows' foreground lock). The
+  computer-use `request_access` resolver only matches Start-menu apps, so it can't
+  target the running game window — GDI capture is the working path.
 
 ---
 
@@ -235,7 +261,9 @@ end bodies with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## 10. Immediate next step
 
-Run `Build\Windows\M1UE5.exe`, screenshot the in-game framed HUD, and tune the
-bezel meter/ammo rectangles + SceneCapture FOV in `M1HUD.cpp::DrawReadouts` /
-`AM1Character` (they were measured off the 640×480 art, unverified visually).
-Then proceed to the polish tier (§6).
+HUD bezel meter tuning (the prior next step) is **done & verified in-engine**
+(`M1HUD.cpp::DrawReadouts`: shields→right well, oxygen→left well, fill spans the
+"10"→"1" scale). Proceed to the **polish tier (#15 in §6)**: muzzle/decal VFX,
+music + door/platform SFX, oxygen system (wire the static green meter to a real
+vacuum mechanic), movement feel, epilogue. See also the deferred door/campaign
+follow-ups in §6.

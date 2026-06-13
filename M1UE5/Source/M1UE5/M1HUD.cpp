@@ -138,20 +138,25 @@ void AM1HUD::DrawFramedBezel(AM1Character* Player, UM1WeaponComponent* Weapon,
 void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
 	float BX, float BY, float Scale)
 {
-	// Vertical meters (bezel px). Right column = shields (dynamic, fills bottom-up);
-	// left column = oxygen (static full until the vacuum system exists).
-	const float MeterTop = 126.0f, MeterH = 134.0f, MeterW = 28.0f;
+	// Vertical gauge wells (bezel px, measured off the PICT-128 art's two LED
+	// columns). The art labels the LEFT well OXYGEN and the RIGHT well SHIELDS;
+	// each is a 1..10 scale with the tick numbers down its left edge. We fill the
+	// plot area to the RIGHT of those numbers, from the "10" tick (top) down, so
+	// the bar clears the silver frame and the scale. Right well = shields
+	// (dynamic, fills bottom-up); left well = oxygen (static full until the
+	// vacuum system exists).
+	const float MeterTop = 132.0f, MeterH = 124.0f;
 	{
 		const float Frac = FMath::Clamp(
 			Player->GetHealth() / FMath::Max(1.0f, Player->GetMaxHealth()), 0.0f, 1.0f);
-		const float X = BX + 122.0f * Scale, Y = BY + MeterTop * Scale;
-		const float W = MeterW * Scale, H = MeterH * Scale;
+		const float X = BX + 141.0f * Scale, Y = BY + MeterTop * Scale;
+		const float W = 29.0f * Scale, H = MeterH * Scale;
 		DrawRect(FLinearColor(0.0f, 0.05f, 0.10f, 0.9f), X, Y, W, H);
 		DrawRect(FLinearColor(0.0f, 0.85f, 1.0f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
 	}
 	{
-		const float X = BX + 88.0f * Scale, Y = BY + MeterTop * Scale;
-		const float W = MeterW * Scale, H = MeterH * Scale;
+		const float X = BX + 92.0f * Scale, Y = BY + MeterTop * Scale;
+		const float W = 28.0f * Scale, H = MeterH * Scale;
 		DrawRect(FLinearColor(0.0f, 0.10f, 0.0f, 0.9f), X, Y, W, H);
 		DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), X, Y, W, H);
 	}
