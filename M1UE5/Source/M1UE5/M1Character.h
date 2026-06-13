@@ -105,6 +105,10 @@ public:
 	/** Invoke OnUse() once (page a terminal / use the nearest panel) -- the same
 	 *  path as the Use key, but reliably driveable from the console. */
 	UFUNCTION(Exec) void M1Use();
+	/** End-to-end self-test: verify every system spawned + the player state on the
+	 *  current level, log one "M1SELFTEST ... PASS/FAIL" summary line. A driver
+	 *  runs it across all levels for a full playthrough check. */
+	UFUNCTION(Exec) void M1SelfTest();
 
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

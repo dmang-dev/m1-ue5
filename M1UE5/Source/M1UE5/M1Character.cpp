@@ -23,6 +23,7 @@
 #include "M1Panel.h"
 #include "M1Platform.h"
 #include "M1Elevator.h"
+#include "M1Enemy.h"
 #include "EngineUtils.h"  // TActorIterator
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
@@ -669,6 +670,43 @@ void AM1Character::M1Use()
 	UE_LOG(LogTemp, Warning, TEXT("[M1Use] termOpen=%d page=%d/%d"),
 		bTerminalOpen ? 1 : 0, ActiveTermPage, ActiveTermPages);
 	OnUse();
+}
+
+void AM1Character::M1SelfTest()
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return;
+	}
+	const FString Map = W->GetMapName();
+	int32 nMon = 0, nDoor = 0, nPanel = 0, nElev = 0, nSwitch = 0;
+	for (TActorIterator<AM1Enemy> It(W); It; ++It) { ++nMon; }
+	for (TActorIterator<AM1Platform> It(W); It; ++It) { ++nDoor; }
+	for (TActorIterator<AM1Elevator> It(W); It; ++It) { ++nElev; }
+	for (TActorIterator<AM1Panel> It(W); It; ++It) { ++nPanel; }
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(Map);
+	int32 ExitId = -1;
+	for (const FM1Terminal& T : Terms)
+	{
+		if (IsLevelExitTerminal(T.TermId)) { ExitId = T.TermId; break; }
+	}
+	const int32 LvlIdx = M1LevelIndexForMap(Map);
+	const FVector P = GetActorLocation();
+	const bool bHasWeapon = Weapon != nullptr;
+
+	// PASS criteria: a campaign level should have a pawn placed on real ground
+	// (finite Z), a weapon, and an identifiable exit terminal when it has any.
+	const bool bGrounded = FMath::Abs(P.Z) < 100000.0f;
+	const bool bExitOk = (Terms.Num() == 0) || (ExitId >= 0);
+	const bool bPass = bGrounded && bHasWeapon && bExitOk && LvlIdx >= 0;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[M1SELFTEST] %s idx=%d pos=(%.0f,%.0f,%.0f) shields=%.0f oxy=%.0f vac=%d | "
+		     "monsters=%d doors=%d elevators=%d panels=%d terminals=%d exitTerm=%d weapon=%d | %s"),
+		*Map, LvlIdx, P.X, P.Y, P.Z, Health, Oxygen, bIsVacuumLevel ? 1 : 0,
+		nMon, nDoor, nElev, nPanel, Terms.Num(), ExitId, bHasWeapon ? 1 : 0,
+		bPass ? TEXT("PASS") : TEXT("FAIL"));
 }
 
 FString AM1Character::GetBuildStamp()
