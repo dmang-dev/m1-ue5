@@ -52,6 +52,14 @@ void AM1Panel::InitFromPanel(const FM1Panel& Panel)
 	Sound = LoadObject<USoundBase>(nullptr, SoundPath);
 }
 
+FString AM1Panel::M1DebugString() const
+{
+	const TCHAR* K = Kind == 0 ? TEXT("shield-charger") : Kind == 1 ? TEXT("pattern-buffer")
+		: Kind == 2 ? TEXT("oxygen-recharger") : TEXT("?");
+	const FVector L = GetActorLocation();
+	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) kind=%s cap=%.0f"), L.X, L.Y, L.Z, K, Cap);
+}
+
 bool AM1Panel::Activate(AM1Character* Player)
 {
 	if (!Player)

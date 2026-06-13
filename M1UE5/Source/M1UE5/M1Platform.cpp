@@ -89,6 +89,17 @@ void AM1Platform::PlayDoorSound(USoundBase* Sound) const
 	}
 }
 
+FString AM1Platform::M1DebugString() const
+{
+	const TCHAR* S =
+		State == EDoorState::Closed ? TEXT("CLOSED") :
+		State == EDoorState::Opening ? TEXT("OPENING") :
+		State == EDoorState::Open ? TEXT("OPEN") : TEXT("CLOSING");
+	const FVector L = GetActorLocation();
+	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) Z=%.0f closedZ=%.0f openZ=%.0f [%s]"),
+		L.X, L.Y, L.Z, L.Z, ClosedZ, OpenZ, S);
+}
+
 void AM1Platform::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

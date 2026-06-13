@@ -21,6 +21,7 @@
 #include "M1LevelEnvTable.h"
 #include "M1SaveGame.h"
 #include "M1Panel.h"
+#include "M1Platform.h"
 #include "EngineUtils.h"  // TActorIterator
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
@@ -550,6 +551,111 @@ void AM1Character::M1SetOxygen(float NewOxygen)
 {
 	Oxygen = FMath::Clamp(NewOxygen, 0.0f, M1Tuning::GPlayerOxygen);
 	UE_LOG(LogTemp, Log, TEXT("M1SetOxygen -> %.0f / %.0f"), Oxygen, M1Tuning::GPlayerOxygen);
+}
+
+void AM1Character::M1Where()
+{
+	UWorld* W = GetWorld();
+	const FVector L = GetActorLocation();
+	const FRotator R = GetActorRotation();
+	UE_LOG(LogTemp, Warning,
+		TEXT("[M1Where] map=%s pos=(%.0f,%.0f,%.0f) yaw=%.0f shields=%.0f/%.0f oxygen=%.0f/%.0f vacuum=%d"),
+		W ? *W->GetMapName() : TEXT("?"), L.X, L.Y, L.Z, R.Yaw,
+		Health, GetMaxHealth(), Oxygen, GetMaxOxygen(), bIsVacuumLevel ? 1 : 0);
+}
+
+void AM1Character::M1Doors()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	int32 i = 0;
+	for (TActorIterator<AM1Platform> It(W); It; ++It)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[M1Doors] #%d %s"), i++, *(*It)->M1DebugString());
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Doors] total %d"), i);
+}
+
+void AM1Character::M1Panels()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	int32 i = 0;
+	for (TActorIterator<AM1Panel> It(W); It; ++It)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[M1Panels] #%d %s"), i++, *(*It)->M1DebugString());
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Panels] total %d"), i);
+}
+
+void AM1Character::M1Terms()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(W->GetMapName());
+	for (int32 i = 0; i < Terms.Num(); ++i)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[M1Terms] #%d id=%d pages=%d bExit=%d isExit=%d pos=(%.0f,%.0f,%.0f)"),
+			i, Terms[i].TermId, Terms[i].PageCount, Terms[i].bExit ? 1 : 0,
+			IsLevelExitTerminal(Terms[i].TermId) ? 1 : 0, Terms[i].X, Terms[i].Y, Terms[i].Z);
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Terms] total %d"), Terms.Num());
+}
+
+void AM1Character::M1Goto(float X, float Y, float Z)
+{
+	SetActorLocation(FVector(X, Y, Z), false, nullptr, ETeleportType::TeleportPhysics);
+	UE_LOG(LogTemp, Warning, TEXT("[M1Goto] -> (%.0f,%.0f,%.0f)"), X, Y, Z);
+}
+
+void AM1Character::M1Activate(int32 PanelIndex)
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	int32 i = 0;
+	for (TActorIterator<AM1Panel> It(W); It; ++It)
+	{
+		if (i++ == PanelIndex)
+		{
+			const bool bFired = (*It)->Activate(this);
+			UE_LOG(LogTemp, Warning, TEXT("[M1Activate] #%d %s -> %d"),
+				PanelIndex, *(*It)->M1DebugString(), bFired ? 1 : 0);
+			return;
+		}
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Activate] no panel #%d (have %d)"), PanelIndex, i);
+}
+
+void AM1Character::M1OpenTerm(int32 TermIndex)
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(W->GetMapName());
+	if (TermIndex < 0 || TermIndex >= Terms.Num())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[M1OpenTerm] no term #%d (have %d)"), TermIndex, Terms.Num());
+		return;
+	}
+	const FM1Terminal& T = Terms[TermIndex];
+	bTerminalOpen = true;
+	ActiveTermId = T.TermId;
+	ActiveTermPage = 0;
+	ActiveTermPages = FMath::Max(1, T.PageCount);
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->DisableMovement();
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1OpenTerm] #%d id=%d pages=%d isExit=%d (M1Use to page)"),
+		TermIndex, T.TermId, ActiveTermPages, IsLevelExitTerminal(T.TermId) ? 1 : 0);
+}
+
+void AM1Character::M1Use()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[M1Use] termOpen=%d page=%d/%d"),
+		bTerminalOpen ? 1 : 0, ActiveTermPage, ActiveTermPages);
+	OnUse();
 }
 
 FString AM1Character::GetBuildStamp()

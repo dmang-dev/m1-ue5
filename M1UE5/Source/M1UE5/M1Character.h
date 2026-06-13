@@ -82,6 +82,28 @@ public:
 	UFUNCTION(Exec)
 	void M1SetOxygen(float NewOxygen);
 
+	// --- Test harness (Exec console commands; stripped from Shipping). Lets a
+	//     headless/automated session DRIVE and INSPECT gameplay to verify features
+	//     by reading the log -- no manual navigation. ---
+	/** Log player position, level, shields, oxygen, vacuum flag. */
+	UFUNCTION(Exec) void M1Where();
+	/** Log every spawned door's position + open/closed state. */
+	UFUNCTION(Exec) void M1Doors();
+	/** Log every spawned control panel (kind + position) with its index. */
+	UFUNCTION(Exec) void M1Panels();
+	/** Log the level's terminals (index, id, pages, whether it's the exit). */
+	UFUNCTION(Exec) void M1Terms();
+	/** Teleport the player to a world location. */
+	UFUNCTION(Exec) void M1Goto(float X, float Y, float Z);
+	/** Directly activate the Nth spawned control panel (bypasses proximity). */
+	UFUNCTION(Exec) void M1Activate(int32 PanelIndex);
+	/** Open the Nth terminal directly (bypasses proximity/facing). Page it with
+	 *  M1Use to test the exit-terminal -> AdvanceLevel path. */
+	UFUNCTION(Exec) void M1OpenTerm(int32 TermIndex);
+	/** Invoke OnUse() once (page a terminal / use the nearest panel) -- the same
+	 *  path as the Use key, but reliably driveable from the console. */
+	UFUNCTION(Exec) void M1Use();
+
 protected:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 

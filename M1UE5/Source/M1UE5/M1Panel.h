@@ -30,6 +30,9 @@ public:
 
 	float GetUseRadius() const { return UseRadius; }
 
+	/** Debug line for the test harness: kind + position. */
+	FString M1DebugString() const;
+
 private:
 	UPROPERTY()
 	UStaticMeshComponent* Mesh = nullptr;

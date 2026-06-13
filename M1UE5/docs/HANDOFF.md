@@ -289,6 +289,28 @@ b45021f [Menu] Marathon chapter screens on level entry
 Commit format `[System] description`; author `dmang-dev` (no PII — public repo);
 end bodies with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
+## 9b. Test harness (drive + verify gameplay headlessly)
+
+`AM1Character` exposes `Exec` console commands (Development only) so a headless
+run can DRIVE and INSPECT gameplay and verify features by reading the log — no
+manual navigation. Console commands inject reliably (open `~`, type, Enter);
+in-game key binds via SendInput are flaky, so route through these instead.
+
+- `M1Where` — pos / level / shields / oxygen / vacuum flag
+- `M1Doors` / `M1Panels` / `M1Terms` — list spawned doors (open state), panels
+  (kind), terminals (id, pages, which is the exit)
+- `M1Goto X Y Z` — teleport
+- `M1Activate N` — fire the Nth control panel (bypasses proximity)
+- `M1OpenTerm N` + `M1Use` (repeat) — open a terminal and page it; finishing the
+  exit terminal calls `AdvanceLevel`
+- `M1SetOxygen V` — set the gauge
+
+Verified via this harness: exit-terminal → `AdvanceLevel 0→1` (shields carry,
+L_01 plays its song_index track 8); vacuum O2 drain on L08 + oxygen-recharger
+refill (19→99). Driving recipe: launch the packaged exe windowed on a map, click
+to dismiss the chapter splash, then inject `~`-console commands and read
+`Build\Windows\M1UE5\Saved\Logs\M1UE5.log`.
+
 ## 10. Immediate next step
 
 The **polish tier (#15)** is done v1: faithful music (song_index), muzzle flash +

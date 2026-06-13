@@ -27,6 +27,9 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** Debug line for the test harness: position + open/closed state. */
+	FString M1DebugString() const;
+
 private:
 	UPROPERTY()
 	UStaticMeshComponent* Panel = nullptr;
