@@ -29,6 +29,9 @@ private:
 	/** Spawn the current map's door panels (M1PlatformTable.h). */
 	void SpawnDoors();
 
+	/** Spawn the current map's ride-on elevators (M1PlatformTable.h). */
+	void SpawnElevators();
+
 	/** Spawn the current map's wall control panels (M1PanelTable.h). */
 	void SpawnPanels();
 

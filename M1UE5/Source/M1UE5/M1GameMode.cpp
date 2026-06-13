@@ -3,6 +3,7 @@
 #include "M1PlayerController.h"
 #include "M1Enemy.h"
 #include "M1Platform.h"
+#include "M1Elevator.h"
 #include "M1Panel.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
@@ -28,6 +29,7 @@ void AM1GameMode::BeginPlay()
 	Super::BeginPlay();
 	SpawnMonsters();
 	SpawnDoors();
+	SpawnElevators();
 	SpawnPanels();
 	PlayLevelMusic();
 }
@@ -129,6 +131,37 @@ void AM1GameMode::SpawnDoors()
 	}
 	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d doors for %s"),
 		Spawned, Doors.Num(), *MapName);
+}
+
+void AM1GameMode::SpawnElevators()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const FString MapName = World->GetMapName();
+	const TArrayView<const FM1Elevator> Elevs = M1ElevatorsForLevel(MapName);
+
+	int32 Spawned = 0;
+	for (const FM1Elevator& E : Elevs)
+	{
+		if (E.HighZ <= E.LowZ)
+		{
+			continue;  // sentinel (level has no elevators)
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AM1Elevator* Elev = World->SpawnActor<AM1Elevator>(
+			AM1Elevator::StaticClass(), FVector(E.X, E.Y, 0.0f), FRotator::ZeroRotator, Params);
+		if (Elev)
+		{
+			Elev->InitFromElevator(E);
+			++Spawned;
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d elevators for %s"),
+		Spawned, Elevs.Num(), *MapName);
 }
 
 void AM1GameMode::SpawnMonsters()

@@ -166,18 +166,20 @@ teardown is a benign editor-shutdown crash, not a failure.)
 | Enemies | ✅ v1 | 2232 placements, ranged + 8-dir |
 | Terminals (lore) | ✅ | readable pages, paging |
 | Main menu + chapter screens | ✅ | authentic bitmaps |
-| **Doors** (#11) | ✅ v1 | 473 narrow authored-open doors as panels; **switch→door wiring** (platform-switch type 5 = polygon target, tag-switch type 7 = tag; 119 switches) — verified via harness (switch target 244 force-opened door poly 244) |
+| **Doors** (#11) | ✅ v1 | 473 door panels; **switch→door wiring** (119 switches); **ride-on elevators** (35 wide platforms via `AM1Elevator` — movable floor slab, rises to neighbour floor, carries the rider). All harness-verified (switch target 244 opened door poly 244; player rode elevator 100→200) |
 | **Save / Continue** (#12) | ✅ | shield carry-over, menu Continue |
 | **Control panels** (#13) | ✅ v1 | 42 chargers + 48 save buffers (press E) |
 | **HUD bezel** (#14) | ✅ | PICT-128 framed view; meter rects verified in-engine. **Oxygen gauge dynamic + drains in vacuum** (`AM1Character::Oxygen`, drain in `Tick` on vacuum levels) |
 | Polish (#15) | ✅ v1 | music (song_index), muzzle flash + impact sparks, dynamic O2 meter + **vacuum drain & oxygen rechargers**, **exit-terminal progression** (data-flagged), **epilogue**, movement-param consolidation. TODO: persistent decals, platform-move SFX, movement feel pass, O2 checkpoint persistence |
 
 **Deferred / known follow-ups** (tracked in memory + commit bodies):
-- Doors: **switch→door done** (types 5/7 force-open their target door(s) on use;
-  additive — doors still auto-open on proximity, so no soft-lock). Remaining:
-  authored-**closed** doors (need converter floor-rebake), **ride-on elevators**
-  (floor itself must move), **light-switch** (type 4; no lights yet), door panel
-  **textures** (plain box now).
+- Doors: **switch→door** + **ride-on elevators** done (v1). Elevators are a runtime
+  movable slab (`AM1Elevator`, engine box, no geometry rebake) that rises to the
+  highest neighbour floor and carries the rider; the baked static floor still sits
+  at the slab's rest height (a faithful version would author the floor as a movable
+  mesh in the converter, dropping the static one). Remaining: authored-**closed**
+  doors + the **11 closed-platform** polygons (need the converter floor-rebake),
+  **light-switch** (type 4; no lights), door/elevator **textures** (plain box now).
 - Campaign exit terminal: finishing a level's exit terminal calls
   `AM1Character::AdvanceLevel` (last level → `AM1PlayerController::ShowEpilogue`);
   `[`/`]` cycling kept as a fallback. M1 carries **no teleport directive** in the
@@ -336,10 +338,12 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    verified via the §9b harness). Optional refinement: make switch-targeted doors
    switch-*only* (disable proximity) where the M1 `plat` flags say so — needs
    playtest to avoid soft-locks.
-3. **Closed doors / ride-on elevators** — geometry-pipeline scale: the converter
-   (`scen_to_obj.py`) bakes door/platform polygon floors at one height; a moving
-   floor needs the floor itself rebuilt as a movable mesh, i.e. regenerate all 37
-   levels' geometry + headless re-import + full cook. A distinct subsystem effort.
+3. **Ride-on elevators** — DONE v1 as a runtime movable slab (`AM1Elevator`),
+   harness-verified. The faithful version (drop the baked static floor, author the
+   floor as a movable mesh in `scen_to_obj.py`) + **authored-closed doors/platforms**
+   (11 polygons baked solid → need the converter to lower the floor so there's a
+   walkable passage) remain geometry-pipeline work: regenerate geometry + headless
+   re-import + full cook.
 4. **Per-level exit-terminal curation** (~14 levels with no teleport-action
    phrase) — needs Marathon walkthrough knowledge per level; manual research.
 5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already

@@ -22,6 +22,7 @@
 #include "M1SaveGame.h"
 #include "M1Panel.h"
 #include "M1Platform.h"
+#include "M1Elevator.h"
 #include "EngineUtils.h"  // TActorIterator
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
@@ -574,6 +575,18 @@ void AM1Character::M1Doors()
 		UE_LOG(LogTemp, Warning, TEXT("[M1Doors] #%d %s"), i++, *(*It)->M1DebugString());
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[M1Doors] total %d"), i);
+}
+
+void AM1Character::M1Elevators()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	int32 i = 0;
+	for (TActorIterator<AM1Elevator> It(W); It; ++It)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[M1Elevators] #%d %s"), i++, *(*It)->M1DebugString());
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Elevators] total %d"), i);
 }
 
 void AM1Character::M1Panels()

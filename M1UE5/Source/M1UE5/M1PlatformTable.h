@@ -703,3 +703,279 @@ static TArrayView<const FM1Door> M1DoorsForLevel(const FString& MapName)
 	}
 	return TArrayView<const FM1Door>();
 }
+
+/** One Marathon ride-on elevator: a movable floor slab (footprint SizeX x
+ *  SizeY) whose TOP rises from LowZ to HighZ, carrying the player. cm. */
+struct FM1Elevator
+{
+	float X, Y;            // footprint centre (UE cm, final imported frame)
+	float SizeX, SizeY;
+	float LowZ, HighZ;     // slab-top travel range
+	float Speed;           // cm/s
+	int32 PolyIndex, Tag;  // switch targets (platform/tag switch)
+};
+
+struct FM1LevelElevators
+{
+	const TCHAR* LevelName;
+	const FM1Elevator* Elevators;
+	int32 Count;
+};
+
+static const FM1Elevator GM1Elevators_L_00_Arrival[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_01_Bigger_Guns_Nearby[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_02_Never_Burn_Money[] =
+{
+	{ -75.00f, 650.00f, 150.00f, 200.00f, 300.00f, 450.00f, 46.9f, 137, 0 },
+	{ -75.00f, 800.00f, 150.00f, 200.00f, 300.00f, 400.00f, 70.3f, 138, 0 },
+	{ -75.00f, 512.50f, 150.00f, 175.00f, 300.00f, 400.00f, 70.3f, 140, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_03_Defend_THIS[] =
+{
+	{ 800.00f, 300.00f, 200.00f, 200.00f, 100.00f, 200.00f, 87.9f, 22, 0 },
+	{ -250.00f, -143.75f, 700.00f, 487.50f, 0.00f, 50.00f, 2.9f, 32, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_04_Couch_Fishing[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_05_The_Rose[] =
+{
+	{ 1900.00f, 1800.00f, 200.00f, 200.00f, 9.96f, 100.00f, 105.5f, 17, 0 },
+	{ 1900.00f, 300.00f, 200.00f, 200.00f, 9.96f, 129.98f, 87.9f, 37, 0 },
+	{ -1100.00f, 2000.00f, 200.00f, 200.00f, 100.00f, 400.00f, 175.8f, 123, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_06_Smells_Like_Napalm_Tastes_Like_Chicken[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_07_Cool_Fusion[] =
+{
+	{ 725.00f, 975.00f, 350.00f, 350.00f, 0.00f, 200.00f, 87.9f, 29, 0 },
+	{ 450.00f, 2550.00f, 500.00f, 300.00f, 259.96f, 600.00f, 263.7f, 171, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_08_G4_Sunbathing[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_09_Blaspheme_Quarantine[] =
+{
+	{ -500.00f, 1675.00f, 300.00f, 150.00f, -800.00f, -600.00f, 46.9f, 207, 0 },
+	{ -175.00f, 1675.00f, 350.00f, 150.00f, -800.00f, -600.00f, 46.9f, 206, 0 },
+	{ 100.00f, 1675.00f, 200.00f, 450.00f, -800.00f, -500.00f, 46.9f, 208, 0 },
+	{ 200.00f, 1525.00f, 200.00f, 150.00f, -800.00f, -600.00f, 46.9f, 209, 0 },
+	{ 375.00f, 1400.00f, 150.00f, 400.00f, -800.00f, -600.00f, 46.9f, 222, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_10_Bob_B_Q[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_11_Shake_Before_Using[] =
+{
+	{ -850.00f, 2650.00f, 150.00f, 150.00f, -50.00f, 100.00f, 527.3f, 155, 0 },
+	{ -450.00f, 2650.00f, 150.00f, 150.00f, -50.00f, 100.00f, 527.3f, 171, 0 },
+	{ -581.25f, 1000.00f, 162.50f, 550.00f, -200.00f, 100.00f, 26.4f, 187, 0 },
+	{ -793.75f, 1000.00f, 162.50f, 550.00f, -200.00f, 100.00f, 26.4f, 189, 0 },
+	{ -993.75f, 187.50f, 262.50f, 150.00f, 100.00f, 300.00f, 878.9f, 76, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_12_Fire_Fire_Fire_Fire_Fire[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_13_Colony_Ship_For_Sale_Cheap[] =
+{
+	{ 2637.50f, 162.50f, 225.00f, 225.00f, 300.00f, 400.00f, 8.8f, 148, 0 },
+	{ 2987.50f, 162.50f, 225.00f, 225.00f, 300.00f, 400.00f, 8.8f, 144, 0 },
+	{ 2987.50f, 637.50f, 225.00f, 225.00f, 300.00f, 400.00f, 8.8f, 160, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_14_Habe_Quiddam[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_15_Neither_High_nor_Low[] =
+{
+	{ -793.75f, -476.56f, 150.00f, 221.88f, 319.92f, 400.00f, 61.5f, 93, 0 },
+	{ -645.31f, -664.06f, 253.12f, 271.88f, 319.92f, 400.00f, 61.5f, 91, 0 },
+	{ 132.81f, 68.75f, 196.88f, 168.75f, 0.00f, 200.00f, 131.8f, 238, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_16_Pfhor_Your_Eyes_Only[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_17_No_Artificial_Colors[] =
+{
+	{ -1587.50f, -2125.00f, 325.00f, 250.00f, 119.92f, 200.00f, 46.9f, 203, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_18_Unpfhorgiven[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_19_Two_Times_Two_Equals[] =
+{
+	{ 465.62f, -1043.75f, 181.25f, 175.00f, 0.00f, 50.00f, 49.8f, 198, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_20_Beware_of_Low_Flying_Defense_Drones[] =
+{
+	{ 1706.25f, -837.50f, 212.50f, 200.00f, 0.00f, 300.00f, 131.8f, 244, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_21_Eupfhoria[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_22_Pfhoraphobia[] =
+{
+	{ 470.51f, 1423.83f, 186.33f, 157.03f, -800.00f, 0.00f, 263.7f, 137, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_23_Ain_t_Got_Time_Pfhor_This[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_24_Welcome_to_the_Revolution[] =
+{
+	{ 2000.00f, -975.00f, 200.00f, 450.00f, -119.92f, 400.00f, 46.9f, 206, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_25_Try_again[] =
+{
+	{ 1675.00f, 375.00f, 150.00f, 150.00f, 0.00f, 100.00f, 46.9f, 196, 0 },
+	{ -1250.00f, -3025.00f, 300.00f, 250.00f, 0.00f, 129.98f, 70.3f, 164, 0 },
+	{ -1525.00f, -2575.00f, 150.00f, 150.00f, 129.98f, 200.00f, 87.9f, 161, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_26_Ingue_Ferroque[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_27_Mars_Needs_Women[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_28_Carnage_Palace_Deeee_Luxe[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_29_5_D_space[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_30_Arena[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_31_E_equals_MC_WHAT[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_32_Showered_With_Grenades[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_33_Spiral_Insanity[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_34_Waldo_World_Arena[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1Elevator GM1Elevators_L_35_What_Goes_Up_Must_Come_Down[] =
+{
+	{ 400.00f, 425.00f, 200.00f, 150.00f, -779.98f, -700.00f, 46.9f, 20, 0 },
+};
+
+static const FM1Elevator GM1Elevators_L_36_You_don_t_need_to_see_my_I_D[] =
+{
+	{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none
+};
+
+static const FM1LevelElevators GM1LevelElevatorTable[] =
+{
+	{ TEXT("L_00_Arrival"), GM1Elevators_L_00_Arrival, 0 },
+	{ TEXT("L_01_Bigger_Guns_Nearby"), GM1Elevators_L_01_Bigger_Guns_Nearby, 0 },
+	{ TEXT("L_02_Never_Burn_Money"), GM1Elevators_L_02_Never_Burn_Money, 3 },
+	{ TEXT("L_03_Defend_THIS"), GM1Elevators_L_03_Defend_THIS, 2 },
+	{ TEXT("L_04_Couch_Fishing"), GM1Elevators_L_04_Couch_Fishing, 0 },
+	{ TEXT("L_05_The_Rose"), GM1Elevators_L_05_The_Rose, 3 },
+	{ TEXT("L_06_Smells_Like_Napalm_Tastes_Like_Chicken"), GM1Elevators_L_06_Smells_Like_Napalm_Tastes_Like_Chicken, 0 },
+	{ TEXT("L_07_Cool_Fusion"), GM1Elevators_L_07_Cool_Fusion, 2 },
+	{ TEXT("L_08_G4_Sunbathing"), GM1Elevators_L_08_G4_Sunbathing, 0 },
+	{ TEXT("L_09_Blaspheme_Quarantine"), GM1Elevators_L_09_Blaspheme_Quarantine, 5 },
+	{ TEXT("L_10_Bob_B_Q"), GM1Elevators_L_10_Bob_B_Q, 0 },
+	{ TEXT("L_11_Shake_Before_Using"), GM1Elevators_L_11_Shake_Before_Using, 5 },
+	{ TEXT("L_12_Fire_Fire_Fire_Fire_Fire"), GM1Elevators_L_12_Fire_Fire_Fire_Fire_Fire, 0 },
+	{ TEXT("L_13_Colony_Ship_For_Sale_Cheap"), GM1Elevators_L_13_Colony_Ship_For_Sale_Cheap, 3 },
+	{ TEXT("L_14_Habe_Quiddam"), GM1Elevators_L_14_Habe_Quiddam, 0 },
+	{ TEXT("L_15_Neither_High_nor_Low"), GM1Elevators_L_15_Neither_High_nor_Low, 3 },
+	{ TEXT("L_16_Pfhor_Your_Eyes_Only"), GM1Elevators_L_16_Pfhor_Your_Eyes_Only, 0 },
+	{ TEXT("L_17_No_Artificial_Colors"), GM1Elevators_L_17_No_Artificial_Colors, 1 },
+	{ TEXT("L_18_Unpfhorgiven"), GM1Elevators_L_18_Unpfhorgiven, 0 },
+	{ TEXT("L_19_Two_Times_Two_Equals"), GM1Elevators_L_19_Two_Times_Two_Equals, 1 },
+	{ TEXT("L_20_Beware_of_Low_Flying_Defense_Drones"), GM1Elevators_L_20_Beware_of_Low_Flying_Defense_Drones, 1 },
+	{ TEXT("L_21_Eupfhoria"), GM1Elevators_L_21_Eupfhoria, 0 },
+	{ TEXT("L_22_Pfhoraphobia"), GM1Elevators_L_22_Pfhoraphobia, 1 },
+	{ TEXT("L_23_Ain_t_Got_Time_Pfhor_This"), GM1Elevators_L_23_Ain_t_Got_Time_Pfhor_This, 0 },
+	{ TEXT("L_24_Welcome_to_the_Revolution"), GM1Elevators_L_24_Welcome_to_the_Revolution, 1 },
+	{ TEXT("L_25_Try_again"), GM1Elevators_L_25_Try_again, 3 },
+	{ TEXT("L_26_Ingue_Ferroque"), GM1Elevators_L_26_Ingue_Ferroque, 0 },
+	{ TEXT("L_27_Mars_Needs_Women"), GM1Elevators_L_27_Mars_Needs_Women, 0 },
+	{ TEXT("L_28_Carnage_Palace_Deeee_Luxe"), GM1Elevators_L_28_Carnage_Palace_Deeee_Luxe, 0 },
+	{ TEXT("L_29_5_D_space"), GM1Elevators_L_29_5_D_space, 0 },
+	{ TEXT("L_30_Arena"), GM1Elevators_L_30_Arena, 0 },
+	{ TEXT("L_31_E_equals_MC_WHAT"), GM1Elevators_L_31_E_equals_MC_WHAT, 0 },
+	{ TEXT("L_32_Showered_With_Grenades"), GM1Elevators_L_32_Showered_With_Grenades, 0 },
+	{ TEXT("L_33_Spiral_Insanity"), GM1Elevators_L_33_Spiral_Insanity, 0 },
+	{ TEXT("L_34_Waldo_World_Arena"), GM1Elevators_L_34_Waldo_World_Arena, 0 },
+	{ TEXT("L_35_What_Goes_Up_Must_Come_Down"), GM1Elevators_L_35_What_Goes_Up_Must_Come_Down, 1 },
+	{ TEXT("L_36_You_don_t_need_to_see_my_I_D"), GM1Elevators_L_36_You_don_t_need_to_see_my_I_D, 0 },
+};
+
+static TArrayView<const FM1Elevator> M1ElevatorsForLevel(const FString& MapName)
+{
+	for (const FM1LevelElevators& Level : GM1LevelElevatorTable)
+	{
+		if (MapName.Contains(Level.LevelName, ESearchCase::IgnoreCase))
+		{
+			return TArrayView<const FM1Elevator>(Level.Elevators, Level.Count);
+		}
+	}
+	return TArrayView<const FM1Elevator>();
+}

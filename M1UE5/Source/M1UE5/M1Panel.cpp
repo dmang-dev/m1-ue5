@@ -1,6 +1,7 @@
 #include "M1Panel.h"
 #include "M1Character.h"
 #include "M1Platform.h"
+#include "M1Elevator.h"
 #include "M1Audio.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -87,7 +88,19 @@ int32 AM1Panel::FireSwitch()
 			++Opened;
 		}
 	}
-	UE_LOG(LogTemp, Log, TEXT("M1Panel switch kind=%d target=%d -> opened %d door(s)"),
+	// Platform switches can also target wide platforms (ride-on elevators).
+	for (TActorIterator<AM1Elevator> It(W); It; ++It)
+	{
+		const bool bMatch = (Kind == 3)
+			? ((*It)->GetPolyIndex() == Target)
+			: (Target >= 1 && (*It)->GetTag() == Target);
+		if (bMatch)
+		{
+			(*It)->ForceActivate();
+			++Opened;
+		}
+	}
+	UE_LOG(LogTemp, Log, TEXT("M1Panel switch kind=%d target=%d -> activated %d platform(s)"),
 		Kind, Target, Opened);
 	return Opened;
 }

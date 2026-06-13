@@ -89,6 +89,8 @@ public:
 	UFUNCTION(Exec) void M1Where();
 	/** Log every spawned door's position + open/closed state. */
 	UFUNCTION(Exec) void M1Doors();
+	/** Log every spawned ride-on elevator (position, travel range, state). */
+	UFUNCTION(Exec) void M1Elevators();
 	/** Log every spawned control panel (kind + position) with its index. */
 	UFUNCTION(Exec) void M1Panels();
 	/** Log the level's terminals (index, id, pages, whether it's the exit). */
