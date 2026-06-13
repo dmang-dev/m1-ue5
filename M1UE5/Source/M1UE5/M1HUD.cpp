@@ -151,16 +151,18 @@ void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
 			Player->GetHealth() / FMath::Max(1.0f, Player->GetMaxHealth()), 0.0f, 1.0f);
 		const float X = BX + 141.0f * Scale, Y = BY + MeterTop * Scale;
 		const float W = 29.0f * Scale, H = MeterH * Scale;
-		DrawRect(FLinearColor(0.0f, 0.05f, 0.10f, 0.9f), X, Y, W, H);
-		DrawRect(FLinearColor(0.0f, 0.85f, 1.0f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
+		// Shields are RED in the original M1 HUD (verified vs Classic Marathon).
+		DrawRect(FLinearColor(0.12f, 0.0f, 0.0f, 0.9f), X, Y, W, H);
+		DrawRect(FLinearColor(1.0f, 0.08f, 0.08f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
 	}
 	{
 		const float Frac = FMath::Clamp(
 			Player->GetOxygen() / FMath::Max(1.0f, Player->GetMaxOxygen()), 0.0f, 1.0f);
 		const float X = BX + 92.0f * Scale, Y = BY + MeterTop * Scale;
 		const float W = 28.0f * Scale, H = MeterH * Scale;
-		DrawRect(FLinearColor(0.0f, 0.10f, 0.0f, 0.9f), X, Y, W, H);
-		DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
+		// Oxygen is BLUE in the original M1 HUD (verified vs Classic Marathon).
+		DrawRect(FLinearColor(0.0f, 0.0f, 0.12f, 0.9f), X, Y, W, H);
+		DrawRect(FLinearColor(0.05f, 0.15f, 1.0f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
 	}
 
 	// Ammo readout in the message panel (bezel px ~x[238,615] y[386,448]).
@@ -363,8 +365,8 @@ void AM1HUD::DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon
 	const float PanelY = Canvas->SizeY - PanelH;
 
 	// --- Shield bar. width = (health/max) * full, fill left-to-right.
-	//     Marathon shield color is cyan. DrawRect a dim back-rail then the fill,
-	//     so an empty bar still reads as "the shield region". ---
+	//     Marathon shields are RED (verified vs Classic Marathon). DrawRect a dim
+	//     back-rail then the fill, so an empty bar still reads as the region. ---
 	if (Player)
 	{
 		const float MaxHealth = FMath::Max(1.0f, Player->GetMaxHealth());
@@ -375,17 +377,17 @@ void AM1HUD::DrawInterfacePanel(AM1Character* Player, UM1WeaponComponent* Weapon
 		const float BarFullW = kShieldW * PanelW;
 		const float BarH = kShieldH * PanelH;
 
-		// Back rail (dark blue) then the cyan fill scaled by shield fraction.
-		DrawRect(FLinearColor(0.0f, 0.06f, 0.12f, 0.85f), BarX, BarY, BarFullW, BarH);
-		DrawRect(FLinearColor(0.0f, 0.75f, 1.0f, 1.0f), BarX, BarY, BarFullW * Frac, BarH);
+		// Back rail then the RED fill scaled by shield fraction (M1 shields = red).
+		DrawRect(FLinearColor(0.12f, 0.0f, 0.0f, 0.85f), BarX, BarY, BarFullW, BarH);
+		DrawRect(FLinearColor(1.0f, 0.08f, 0.08f, 1.0f), BarX, BarY, BarFullW * Frac, BarH);
 
 		// Oxygen placeholder: full/static green bar (no vacuum system yet). It
 		// shares the shield bar's X/width so the two stack like the original.
 		if (kDrawOxygen)
 		{
 			const float OxyY = PanelY + kOxygenY * PanelH;
-			DrawRect(FLinearColor(0.0f, 0.10f, 0.0f, 0.85f), BarX, OxyY, BarFullW, BarH);
-			DrawRect(FLinearColor(0.0f, 0.85f, 0.20f, 1.0f), BarX, OxyY, BarFullW, BarH);
+			DrawRect(FLinearColor(0.0f, 0.0f, 0.12f, 0.85f), BarX, OxyY, BarFullW, BarH);
+			DrawRect(FLinearColor(0.05f, 0.15f, 1.0f, 1.0f), BarX, OxyY, BarFullW, BarH);
 		}
 	}
 

@@ -315,6 +315,21 @@ refill (19→99). Driving recipe: launch the packaged exe windowed on a map, cli
 to dismiss the chapter splash, then inject `~`-console commands and read
 `Build\Windows\M1UE5\Saved\Logs\M1UE5.log`.
 
+## 9c. Side-by-side fidelity vs Classic Marathon
+
+`M1SOURCE\Marathon-20250829\Classic Marathon.exe` is the bundled Aleph One
+Windows build of the ORIGINAL game — run it for ground-truth fidelity checks.
+Recipe (PowerShell GDI, like the §9b harness): `Start-Process "Classic
+Marathon.exe"` → click through the intro → the main menu renders right-of-centre
+in the 1536×864 window (BEGIN NEW GAME ≈ (945,408)) → ARRIVAL teleport screen →
+first-person HUD. Full-screen `CopyFromScreen` captures it. Then capture the same
+spot in the UE5 build and diff/compose with PIL.
+
+First finding it caught: **the M1 HUD meters are OXYGEN = blue (left well),
+SHIELDS = red (right well)** — the remake had them green/cyan. Fixed in
+`M1HUD.cpp` (sampled originals: oxygen ~RGB(0,0,200), shields ~RGB(200,0,0)).
+Saved reference shots live in `Saved\classic_*.png` (Bungie IP — gitignored).
+
 ## 10. Immediate next step
 
 The **polish tier (#15)** is done v1: faithful music (song_index), muzzle flash +
