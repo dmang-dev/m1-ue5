@@ -146,14 +146,46 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
     def uv_e(e: int) -> tuple[float, float]:
         return (epnt[e]["x"] / 1024.0, epnt[e]["y"] / 1024.0)
 
+    # ---- Closed-platform rebake --------------------------------------------
+    # Some platform polygons are authored CLOSED (floor >= ceiling -> zero height),
+    # so the loop below would emit a degenerate floor == a hole you fall through.
+    # Re-open them: floor at the LOWEST neighbour floor, ceiling at the HIGHEST
+    # neighbour ceiling, giving a walkable passage. (poly_subset/micro-slice mode
+    # keeps original behaviour.)
+    closed_open: dict[int, tuple[int, int]] = {}
+    if poly_subset is None:
+        all_polys = data["POLY"]
+
+        def _nbr(pi: int, attr: str, agg):
+            vals = []
+            for li in all_polys[pi].get("lines", []):
+                if 0 <= li < len(lins):
+                    ln = lins[li]
+                    for k in ("cw_poly", "ccw_poly"):
+                        npi = ln.get(k, -1)
+                        if npi is not None and 0 <= npi < len(all_polys) and npi != pi:
+                            vals.append(all_polys[npi][attr])
+            return agg(vals) if vals else None
+
+        for pl in (data.get("plat") or []):
+            pi = pl["polygon_index"]
+            if 0 <= pi < len(all_polys) and all_polys[pi]["floor_height"] >= all_polys[pi]["ceiling_height"]:
+                of = _nbr(pi, "floor_height", min)
+                oc = _nbr(pi, "ceiling_height", max)
+                if of is not None and oc is not None and oc > of:
+                    closed_open[pi] = (of, oc)
+
     # ---- Floors + ceilings -------------------------------------------------
-    for poly in polys:
+    for idx, poly in enumerate(polys):
         n = poly["vertex_count"]
         if n < 3:
             continue
         eids = poly["endpoints"][:n]
-        fz = poly["floor_height"] * S
-        cz = poly["ceiling_height"] * S
+        fh, ch = poly["floor_height"], poly["ceiling_height"]
+        if idx in closed_open:
+            fh, ch = closed_open[idx]   # walkable passage instead of a sealed hole
+        fz = fh * S
+        cz = ch * S
         ring2d = [(px(e), py(e)) for e in eids]
         ccw = _signed_area(ring2d) > 0
         fmat = mat_for(poly["floor_shape"])
