@@ -298,12 +298,27 @@ ones verified in-engine (music log = track 7 on Arrival; O2 drains full→~40% o
 ~40s on L08). `Build\Windows` is current via an exe-swap (all changes were
 code-only — no re-cook).
 
-Remaining, in rough priority (see §6 deferred):
-1. **Persistent impact decals** (scorch/blood) — needs a decal material; sparks
-   are the v1 stand-in.
-2. **Oxygen checkpoint persistence** (`M1SaveGame.Oxygen`) + tune
-   `GOxygenDrainPerSec` (L08 currently empties in ~75–100s).
-3. **Movement feel pass** — lower `GWalkSpeed` (600) toward canonical ~430 cm/s.
-4. **Door follow-ups** — closed doors / ride-on elevators / switch→door wiring.
-5. **Platform-move loop SFX**; per-level exit-terminal curation for the ~14
-   levels without a teleport-action phrase.
+Done since: movement tuned to canonical `GWalkSpeed`=430; vacuum drain softened
+to `GOxygenDrainPerSec`=0.5 (oxygen intentionally resets per level → not
+checkpointed, matching M1's per-teleport suit reset).
+
+Remaining — these are larger / not cleanly doable headless, hence deferred:
+1. **Persistent scorch decals** — `Tools/ue5_import_decal.py` + `T_scorch_decal`
+   exist, but the deferred-decal material **won't compile in the headless
+   (`-RenderOffScreen`) editor** ("Default Material will be used"); it needs the
+   material authored/fixed in the GUI editor (or a cook-time compile check). The
+   impact **spark** (`AM1Impact`) is the working stand-in.
+2. **Switch→door wiring** (panel types 5/7) — data is present (`plat.polygon_index`
+   /`tag` + switch `permutation`, type 5 = polygon_index, type 7 = tag). Tractable
+   as gameplay+data (no geometry change), BUT making switch-operated doors *not*
+   also auto-open risks soft-locks, so it needs in-game verification (navigate to
+   a switch, confirm the right remote door opens) — which isn't automatable from
+   here. Recommend a focused session with manual playtest.
+3. **Closed doors / ride-on elevators** — geometry-pipeline scale: the converter
+   (`scen_to_obj.py`) bakes door/platform polygon floors at one height; a moving
+   floor needs the floor itself rebuilt as a movable mesh, i.e. regenerate all 37
+   levels' geometry + headless re-import + full cook. A distinct subsystem effort.
+4. **Per-level exit-terminal curation** (~14 levels with no teleport-action
+   phrase) — needs Marathon walkthrough knowledge per level; manual research.
+5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already
+   play open/close one-shots that cover their motion.
