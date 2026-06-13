@@ -87,6 +87,8 @@ def doors_for_level(data):
             "sz": round(size_z, 2),
             "speed": round(speed_cms, 1),
             "dwell": round(dwell, 2),
+            "poly": pi,                          # for platform-switch matching
+            "tag": pl.get("tag", -1),            # for tag-switch matching
         })
     return out
 
@@ -122,6 +124,8 @@ def main():
         "\tfloat SizeX, SizeY, SizeZ;",
         "\tfloat Speed;          // cm/s travel",
         "\tfloat Dwell;          // seconds held open before auto-close",
+        "\tint32 PolyIndex;      // source polygon (platform-switch target)",
+        "\tint32 Tag;            // platform tag (tag-switch target; -1 = none)",
         "};",
         "",
         "struct FM1LevelDoors",
@@ -137,11 +141,12 @@ def main():
         lines.append("static const FM1Door %s[] =" % arr)
         lines.append("{")
         for d in doors:
-            lines.append("\t{ %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.1ff, %.2ff },"
-                         % (d["x"], d["y"], d["z"], d["sx"], d["sy"], d["sz"], d["speed"], d["dwell"]))
+            lines.append("\t{ %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.1ff, %.2ff, %d, %d },"
+                         % (d["x"], d["y"], d["z"], d["sx"], d["sy"], d["sz"], d["speed"], d["dwell"],
+                            d["poly"], d["tag"]))
         if not doors:
             # C++ forbids zero-size arrays; emit a sentinel kept out by Count=0.
-            lines.append("\t{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, 0.00f },  // no doors")
+            lines.append("\t{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, 0.00f, -1, -1 },  // no doors")
         lines.append("};")
         lines.append("")
 

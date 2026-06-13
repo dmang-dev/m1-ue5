@@ -38,7 +38,11 @@ private:
 	UStaticMeshComponent* Mesh = nullptr;
 
 	USoundBase* Sound = nullptr;
-	int32 Kind = 0;            // 0 = shield charger, 1 = pattern buffer, 2 = oxygen
+	int32 Kind = 0;            // 0=charger 1=buffer 2=oxygen 3=platform-switch 4=tag-switch
 	float Cap = 150.0f;        // charger fill target
+	int32 Target = -1;         // switch target: door polygon index (kind 3) / tag (kind 4)
 	float UseRadius = 170.0f;
+
+	/** Force-open every door this switch controls. Returns how many it opened. */
+	int32 FireSwitch();
 };

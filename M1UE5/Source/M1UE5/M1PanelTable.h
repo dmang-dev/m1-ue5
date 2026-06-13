@@ -7,13 +7,15 @@
 #include "Containers/ArrayView.h"
 
 /** One Marathon wall control panel. Kind: 0 = shield charger (refill to
- *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger
- *  (refill suit oxygen to Cap on use). Position in UE cm. */
+ *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger,
+ *  3 = platform switch (Target = polygon index of the door it opens),
+ *  4 = tag switch (Target = tag; opens all doors with it). Position in cm. */
 struct FM1Panel
 {
 	float X, Y, Z;
 	int32 Kind;
 	float Cap;
+	int32 Target;   // switch target (polygon index or tag); -1 otherwise
 };
 
 struct FM1LevelPanels
@@ -25,286 +27,404 @@ struct FM1LevelPanels
 
 static const FM1Panel GM1Panels_L_00_Arrival[] =
 {
-	{ 3001.56f, 584.38f, 55.00f, 1, 0.0f },
-	{ 2475.00f, 1875.00f, -84.84f, 1, 0.0f },
-	{ 1625.00f, 2225.00f, 294.94f, 0, 150.0f },
+	{ 3001.56f, 584.38f, 55.00f, 1, 0.0f, -1 },
+	{ 2475.00f, 1875.00f, -84.84f, 1, 0.0f, -1 },
+	{ 2738.87f, 956.05f, 55.00f, 3, 0.0f, 244 },
+	{ 2588.48f, 2886.82f, -84.84f, 3, 0.0f, 232 },
+	{ 1625.00f, 2225.00f, 294.94f, 0, 150.0f, -1 },
+	{ 2225.00f, 1525.00f, -84.84f, 3, 0.0f, 25 },
 };
 
 static const FM1Panel GM1Panels_L_01_Bigger_Guns_Nearby[] =
 {
-	{ 883.20f, 424.51f, 55.00f, 0, 150.0f },
-	{ 1400.00f, 2325.00f, 55.00f, 1, 0.0f },
+	{ 883.20f, 424.51f, 55.00f, 0, 150.0f, -1 },
+	{ 1400.00f, 2325.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1000.00f, 1775.00f, 55.00f, 3, 0.0f, 221 },
+	{ 1512.11f, -101.51f, 5.00f, 3, 0.0f, 248 },
 };
 
 static const FM1Panel GM1Panels_L_02_Never_Burn_Money[] =
 {
-	{ 1350.00f, 50.00f, 55.00f, 1, 0.0f },
-	{ 200.00f, 525.00f, 174.92f, 1, 0.0f },
-	{ 50.00f, 950.00f, 55.00f, 0, 150.0f },
-	{ 1575.00f, 1650.00f, 174.92f, 1, 0.0f },
-	{ 2300.00f, -1175.00f, 55.00f, 0, 450.0f },
-	{ 475.00f, 1425.00f, 174.92f, 0, 150.0f },
+	{ 1350.00f, 50.00f, 55.00f, 1, 0.0f, -1 },
+	{ 200.00f, 525.00f, 174.92f, 1, 0.0f, -1 },
+	{ 50.00f, 950.00f, 55.00f, 0, 150.0f, -1 },
+	{ 200.00f, 775.00f, 174.92f, 3, 0.0f, 137 },
+	{ 1575.00f, 1650.00f, 174.92f, 1, 0.0f, -1 },
+	{ -442.97f, 537.01f, 174.92f, 3, 0.0f, 176 },
+	{ 2300.00f, -1175.00f, 55.00f, 0, 450.0f, -1 },
+	{ 475.00f, 1425.00f, 174.92f, 0, 150.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_03_Defend_THIS[] =
 {
-	{ 162.50f, -1100.00f, 155.00f, 1, 0.0f },
-	{ 1287.50f, -937.50f, 155.00f, 0, 150.0f },
-	{ 687.50f, -2150.00f, 155.00f, 0, 150.0f },
-	{ 762.50f, -1100.00f, 55.00f, 0, 150.0f },
-	{ 1912.50f, -1012.50f, 55.00f, 1, 0.0f },
+	{ -312.50f, 200.00f, 155.00f, 3, 0.0f, 34 },
+	{ 162.50f, -1100.00f, 155.00f, 1, 0.0f, -1 },
+	{ 1927.10f, -765.48f, 159.98f, 3, 0.0f, 139 },
+	{ 1836.91f, -738.18f, 159.98f, 3, 0.0f, 138 },
+	{ 1455.08f, -740.72f, 114.96f, 3, 0.0f, 136 },
+	{ 1364.70f, -768.12f, 114.96f, 3, 0.0f, 135 },
+	{ 1287.50f, -937.50f, 155.00f, 0, 150.0f, -1 },
+	{ -1712.50f, -1475.00f, 155.00f, 3, 0.0f, 166 },
+	{ 1943.70f, -2741.80f, 55.00f, 3, 0.0f, 194 },
+	{ 1348.00f, -2738.09f, 155.00f, 3, 0.0f, 189 },
+	{ 1436.33f, -2781.93f, 155.00f, 3, 0.0f, 191 },
+	{ 1867.33f, -2779.74f, 55.00f, 3, 0.0f, 192 },
+	{ 687.50f, -2150.00f, 155.00f, 0, 150.0f, -1 },
+	{ 762.50f, -1100.00f, 55.00f, 0, 150.0f, -1 },
+	{ 1912.50f, -1012.50f, 55.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_04_Couch_Fishing[] =
 {
-	{ 800.00f, 850.00f, 55.00f, 1, 0.0f },
-	{ 825.00f, 875.00f, -4.96f, 0, 150.0f },
-	{ 1425.00f, 1550.00f, -4.96f, 1, 0.0f },
-	{ 2275.00f, 1100.00f, 55.00f, 0, 150.0f },
+	{ 800.00f, 850.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1125.00f, 975.00f, 55.00f, 3, 0.0f, 117 },
+	{ 825.00f, 875.00f, -4.96f, 0, 150.0f, -1 },
+	{ 1425.00f, 1550.00f, -4.96f, 1, 0.0f, -1 },
+	{ 1675.00f, 1850.00f, 55.00f, 3, 0.0f, 198 },
+	{ 2175.00f, 1825.00f, 55.00f, 3, 0.0f, 186 },
+	{ 2275.00f, 1100.00f, 55.00f, 0, 150.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_05_The_Rose[] =
 {
-	{ -350.00f, -275.00f, 555.00f, 1, 0.0f },
-	{ 2350.00f, 850.00f, 555.00f, 1, 0.0f },
-	{ -375.00f, -25.00f, 555.00f, 0, 150.0f },
+	{ -350.00f, -275.00f, 555.00f, 1, 0.0f, -1 },
+	{ 1725.00f, 1950.00f, 55.00f, 3, 0.0f, 17 },
+	{ 1825.00f, 1275.00f, 55.00f, 3, 0.0f, 7 },
+	{ 1825.00f, 1325.00f, 55.00f, 3, 0.0f, 163 },
+	{ 2050.00f, 675.00f, 55.00f, 3, 0.0f, 37 },
+	{ -1600.00f, 2075.00f, 55.00f, 3, 0.0f, 123 },
+	{ 2350.00f, 850.00f, 555.00f, 1, 0.0f, -1 },
+	{ -375.00f, -25.00f, 555.00f, 0, 150.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_06_Smells_Like_Napalm_Tastes_Like_Chicken[] =
 {
-	{ -1400.00f, 325.00f, 55.00f, 0, 150.0f },
-	{ -1675.00f, 550.00f, 55.00f, 1, 0.0f },
-	{ 1800.00f, -425.00f, 55.00f, 1, 0.0f },
+	{ -325.00f, -75.00f, 174.92f, 3, 0.0f, 14 },
+	{ -175.00f, -75.00f, 174.92f, 3, 0.0f, 13 },
+	{ 25.00f, -375.00f, 55.00f, 3, 0.0f, 18 },
+	{ -525.00f, -525.00f, 35.08f, 3, 0.0f, 16 },
+	{ 25.00f, -525.00f, 55.00f, 3, 0.0f, 17 },
+	{ -525.00f, -375.00f, 35.08f, 3, 0.0f, 15 },
+	{ -1400.00f, 325.00f, 55.00f, 0, 150.0f, -1 },
+	{ -1675.00f, 550.00f, 55.00f, 1, 0.0f, -1 },
+	{ -2175.00f, -450.00f, 55.00f, 3, 0.0f, 119 },
+	{ 1800.00f, -425.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1775.00f, 75.00f, 35.08f, 3, 0.0f, 183 },
+	{ 125.00f, -1150.00f, 55.00f, 3, 0.0f, 235 },
+	{ -625.00f, -1150.00f, 35.08f, 3, 0.0f, 234 },
+	{ -2500.00f, 225.00f, 174.92f, 3, 0.0f, 241 },
+	{ 2875.00f, 375.00f, 174.92f, 3, 0.0f, 246 },
 };
 
 static const FM1Panel GM1Panels_L_07_Cool_Fusion[] =
 {
-	{ 1950.00f, 2625.00f, 55.00f, 1, 0.0f },
-	{ 2025.00f, 1875.00f, 55.00f, 0, 300.0f },
-	{ 825.00f, -100.00f, 55.00f, 1, 0.0f },
-	{ -1025.00f, 1650.00f, 194.94f, 1, 0.0f },
-	{ 50.00f, 1225.00f, 55.00f, 0, 300.0f },
+	{ 1475.00f, 975.00f, 55.00f, 3, 0.0f, 3 },
+	{ 725.00f, 225.00f, 55.00f, 3, 0.0f, 7 },
+	{ 725.00f, 1725.00f, 55.00f, 3, 0.0f, 35 },
+	{ 1950.00f, 2625.00f, 55.00f, 1, 0.0f, -1 },
+	{ 2138.28f, 791.41f, 55.00f, 3, 0.0f, 138 },
+	{ 2025.00f, 1875.00f, 55.00f, 0, 300.0f, -1 },
+	{ 825.00f, 1975.00f, 55.00f, 3, 0.0f, 171 },
+	{ 725.00f, 825.00f, 55.00f, 3, 0.0f, 29 },
+	{ 875.00f, 975.00f, 55.00f, 3, 0.0f, 138 },
+	{ 825.00f, -100.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1663.28f, 785.79f, 214.96f, 3, 0.0f, 196 },
+	{ 1150.00f, 225.00f, 55.00f, 3, 0.0f, 205 },
+	{ -25.00f, 975.00f, 194.94f, 3, 0.0f, 23 },
+	{ -1025.00f, 1650.00f, 194.94f, 1, 0.0f, -1 },
+	{ 50.00f, 1225.00f, 55.00f, 0, 300.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_08_G4_Sunbathing[] =
 {
-	{ -1375.00f, 125.00f, 55.00f, 0, 150.0f },
-	{ 750.00f, -2050.00f, 55.00f, 1, 0.0f },
-	{ 1125.00f, -300.00f, 55.00f, 2, 100.0f },
-	{ 1125.00f, 350.00f, 55.00f, 0, 300.0f },
-	{ 2592.38f, -81.54f, 55.00f, 2, 100.0f },
-	{ 2461.18f, 423.34f, 55.00f, 2, 100.0f },
-	{ 600.00f, -250.00f, 55.00f, 1, 0.0f },
+	{ 1000.00f, -175.00f, 55.00f, 3, 0.0f, 66 },
+	{ 775.00f, -75.00f, 84.98f, 3, 0.0f, 66 },
+	{ 975.00f, -75.00f, 55.00f, 3, 0.0f, 71 },
+	{ -1375.00f, 125.00f, 55.00f, 0, 150.0f, -1 },
+	{ 725.00f, 2175.00f, 84.98f, 3, 0.0f, 129 },
+	{ 675.00f, 1950.00f, 84.98f, 3, 0.0f, 125 },
+	{ 925.00f, 1950.00f, 55.00f, 3, 0.0f, 129 },
+	{ 850.00f, 1650.00f, 55.00f, 3, 0.0f, 125 },
+	{ 1000.00f, 100.00f, 55.00f, 3, 0.0f, 71 },
+	{ 750.00f, -2050.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1125.00f, -300.00f, 55.00f, 2, 100.0f, -1 },
+	{ 1125.00f, 350.00f, 55.00f, 0, 300.0f, -1 },
+	{ 2592.38f, -81.54f, 55.00f, 2, 100.0f, -1 },
+	{ 1200.00f, -575.00f, 84.98f, 3, 0.0f, 239 },
+	{ 1659.03f, 590.04f, 55.00f, 3, 0.0f, 241 },
+	{ -2.78f, 593.55f, 55.00f, 3, 0.0f, 243 },
+	{ 2461.18f, 423.34f, 55.00f, 2, 100.0f, -1 },
+	{ 2620.31f, -1657.81f, 55.00f, 3, 0.0f, 77 },
+	{ 2802.59f, 1574.07f, 55.00f, 3, 0.0f, 75 },
+	{ -1333.98f, 24.41f, 55.00f, 3, 0.0f, 79 },
+	{ 600.00f, -250.00f, 55.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_09_Blaspheme_Quarantine[] =
 {
-	{ 800.00f, 150.00f, 55.00f, 0, 150.0f },
-	{ 2050.00f, -1150.00f, 55.00f, 1, 0.0f },
-	{ 775.00f, -375.00f, 55.00f, 1, 0.0f },
-	{ 200.00f, 325.00f, 55.00f, 1, 0.0f },
-	{ -650.00f, 1075.00f, 55.00f, 0, 150.0f },
+	{ 800.00f, 150.00f, 55.00f, 0, 150.0f, -1 },
+	{ 725.00f, 150.00f, 55.00f, 3, 0.0f, 13 },
+	{ 650.00f, 750.00f, 55.00f, 3, 0.0f, 20 },
+	{ 2750.00f, -1225.00f, 55.00f, 3, 0.0f, 116 },
+	{ 2050.00f, -1150.00f, 55.00f, 1, 0.0f, -1 },
+	{ 775.00f, -375.00f, 55.00f, 1, 0.0f, -1 },
+	{ 200.00f, 325.00f, 55.00f, 1, 0.0f, -1 },
+	{ 2250.00f, -125.00f, 55.00f, 3, 0.0f, 231 },
+	{ -650.00f, 1075.00f, 55.00f, 0, 150.0f, -1 },
+	{ -775.00f, 2400.00f, 55.00f, 3, 0.0f, 222 },
+	{ -900.00f, 1075.00f, 55.00f, 3, 0.0f, 207 },
+	{ -950.00f, 2225.00f, 55.00f, 3, 0.0f, 206 },
+	{ -875.00f, 2400.00f, 55.00f, 3, 0.0f, 208 },
 };
 
 static const FM1Panel GM1Panels_L_10_Bob_B_Q[] =
 {
-	{ -1550.00f, 325.00f, 55.00f, 0, 300.0f },
-	{ -1525.00f, 575.00f, 55.00f, 1, 0.0f },
-	{ -925.00f, 1250.00f, 55.00f, 0, 150.0f },
-	{ 2000.00f, 1825.00f, 55.00f, 0, 300.0f },
-	{ -1625.00f, 400.00f, 55.00f, 2, 100.0f },
-	{ 2650.00f, 1225.00f, 55.00f, 1, 0.0f },
+	{ -1550.00f, 325.00f, 55.00f, 0, 300.0f, -1 },
+	{ -1525.00f, 575.00f, 55.00f, 1, 0.0f, -1 },
+	{ -925.00f, 1250.00f, 55.00f, 0, 150.0f, -1 },
+	{ 825.00f, 1475.00f, 55.00f, 3, 0.0f, 142 },
+	{ 2000.00f, 1825.00f, 55.00f, 0, 300.0f, -1 },
+	{ -1625.00f, 400.00f, 55.00f, 2, 100.0f, -1 },
+	{ 1400.00f, 1075.00f, 55.00f, 3, 0.0f, 72 },
+	{ 2650.00f, 1225.00f, 55.00f, 1, 0.0f, -1 },
+	{ 2450.00f, 200.00f, 55.00f, 3, 0.0f, 59 },
+	{ 300.00f, 1375.00f, 55.00f, 3, 0.0f, 254 },
 };
 
 static const FM1Panel GM1Panels_L_11_Shake_Before_Using[] =
 {
-	{ 750.00f, 912.50f, 55.00f, 1, 0.0f },
-	{ -1512.50f, 400.00f, 55.00f, 0, 150.0f },
-	{ -2712.50f, 2350.00f, 55.00f, 1, 0.0f },
-	{ -1612.50f, 1450.00f, 55.00f, 0, 450.0f },
+	{ 750.00f, 912.50f, 55.00f, 1, 0.0f, -1 },
+	{ 87.50f, 975.00f, 55.00f, 3, 0.0f, 8 },
+	{ 1412.50f, 1100.00f, 55.00f, 3, 0.0f, 19 },
+	{ -1512.50f, 400.00f, 55.00f, 0, 150.0f, -1 },
+	{ -2712.50f, 2350.00f, 55.00f, 1, 0.0f, -1 },
+	{ -1087.50f, 2850.00f, 55.00f, 3, 0.0f, 155 },
+	{ -212.50f, 2850.00f, 55.00f, 3, 0.0f, 171 },
+	{ -687.50f, 1612.50f, 55.00f, 3, 0.0f, 196 },
+	{ -537.50f, 1362.50f, 55.00f, 3, 0.0f, 67 },
+	{ -1612.50f, 1450.00f, 55.00f, 0, 450.0f, -1 },
+	{ 512.50f, 187.50f, 55.00f, 3, 0.0f, 8 },
 };
 
 static const FM1Panel GM1Panels_L_12_Fire_Fire_Fire_Fire_Fire[] =
 {
-	{ 1825.00f, 25.00f, 214.96f, 0, 300.0f },
-	{ 2625.00f, 25.00f, 55.00f, 1, 0.0f },
-	{ 1325.00f, 1000.00f, 55.00f, 0, 150.0f },
+	{ 1825.00f, 25.00f, 214.96f, 0, 300.0f, -1 },
+	{ 2025.00f, -1000.00f, 214.96f, 3, 0.0f, 106 },
+	{ 2625.00f, 25.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1325.00f, 1000.00f, 55.00f, 0, 150.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_13_Colony_Ship_For_Sale_Cheap[] =
 {
-	{ -750.00f, 525.00f, 305.00f, 1, 0.0f },
-	{ 1900.00f, -2075.00f, 305.00f, 0, 300.0f },
+	{ 775.00f, 1275.00f, 305.00f, 3, 0.0f, 16 },
+	{ 1142.58f, 1153.03f, 455.00f, 3, 0.0f, 24 },
+	{ 1142.43f, 796.88f, 455.00f, 3, 0.0f, 20 },
+	{ 1142.58f, 552.83f, 455.00f, 3, 0.0f, 11 },
+	{ 1142.58f, 196.73f, 455.00f, 3, 0.0f, 7 },
+	{ 407.13f, 852.93f, 305.00f, 3, 0.0f, 17 },
+	{ 407.08f, 496.83f, 55.00f, 3, 0.0f, 13 },
+	{ -425.00f, -350.00f, 455.00f, 3, 0.0f, 71 },
+	{ 241.89f, 145.31f, 305.00f, 3, 0.0f, 230 },
+	{ 234.96f, -247.66f, 55.00f, 3, 0.0f, 214 },
+	{ 2250.00f, 1125.00f, 305.00f, 3, 0.0f, 105 },
+	{ 1335.35f, -229.39f, 455.00f, 3, 0.0f, 71 },
+	{ -750.00f, 525.00f, 305.00f, 1, 0.0f, -1 },
+	{ 1900.00f, -2075.00f, 305.00f, 0, 300.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_14_Habe_Quiddam[] =
 {
-	{ 75.00f, 1525.00f, 134.98f, 0, 300.0f },
-	{ 525.00f, 1525.00f, 55.00f, 1, 0.0f },
-	{ 1900.00f, 375.00f, 55.00f, 1, 0.0f },
-	{ 2900.00f, 1375.00f, 55.00f, 0, 300.0f },
+	{ 75.00f, 1525.00f, 134.98f, 0, 300.0f, -1 },
+	{ 525.00f, 1525.00f, 55.00f, 1, 0.0f, -1 },
+	{ 1050.00f, -1025.00f, 55.00f, 3, 0.0f, 5 },
+	{ 2125.00f, 550.00f, 55.00f, 3, 0.0f, 63 },
+	{ 1900.00f, 375.00f, 55.00f, 1, 0.0f, -1 },
+	{ 2900.00f, 1375.00f, 55.00f, 0, 300.0f, -1 },
+	{ 1925.00f, 75.00f, 55.00f, 3, 0.0f, 81 },
+	{ 2000.00f, 1225.00f, 55.00f, 3, 0.0f, 159 },
+	{ 1350.00f, 575.00f, 55.00f, 3, 0.0f, 74 },
+	{ 575.00f, -125.00f, 55.00f, 3, 0.0f, 107 },
 };
 
 static const FM1Panel GM1Panels_L_15_Neither_High_nor_Low[] =
 {
-	{ 2775.00f, -1100.00f, 55.00f, 0, 450.0f },
-	{ -1300.00f, -875.00f, 374.92f, 0, 450.0f },
-	{ 748.93f, 605.52f, 55.00f, 0, 300.0f },
-	{ 864.94f, -300.68f, 55.00f, 1, 0.0f },
-	{ -1325.00f, -1300.00f, 374.92f, 1, 0.0f },
+	{ -560.94f, 673.44f, 374.92f, 3, 0.0f, 94 },
+	{ -325.00f, -2700.00f, 55.00f, 3, 0.0f, 124 },
+	{ 2775.00f, -1100.00f, 55.00f, 0, 450.0f, -1 },
+	{ 849.61f, 49.80f, 55.00f, 3, 0.0f, 238 },
+	{ -1300.00f, -875.00f, 374.92f, 0, 450.0f, -1 },
+	{ 748.93f, 605.52f, 55.00f, 0, 300.0f, -1 },
+	{ 864.94f, -300.68f, 55.00f, 1, 0.0f, -1 },
+	{ -1325.00f, -1300.00f, 374.92f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_16_Pfhor_Your_Eyes_Only[] =
 {
-	{ 2280.71f, -1816.89f, 55.00f, 1, 0.0f },
+	{ 2280.71f, -1816.89f, 55.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_17_No_Artificial_Colors[] =
 {
-	{ -450.44f, -1513.18f, 55.00f, 1, 0.0f },
-	{ 450.00f, -1087.50f, 55.00f, 0, 450.0f },
-	{ -2225.00f, -1950.00f, 55.00f, 1, 0.0f },
-	{ 898.24f, 1105.22f, 55.00f, 1, 0.0f },
-	{ -125.00f, 1550.00f, -45.00f, 1, 0.0f },
-	{ 1412.50f, -2362.50f, 55.00f, 1, 0.0f },
+	{ -450.44f, -1513.18f, 55.00f, 1, 0.0f, -1 },
+	{ 2341.41f, -1610.94f, 55.00f, 3, 0.0f, 130 },
+	{ -1350.00f, 25.00f, 55.00f, 3, 0.0f, 62 },
+	{ 450.00f, -1087.50f, 55.00f, 0, 450.0f, -1 },
+	{ -1107.42f, -2518.95f, 55.00f, 3, 0.0f, 75 },
+	{ -2225.00f, -400.00f, -45.00f, 3, 0.0f, 165 },
+	{ -2225.00f, -1950.00f, 55.00f, 1, 0.0f, -1 },
+	{ 898.24f, 1105.22f, 55.00f, 1, 0.0f, -1 },
+	{ -125.00f, 1550.00f, -45.00f, 1, 0.0f, -1 },
+	{ 1412.50f, -2362.50f, 55.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_18_Unpfhorgiven[] =
 {
-	{ 2386.72f, -249.46f, 55.00f, 1, 0.0f },
-	{ 1362.35f, 693.75f, 55.00f, 1, 0.0f },
+	{ 2386.72f, -249.46f, 55.00f, 1, 0.0f, -1 },
+	{ 1362.35f, 693.75f, 55.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_19_Two_Times_Two_Equals[] =
 {
-	{ -852.20f, -190.48f, -145.00f, 1, 0.0f },
+	{ -852.20f, -190.48f, -145.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_20_Beware_of_Low_Flying_Defense_Drones[] =
 {
-	{ 1950.00f, -2000.00f, 55.00f, 0, 150.0f },
-	{ 2425.00f, -1212.50f, 55.00f, 1, 0.0f },
-	{ 1625.00f, 2512.50f, 55.00f, 0, 450.0f },
+	{ 1950.00f, -2000.00f, 55.00f, 0, 150.0f, -1 },
+	{ 2425.00f, -1212.50f, 55.00f, 1, 0.0f, -1 },
+	{ 1627.44f, -889.16f, -4.96f, 3, 0.0f, 244 },
+	{ 1625.00f, 2512.50f, 55.00f, 0, 450.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_21_Eupfhoria[] =
 {
-	{ 1679.30f, 507.32f, 355.00f, 1, 0.0f },
+	{ 1679.30f, 507.32f, 355.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_22_Pfhoraphobia[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_23_Ain_t_Got_Time_Pfhor_This[] =
 {
-	{ 901.17f, -904.88f, 205.00f, 1, 0.0f },
+	{ 901.17f, -904.88f, 205.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_24_Welcome_to_the_Revolution[] =
 {
-	{ 475.00f, 550.00f, 394.94f, 1, 0.0f },
-	{ 1450.00f, -950.00f, 55.00f, 1, 0.0f },
-	{ -1425.00f, -2725.00f, 394.94f, 0, 300.0f },
-	{ 625.00f, -450.00f, 55.00f, 0, 450.0f },
-	{ 1500.00f, -125.00f, 84.98f, 0, 150.0f },
+	{ 475.00f, 550.00f, 394.94f, 1, 0.0f, -1 },
+	{ 1525.00f, -100.00f, 394.94f, 3, 0.0f, 26 },
+	{ 1650.00f, -275.00f, 84.98f, 3, 0.0f, 206 },
+	{ 1450.00f, -950.00f, 55.00f, 1, 0.0f, -1 },
+	{ -50.00f, -2750.00f, 394.94f, 3, 0.0f, 136 },
+	{ -575.00f, -2750.00f, 55.00f, 3, 0.0f, 137 },
+	{ -1425.00f, -2725.00f, 394.94f, 0, 300.0f, -1 },
+	{ 625.00f, -450.00f, 55.00f, 0, 450.0f, -1 },
+	{ 1500.00f, -125.00f, 84.98f, 0, 150.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_25_Try_again[] =
 {
-	{ 1450.29f, 562.16f, 255.00f, 0, 450.0f },
-	{ -615.92f, -875.83f, -24.98f, 0, 450.0f },
-	{ -950.00f, -2950.00f, 55.00f, 0, 300.0f },
-	{ 1669.48f, 917.58f, 55.00f, 1, 0.0f },
+	{ 1450.29f, 562.16f, 255.00f, 0, 450.0f, -1 },
+	{ -615.92f, -875.83f, -24.98f, 0, 450.0f, -1 },
+	{ -950.00f, -2950.00f, 55.00f, 0, 300.0f, -1 },
+	{ 1669.48f, 917.58f, 55.00f, 1, 0.0f, -1 },
 };
 
 static const FM1Panel GM1Panels_L_26_Ingue_Ferroque[] =
 {
-	{ 175.00f, 0.00f, 55.00f, 0, 450.0f },
-	{ -175.00f, 0.00f, 555.00f, 1, 0.0f },
-	{ -75.00f, -1275.00f, 55.00f, 0, 300.0f },
+	{ 175.00f, 0.00f, 55.00f, 0, 450.0f, -1 },
+	{ -175.00f, 0.00f, 555.00f, 1, 0.0f, -1 },
+	{ -525.00f, 0.00f, 555.00f, 3, 0.0f, 14 },
+	{ -525.00f, 75.00f, 55.00f, 3, 0.0f, 144 },
+	{ 525.00f, -75.00f, 555.00f, 3, 0.0f, 145 },
+	{ -75.00f, -1275.00f, 55.00f, 0, 300.0f, -1 },
+	{ 525.00f, 0.00f, 55.00f, 3, 0.0f, 11 },
+	{ 1225.00f, 125.00f, 55.00f, 3, 0.0f, 39 },
+	{ -1225.00f, -125.00f, 555.00f, 3, 0.0f, 40 },
+	{ 250.00f, -2100.00f, 55.00f, 3, 0.0f, 93 },
 };
 
 static const FM1Panel GM1Panels_L_27_Mars_Needs_Women[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_28_Carnage_Palace_Deeee_Luxe[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_29_5_D_space[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_30_Arena[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_31_E_equals_MC_WHAT[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_32_Showered_With_Grenades[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_33_Spiral_Insanity[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_34_Waldo_World_Arena[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_35_What_Goes_Up_Must_Come_Down[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
 };
 
 static const FM1Panel GM1Panels_L_36_You_don_t_need_to_see_my_I_D[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none
+	{ 2075.00f, 1662.50f, 55.00f, 3, 0.0f, 124 },
 };
 
 static const FM1LevelPanels GM1LevelPanelTable[] =
 {
-	{ TEXT("L_00_Arrival"), GM1Panels_L_00_Arrival, 3 },
-	{ TEXT("L_01_Bigger_Guns_Nearby"), GM1Panels_L_01_Bigger_Guns_Nearby, 2 },
-	{ TEXT("L_02_Never_Burn_Money"), GM1Panels_L_02_Never_Burn_Money, 6 },
-	{ TEXT("L_03_Defend_THIS"), GM1Panels_L_03_Defend_THIS, 5 },
-	{ TEXT("L_04_Couch_Fishing"), GM1Panels_L_04_Couch_Fishing, 4 },
-	{ TEXT("L_05_The_Rose"), GM1Panels_L_05_The_Rose, 3 },
-	{ TEXT("L_06_Smells_Like_Napalm_Tastes_Like_Chicken"), GM1Panels_L_06_Smells_Like_Napalm_Tastes_Like_Chicken, 3 },
-	{ TEXT("L_07_Cool_Fusion"), GM1Panels_L_07_Cool_Fusion, 5 },
-	{ TEXT("L_08_G4_Sunbathing"), GM1Panels_L_08_G4_Sunbathing, 7 },
-	{ TEXT("L_09_Blaspheme_Quarantine"), GM1Panels_L_09_Blaspheme_Quarantine, 5 },
-	{ TEXT("L_10_Bob_B_Q"), GM1Panels_L_10_Bob_B_Q, 6 },
-	{ TEXT("L_11_Shake_Before_Using"), GM1Panels_L_11_Shake_Before_Using, 4 },
-	{ TEXT("L_12_Fire_Fire_Fire_Fire_Fire"), GM1Panels_L_12_Fire_Fire_Fire_Fire_Fire, 3 },
-	{ TEXT("L_13_Colony_Ship_For_Sale_Cheap"), GM1Panels_L_13_Colony_Ship_For_Sale_Cheap, 2 },
-	{ TEXT("L_14_Habe_Quiddam"), GM1Panels_L_14_Habe_Quiddam, 4 },
-	{ TEXT("L_15_Neither_High_nor_Low"), GM1Panels_L_15_Neither_High_nor_Low, 5 },
+	{ TEXT("L_00_Arrival"), GM1Panels_L_00_Arrival, 6 },
+	{ TEXT("L_01_Bigger_Guns_Nearby"), GM1Panels_L_01_Bigger_Guns_Nearby, 4 },
+	{ TEXT("L_02_Never_Burn_Money"), GM1Panels_L_02_Never_Burn_Money, 8 },
+	{ TEXT("L_03_Defend_THIS"), GM1Panels_L_03_Defend_THIS, 15 },
+	{ TEXT("L_04_Couch_Fishing"), GM1Panels_L_04_Couch_Fishing, 7 },
+	{ TEXT("L_05_The_Rose"), GM1Panels_L_05_The_Rose, 8 },
+	{ TEXT("L_06_Smells_Like_Napalm_Tastes_Like_Chicken"), GM1Panels_L_06_Smells_Like_Napalm_Tastes_Like_Chicken, 15 },
+	{ TEXT("L_07_Cool_Fusion"), GM1Panels_L_07_Cool_Fusion, 15 },
+	{ TEXT("L_08_G4_Sunbathing"), GM1Panels_L_08_G4_Sunbathing, 21 },
+	{ TEXT("L_09_Blaspheme_Quarantine"), GM1Panels_L_09_Blaspheme_Quarantine, 13 },
+	{ TEXT("L_10_Bob_B_Q"), GM1Panels_L_10_Bob_B_Q, 10 },
+	{ TEXT("L_11_Shake_Before_Using"), GM1Panels_L_11_Shake_Before_Using, 11 },
+	{ TEXT("L_12_Fire_Fire_Fire_Fire_Fire"), GM1Panels_L_12_Fire_Fire_Fire_Fire_Fire, 4 },
+	{ TEXT("L_13_Colony_Ship_For_Sale_Cheap"), GM1Panels_L_13_Colony_Ship_For_Sale_Cheap, 14 },
+	{ TEXT("L_14_Habe_Quiddam"), GM1Panels_L_14_Habe_Quiddam, 10 },
+	{ TEXT("L_15_Neither_High_nor_Low"), GM1Panels_L_15_Neither_High_nor_Low, 8 },
 	{ TEXT("L_16_Pfhor_Your_Eyes_Only"), GM1Panels_L_16_Pfhor_Your_Eyes_Only, 1 },
-	{ TEXT("L_17_No_Artificial_Colors"), GM1Panels_L_17_No_Artificial_Colors, 6 },
+	{ TEXT("L_17_No_Artificial_Colors"), GM1Panels_L_17_No_Artificial_Colors, 10 },
 	{ TEXT("L_18_Unpfhorgiven"), GM1Panels_L_18_Unpfhorgiven, 2 },
 	{ TEXT("L_19_Two_Times_Two_Equals"), GM1Panels_L_19_Two_Times_Two_Equals, 1 },
-	{ TEXT("L_20_Beware_of_Low_Flying_Defense_Drones"), GM1Panels_L_20_Beware_of_Low_Flying_Defense_Drones, 3 },
+	{ TEXT("L_20_Beware_of_Low_Flying_Defense_Drones"), GM1Panels_L_20_Beware_of_Low_Flying_Defense_Drones, 4 },
 	{ TEXT("L_21_Eupfhoria"), GM1Panels_L_21_Eupfhoria, 1 },
 	{ TEXT("L_22_Pfhoraphobia"), GM1Panels_L_22_Pfhoraphobia, 0 },
 	{ TEXT("L_23_Ain_t_Got_Time_Pfhor_This"), GM1Panels_L_23_Ain_t_Got_Time_Pfhor_This, 1 },
-	{ TEXT("L_24_Welcome_to_the_Revolution"), GM1Panels_L_24_Welcome_to_the_Revolution, 5 },
+	{ TEXT("L_24_Welcome_to_the_Revolution"), GM1Panels_L_24_Welcome_to_the_Revolution, 9 },
 	{ TEXT("L_25_Try_again"), GM1Panels_L_25_Try_again, 4 },
-	{ TEXT("L_26_Ingue_Ferroque"), GM1Panels_L_26_Ingue_Ferroque, 3 },
+	{ TEXT("L_26_Ingue_Ferroque"), GM1Panels_L_26_Ingue_Ferroque, 10 },
 	{ TEXT("L_27_Mars_Needs_Women"), GM1Panels_L_27_Mars_Needs_Women, 0 },
 	{ TEXT("L_28_Carnage_Palace_Deeee_Luxe"), GM1Panels_L_28_Carnage_Palace_Deeee_Luxe, 0 },
 	{ TEXT("L_29_5_D_space"), GM1Panels_L_29_5_D_space, 0 },
@@ -314,7 +434,7 @@ static const FM1LevelPanels GM1LevelPanelTable[] =
 	{ TEXT("L_33_Spiral_Insanity"), GM1Panels_L_33_Spiral_Insanity, 0 },
 	{ TEXT("L_34_Waldo_World_Arena"), GM1Panels_L_34_Waldo_World_Arena, 0 },
 	{ TEXT("L_35_What_Goes_Up_Must_Come_Down"), GM1Panels_L_35_What_Goes_Up_Must_Come_Down, 0 },
-	{ TEXT("L_36_You_don_t_need_to_see_my_I_D"), GM1Panels_L_36_You_don_t_need_to_see_my_I_D, 0 },
+	{ TEXT("L_36_You_don_t_need_to_see_my_I_D"), GM1Panels_L_36_You_don_t_need_to_see_my_I_D, 1 },
 };
 
 static const int32 GM1LevelPanelTableCount = UE_ARRAY_COUNT(GM1LevelPanelTable);

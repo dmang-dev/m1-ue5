@@ -30,6 +30,13 @@ public:
 	/** Debug line for the test harness: position + open/closed state. */
 	FString M1DebugString() const;
 
+	/** Open now regardless of proximity (a control switch fired). Auto-closes on
+	 *  the usual dwell afterward. No-op if already open/opening. */
+	void ForceOpen();
+
+	int32 GetPolyIndex() const { return PolyIndex; }
+	int32 GetTag() const { return Tag; }
+
 private:
 	UPROPERTY()
 	UStaticMeshComponent* Panel = nullptr;
@@ -47,6 +54,8 @@ private:
 	float OpenTimer = 0.0f;
 	float ActivateRadius = 170.0f;
 	float VerticalReach = 300.0f;
+	int32 PolyIndex = -1;        // source polygon (platform-switch target)
+	int32 Tag = -1;              // platform tag (tag-switch target)
 
 	bool PlayerNear() const;
 	void PlayDoorSound(USoundBase* Sound) const;

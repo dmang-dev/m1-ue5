@@ -64,8 +64,22 @@ void AM1Platform::InitFromDoor(const FM1Door& Door)
 	ActivateRadius = FMath::Max(Door.SizeX, Door.SizeY) * 0.5f + 170.0f;
 	VerticalReach = 300.0f + Door.SizeZ;
 
+	PolyIndex = Door.PolyIndex;
+	Tag = Door.Tag;
+
 	SetActorLocation(FVector(Door.X, Door.Y, ClosedZ));
 	State = EDoorState::Closed;
+}
+
+void AM1Platform::ForceOpen()
+{
+	if (State == EDoorState::Open || State == EDoorState::Opening)
+	{
+		OpenTimer = 0.0f;  // already open(ing) -> just refresh the hold
+		return;
+	}
+	State = EDoorState::Opening;
+	PlayDoorSound(OpenSound);
 }
 
 bool AM1Platform::PlayerNear() const
@@ -96,8 +110,8 @@ FString AM1Platform::M1DebugString() const
 		State == EDoorState::Opening ? TEXT("OPENING") :
 		State == EDoorState::Open ? TEXT("OPEN") : TEXT("CLOSING");
 	const FVector L = GetActorLocation();
-	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) Z=%.0f closedZ=%.0f openZ=%.0f [%s]"),
-		L.X, L.Y, L.Z, L.Z, ClosedZ, OpenZ, S);
+	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) Z=%.0f closedZ=%.0f openZ=%.0f poly=%d tag=%d [%s]"),
+		L.X, L.Y, L.Z, L.Z, ClosedZ, OpenZ, PolyIndex, Tag, S);
 }
 
 void AM1Platform::Tick(float DeltaSeconds)

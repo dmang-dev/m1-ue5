@@ -54,14 +54,19 @@ def panels_for_level(data):
         if not (s.get("flags", 0) & 0x2):
             continue  # not a control panel
         pt = s.get("panel_type", -1)
+        target = -1
         if pt in SHIELD_CAP:
             kind, cap = 0, SHIELD_CAP[pt]
         elif pt in BUFFER_TYPES:
             kind, cap = 1, 0.0
         elif pt == 0:
             kind, cap = 2, OXY_CAP  # oxygen recharger
+        elif pt == 5:
+            kind, cap, target = 3, 0.0, s.get("panel_perm", -1)  # platform switch: target = polygon_index
+        elif pt == 7:
+            kind, cap, target = 4, 0.0, s.get("panel_perm", -1)  # tag switch: target = tag
         else:
-            continue  # terminal / switch -> handled elsewhere or deferred
+            continue  # terminal / light-switch -> handled elsewhere or deferred
         li = s.get("line_index", -1)
         if not (0 <= li < len(lins)):
             continue
@@ -79,6 +84,7 @@ def panels_for_level(data):
             "z": round(floor * S + PANEL_Z, 2),
             "kind": kind,
             "cap": round(cap, 1),
+            "target": target,
         })
     return out
 
@@ -87,7 +93,7 @@ def main():
     files = sorted(f for f in glob.glob(os.path.join(MAPS, "*.json"))
                    if not f.endswith("manifest.json"))
     levels = []
-    total = chargers = buffers = oxygen = 0
+    total = chargers = buffers = oxygen = switches = 0
     for f in files:
         d = json.load(open(f, encoding="utf-8"))
         stem = safe(os.path.splitext(os.path.basename(f))[0])
@@ -96,6 +102,7 @@ def main():
         chargers += sum(1 for p in panels if p["kind"] == 0)
         buffers += sum(1 for p in panels if p["kind"] == 1)
         oxygen += sum(1 for p in panels if p["kind"] == 2)
+        switches += sum(1 for p in panels if p["kind"] in (3, 4))
         levels.append(("L_" + stem, panels))
 
     lines = [
@@ -108,13 +115,15 @@ def main():
         "#include \"Containers/ArrayView.h\"",
         "",
         "/** One Marathon wall control panel. Kind: 0 = shield charger (refill to",
-        " *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger",
-        " *  (refill suit oxygen to Cap on use). Position in UE cm. */",
+        " *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger,",
+        " *  3 = platform switch (Target = polygon index of the door it opens),",
+        " *  4 = tag switch (Target = tag; opens all doors with it). Position in cm. */",
         "struct FM1Panel",
         "{",
         "\tfloat X, Y, Z;",
         "\tint32 Kind;",
         "\tfloat Cap;",
+        "\tint32 Target;   // switch target (polygon index or tag); -1 otherwise",
         "};",
         "",
         "struct FM1LevelPanels",
@@ -129,10 +138,10 @@ def main():
         lines.append("static const FM1Panel GM1Panels_%s[] =" % level_name)
         lines.append("{")
         for p in panels:
-            lines.append("\t{ %.2ff, %.2ff, %.2ff, %d, %.1ff },"
-                         % (p["x"], p["y"], p["z"], p["kind"], p["cap"]))
+            lines.append("\t{ %.2ff, %.2ff, %.2ff, %d, %.1ff, %d },"
+                         % (p["x"], p["y"], p["z"], p["kind"], p["cap"], p["target"]))
         if not panels:
-            lines.append("\t{ 0.00f, 0.00f, 0.00f, -1, 0.0f },  // none")
+            lines.append("\t{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none")
         lines.append("};")
         lines.append("")
 
@@ -162,8 +171,8 @@ def main():
         fh.write("\n".join(lines))
 
     print("wrote %s" % OUT)
-    print("%d panels across %d levels: %d chargers, %d save buffers, %d oxygen"
-          % (total, len(levels), chargers, buffers, oxygen))
+    print("%d panels across %d levels: %d chargers, %d save buffers, %d oxygen, %d switches"
+          % (total, len(levels), chargers, buffers, oxygen, switches))
 
 
 if __name__ == "__main__":
