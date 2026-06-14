@@ -44,6 +44,12 @@ public:
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
 		AController* EventInstigator, AActor* DamageCauser) override;
 
+	/** Motion-sensor (M1HUD radar) queries. IsAlive: not a corpse. IsActive:
+	 *  awake/chasing -> a strong ping. IsFriendly: a human Bob, not assimilated. */
+	bool IsAlive() const { return State != EM1EnemyState::Dead; }
+	bool IsActive() const { return State == EM1EnemyState::Chase; }
+	bool IsFriendly() const;
+
 private:
 	enum class EM1EnemyState : uint8
 	{

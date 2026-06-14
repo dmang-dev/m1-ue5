@@ -95,6 +95,8 @@ public:
 	UFUNCTION(Exec) void M1Panels();
 	/** Log every spawned per-room LITE light (position, channel, on/off). */
 	UFUNCTION(Exec) void M1Lights();
+	/** Log monsters within motion-sensor range (the HUD radar's data source). */
+	UFUNCTION(Exec) void M1Radar();
 	/** Log the level's terminals (index, id, pages, whether it's the exit). */
 	UFUNCTION(Exec) void M1Terms();
 	/** Teleport the player to a world location; optional Yaw aims the view. */

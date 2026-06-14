@@ -44,6 +44,11 @@ private:
 	void DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
 		float BezelX, float BezelY, float Scale);
 
+	/** Marathon motion sensor: the bezel's bottom-left oval. Plots nearby monsters
+	 *  as blips, player-centered + rotated so the view forward is up; hostile = red,
+	 *  friendly = amber; active (chasing) blips are brighter/larger. */
+	void DrawMotionSensor(AM1Character* Player, float BezelX, float BezelY, float Scale);
+
 	/** Bezel texture loader (/Game/UI/HUD/T_hud_bezel), cached. */
 	UTexture2D* GetBezelTexture();
 

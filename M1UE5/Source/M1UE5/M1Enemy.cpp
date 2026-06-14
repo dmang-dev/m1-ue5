@@ -36,6 +36,18 @@ const FM1MonsterRow* AM1Enemy::FindRow(int32 MonsterType)
 	return M1FindMonster(MonsterType);
 }
 
+bool AM1Enemy::IsFriendly() const
+{
+	// Human "Bobs" are friendly; an assimilated civilian is hostile. The monster
+	// row name carries the M1 class ("Civilian (Crew)", "Civilian (Assimilated)").
+	if (!Row || !Row->Name)
+	{
+		return false;
+	}
+	const FString Name(Row->Name);
+	return Name.Contains(TEXT("Civilian")) && !Name.Contains(TEXT("Assimilated"));
+}
+
 AM1Enemy::AM1Enemy()
 {
 	PrimaryActorTick.bCanEverTick = true;

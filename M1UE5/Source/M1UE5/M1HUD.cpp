@@ -2,6 +2,7 @@
 
 #include "M1Character.h"
 #include "M1WeaponComponent.h"
+#include "M1Enemy.h"
 #include "M1WeaponSpriteTable.h"
 #include "M1HudTable.h"
 #include "Engine/Canvas.h"
@@ -10,6 +11,8 @@
 #include "Engine/Texture2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Controller.h"
 
 namespace
 {
@@ -133,6 +136,81 @@ void AM1HUD::DrawFramedBezel(AM1Character* Player, UM1WeaponComponent* Weapon,
 	DrawRect(Reticle, CX - 7.0f, CY - 1.0f, 14.0f, 2.0f);
 
 	DrawReadouts(Player, Weapon, BX, BY, Scale);
+	DrawMotionSensor(Player, BX, BY, Scale);
+}
+
+void AM1HUD::DrawMotionSensor(AM1Character* Player, float BX, float BY, float Scale)
+{
+	UWorld* W = GetWorld();
+	if (!W || !Player)
+	{
+		return;
+	}
+
+	// The bezel's bottom-left oval (PICT-128 art) is the empty sensor housing.
+	// Center + radius measured off the 640x480 bezel; sized to tuck inside the dark
+	// oval so blips/grid don't spill onto the silver frame.
+	const float Cx = BX + 72.0f * Scale;
+	const float Cy = BY + 350.0f * Scale;
+	const float R = 44.0f * Scale;
+	const float RangeCm = 5000.0f;   // sensor reach; the oval edge = this distance
+
+	const FLinearColor Grid(0.12f, 0.85f, 0.35f, 0.45f);  // Marathon sensor green
+
+	// Concentric rings + crosshair (24-segment polylines).
+	for (float rr : {R, R * 0.66f, R * 0.33f})
+	{
+		const int32 Seg = 24;
+		float px = Cx + rr, py = Cy;
+		for (int32 i = 1; i <= Seg; ++i)
+		{
+			const float a = (2.0f * PI * i) / Seg;
+			const float nx = Cx + rr * FMath::Cos(a);
+			const float ny = Cy + rr * FMath::Sin(a);
+			DrawLine(px, py, nx, ny, Grid, 1.0f);
+			px = nx; py = ny;
+		}
+	}
+	DrawLine(Cx - R, Cy, Cx + R, Cy, Grid, 1.0f);
+	DrawLine(Cx, Cy - R, Cx, Cy + R, Grid, 1.0f);
+
+	// View basis: forward = up on the sensor, right = +x.
+	const FRotator ViewRot(0.0f, Player->GetControlRotation().Yaw, 0.0f);
+	const FVector Fwd = ViewRot.Vector();
+	const FVector Right = FRotationMatrix(ViewRot).GetScaledAxis(EAxis::Y);
+	const FVector P = Player->GetActorLocation();
+
+	for (TActorIterator<AM1Enemy> It(W); It; ++It)
+	{
+		AM1Enemy* E = *It;
+		if (!E || !E->IsAlive())
+		{
+			continue;  // corpses don't ping
+		}
+		FVector D = E->GetActorLocation() - P;
+		D.Z = 0.0f;
+		const float DistSq = D.SizeSquared2D();
+		if (DistSq > RangeCm * RangeCm)
+		{
+			continue;
+		}
+		const float RelFwd = FVector::DotProduct(D, Fwd);
+		const float RelRight = FVector::DotProduct(D, Right);
+		const float Bx = Cx + (RelRight / RangeCm) * R;
+		const float By = Cy - (RelFwd / RangeCm) * R;   // forward -> up
+
+		const bool bActive = E->IsActive();
+		FLinearColor Col = E->IsFriendly()
+			? FLinearColor(1.0f, 0.72f, 0.12f, 1.0f)    // friendly Bob = amber
+			: FLinearColor(1.0f, 0.18f, 0.12f, 1.0f);   // hostile Pfhor = red
+		Col.A = bActive ? 1.0f : 0.55f;                 // dim until it's moving/aware
+		const float Sz = (bActive ? 3.5f : 2.5f) * Scale;
+		DrawRect(Col, Bx - Sz * 0.5f, By - Sz * 0.5f, Sz, Sz);
+	}
+
+	// Player ping at center.
+	DrawRect(FLinearColor(0.4f, 1.0f, 0.55f, 1.0f), Cx - 1.5f * Scale, Cy - 1.5f * Scale,
+		3.0f * Scale, 3.0f * Scale);
 }
 
 void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,

@@ -616,6 +616,28 @@ void AM1Character::M1Lights()
 	UE_LOG(LogTemp, Warning, TEXT("[M1Lights] total %d (on %d)"), i, on);
 }
 
+void AM1Character::M1Radar()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const float RangeCm = 5000.0f;
+	const FVector P = GetActorLocation();
+	int32 Total = 0, Active = 0, Friendly = 0;
+	for (TActorIterator<AM1Enemy> It(W); It; ++It)
+	{
+		AM1Enemy* E = *It;
+		if (!E || !E->IsAlive()) { continue; }
+		FVector D = E->GetActorLocation() - P;
+		D.Z = 0.0f;
+		if (D.SizeSquared() > RangeCm * RangeCm) { continue; }
+		++Total;
+		if (E->IsActive()) { ++Active; }
+		if (E->IsFriendly()) { ++Friendly; }
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Radar] within %.0fcm: %d blips (%d active, %d friendly)"),
+		RangeCm, Total, Active, Friendly);
+}
+
 void AM1Character::M1Terms()
 {
 	UWorld* W = GetWorld();
