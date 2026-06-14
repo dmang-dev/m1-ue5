@@ -377,23 +377,42 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    phrase) — needs Marathon walkthrough knowledge per level; manual research.
 5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already
    play open/close one-shots that cover their motion.
-6. **Per-room lighting (LITE point lights) — SYSTEM DONE; full rollout pending an
-   art-direction call.** `gen_light_assets.py` turns the `LITE` chunk into per-room
-   point lights (union-find connected same-`floor_light` polys via `adjacent_polys`
-   → one `AM1Light` per region at the centroid; ~77/level). `AM1GameMode::SpawnLights`
-   spawns them movable+unshadowed and, when present, runtime-dims the baked global
-   DL/SkyLight and spawns an exposure-softening PPV so the room-by-room mood reads.
-   **Light switches now work** — Kind-5 panels toggle every light on their LITE
-   channel; harness-verified on L_01 (65/65 spawn; switch target=7 flips its 3
-   lights on→off). `M1Lights` Exec lists spawned lights. **Visible only under
-   lit/hybrid materials.** **ROLLED OUT to all 37 levels:** full hybrid rebake
-   (`M1_MATMODE=hybrid`, now the **default** in `ue5_headless_build.py`) + full
-   recook into `Build\Windows` via the `-skipbuild` path (no .NET needed). Shipped
-   build is now LIT (was flat-emissive). Verified: L_00 (106/106 lights) + L_06
-   (157/157) `M1SelfTest` PASS; doors/elevators load the hybrid material lib (prefer
-   `/Game/Materials_hybrid`, fall back to emissive). v1 tune: `kIntensityScale=1700`
-   (kept modest — dense levels stack 100+ overlapping fill lights), DL/SkyLight
-   runtime-dimmed to 0.35/0.5, exposure softened (range 0.5–2.0, bias −0.75).
-   REMAINING (fine-tuning, best with a human eye in-game): per-level brightness
-   feel on the densest levels; ceiling-only lights (`ceiling_light` ≠ `floor_light`,
-   ~20% of polys); animated `type`!=0 lights (flicker/strobe via period/phase).
+6. **Marathon lighting — DONE via PER-SURFACE brightness (all 37, shipped).** The
+   point-light approach (`AM1Light` + dimmed directional/fill) was abandoned: it
+   made hotspots AND black gaps (the user saw "too bright" + "black corridors" at
+   once), which no tuning fixes. Marathon lights each *surface* flat at its LITE
+   level (Doom sector lighting), so that's what we bake now:
+   `scen_to_obj.py` writes each floor/ceiling/wall material as `tex_C_S_b<pct>`
+   (from POLY `floor_light`/`ceiling_light`; walls use the poly's floor_light),
+   curve 0→35%, 1.0→100%; `ue5_headless_build.py` emissive mode scales the emissive
+   by `<pct>` (screens/coll-8 stay full so CRTs glow). Structurally can't wash out
+   (emissive ≤ texture) or go pure black (≥35%), needs zero dynamic lights.
+   `AM1GameMode::SpawnLights` now only locks **manual exposure** (no eye-adaptation
+   to undo the baked mood). Doors/elevators load the bucketed material matching
+   their room (`FM1Door/FM1Elevator.TexBucket`). Rolled out: regen all 37 OBJs →
+   full emissive rebake (881 materials) → recook into `Build\Windows`. Verified:
+   L_00 + L_06 `M1SelfTest` PASS, start rooms moody+readable, dim rooms dim-not-black.
+   `AM1Light`/`M1LightTable`/`gen_light_assets.py` are RETAINED (unused) for a future
+   MPC-based switchable-light system. REMAINING (Phase 2): functional light switches
+   (per-LITE-channel brightness via a Material Parameter Collection so Kind-5 toggles
+   work again — currently cosmetic); animated `type`!=0 lights (flicker/strobe);
+   ceiling-only lights (`ceiling_light` ≠ `floor_light`, ~20% of polys).
+7. **Motion sensor / radar — DONE (Phase 1).** `AM1HUD::DrawMotionSensor` fills the
+   bezel's bottom-left oval: green grid (3 rings + crosshair) + monster blips,
+   player-centered and rotated so view-forward is up; red Pfhor / amber Bobs,
+   brighter when active; green player ping. `AM1Enemy::IsAlive/IsActive/IsFriendly`
+   feed it; `M1Radar` Exec logs in-range counts. Range 5000 cm.
+
+## 11. Finish roadmap (4 phases, agreed)
+
+1. **HUD & feel** — motion sensor ✅; remaining: bezel-native ammo/weapon readout,
+   movement-feel pass.
+2. **Lighting interactivity** — functional light switches (MPC), animated lights,
+   ceiling-only lights.
+3. **Fidelity polish** — per-level exit-terminal curation; platform-move SFX; O2
+   checkpoint persistence; scorch decals (GUI material); enemy-AI depth; media/liquid
+   damage; ambient poly sounds.
+4. **Distribution & release** — implement the runtime-loading architecture
+   (`docs/INSTALLER_DESIGN.md`) so the game runs from converted intermediates with no
+   UE/cook; Inno installer + Asset Setup wizard; begin original-art replacement
+   (license requirement before public release).
