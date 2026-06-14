@@ -75,25 +75,41 @@ void AM1GameMode::SpawnLights()
 	// Done at runtime so no geometry rebake is needed to retune the ambient.
 	if (Spawned > 0)
 	{
+		// Directional key, dimmed. (A SkyLight is near-useless here -- it captures the
+		// surrounding scene, and enclosed Marathon levels have no sky, so its
+		// intensity barely registers. Use directional fill for the ambient floor.)
 		for (TActorIterator<ADirectionalLight> It(World); It; ++It)
 		{
 			if (ULightComponent* C = (*It)->GetLightComponent())
 			{
-				C->SetIntensity(0.35f);
+				C->SetIntensity(0.50f);
 			}
 		}
 		for (TActorIterator<ASkyLight> It(World); It; ++It)
 		{
 			if (USkyLightComponent* C = (*It)->GetLightComponent())
 			{
-				C->SetIntensity(0.5f);
+				C->SetIntensity(0.30f);
+			}
+		}
+		// Fill directional light from a different angle so surfaces facing away from
+		// the key still get a navigable floor of light (unlit corridors weren't lit
+		// by the per-room points alone -> near-black). Low intensity keeps mood.
+		if (ADirectionalLight* Fill = World->SpawnActor<ADirectionalLight>(
+				ADirectionalLight::StaticClass(),
+				FVector(0, 0, 1500), FRotator(-30.0f, 210.0f, 0.0f)))
+		{
+			if (ULightComponent* C = Fill->GetLightComponent())
+			{
+				C->SetIntensity(0.40f);
+				C->SetCastShadows(false);
 			}
 		}
 
-		// Soften eye-adaptation so it doesn't fully erase the per-room mood: spawn an
-		// unbound PostProcessVolume that narrows the auto-exposure range (instead of a
-		// hard lock, which over-brightens dim scenes to white) and biases slightly
-		// dark. Tunable at runtime -- no geometry rebake needed.
+		// Use MANUAL exposure (no eye-adaptation): auto-exposure was normalizing
+		// brightness back up and erasing the per-room mood no matter how the lights
+		// were dimmed. Manual + a fixed bias makes the light levels directly control
+		// how bright the scene reads. Tunable at runtime -- no geometry rebake.
 		bool bHasPPV = false;
 		for (TActorIterator<APostProcessVolume> It(World); It; ++It)
 		{
@@ -107,12 +123,12 @@ void AM1GameMode::SpawnLights()
 			{
 				PPV->bUnbound = true;
 				FPostProcessSettings& S = PPV->Settings;
-				S.bOverride_AutoExposureMinBrightness = true;
-				S.AutoExposureMinBrightness = 0.5f;
-				S.bOverride_AutoExposureMaxBrightness = true;
-				S.AutoExposureMaxBrightness = 2.0f;
+				S.bOverride_AutoExposureMethod = true;
+				S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+				S.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+				S.AutoExposureApplyPhysicalCameraExposure = 0;
 				S.bOverride_AutoExposureBias = true;
-				S.AutoExposureBias = -0.75f;
+				S.AutoExposureBias = 0.0f;  // manual EV; raise=brighter, lower=darker
 			}
 		}
 	}
