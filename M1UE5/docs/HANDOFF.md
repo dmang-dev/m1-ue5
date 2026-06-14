@@ -377,8 +377,20 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    phrase) — needs Marathon walkthrough knowledge per level; manual research.
 5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already
    play open/close one-shots that cover their motion.
-6. **Per-room lighting (LITE point lights)** — the build lights every level with a
-   single global DirectionalLight. Importing the `LITE` chunk as per-polygon
-   PointLights (intensity/period/mode) would restore Marathon's room-by-room mood
-   AND give the Kind-5 light switches something real to toggle. Prerequisite for
-   functional light switches.
+6. **Per-room lighting (LITE point lights) — SYSTEM DONE; full rollout pending an
+   art-direction call.** `gen_light_assets.py` turns the `LITE` chunk into per-room
+   point lights (union-find connected same-`floor_light` polys via `adjacent_polys`
+   → one `AM1Light` per region at the centroid; ~77/level). `AM1GameMode::SpawnLights`
+   spawns them movable+unshadowed and, when present, runtime-dims the baked global
+   DL/SkyLight and spawns an exposure-softening PPV so the room-by-room mood reads.
+   **Light switches now work** — Kind-5 panels toggle every light on their LITE
+   channel; harness-verified on L_01 (65/65 spawn; switch target=7 flips its 3
+   lights on→off). `M1Lights` Exec lists spawned lights. **Visible only under
+   lit/hybrid materials** — validated on a hybrid rebake of Arrival (106/106 lights,
+   tonal depth, runs via the `-skipbuild` cook path). REMAINING: (a) the
+   **art-direction decision** — convert all 37 levels from the current flat-emissive
+   look to moody hybrid-lit?; (b) if yes, the **full 37-level hybrid rebake + recook**
+   and a **lighting tune pass** (`AM1Light::kIntensityScale`, DL-dim, exposure bias)
+   best done with a human eye; (c) optional follow-ups: ceiling-only lights
+   (`ceiling_light` ≠ `floor_light`, ~20% of polys) and animated `type`!=0 lights
+   (flicker/strobe via period/phase).
