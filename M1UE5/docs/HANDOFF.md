@@ -358,13 +358,14 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    verified via the §9b harness). Optional refinement: make switch-targeted doors
    switch-*only* (disable proximity) where the M1 `plat` flags say so — needs
    playtest to avoid soft-locks.
-3. **Ride-on elevators** — DONE v1 (`AM1Elevator`, runtime slab). **Closed-door
-   geometry rebake — DONE**: `scen_to_obj.py` now re-opens the 11 closed platform
-   polygons (L00/L01/L07) to the neighbour floor/ceiling so they're walkable
-   passages (were holes); re-imported + cooked + harness-verified (teleport onto
-   L07's old poly2/poly8 → player lands at z=34 on a floor, no fall-through). The
-   faithful elevator (drop the baked static floor → movable mesh) is the remaining
-   geometry refinement.
+3. **Geometry pipeline — DONE.** Closed-door rebake (11 polys reopened to walkable
+   passages) + **faithful elevators** (`scen_to_obj.py` drops the baked floor for
+   elevator polys so the `AM1Elevator` slab IS the floor; drop ⟺ slab via the
+   shared detection). Regenerated all 37 OBJs → re-imported (37/37, 0 errors) →
+   cooked. **Full 37-level `M1SelfTest` sweep: 37/37 PASS** (every level grounded,
+   weapon + exit-terminal present, all systems spawned, no holes). Remaining
+   geometry niceties: door/elevator **textures** (plain boxes) + **light-switch**
+   (type 4; no lights yet).
 4. **Per-level exit-terminal curation** (~14 levels with no teleport-action
    phrase) — needs Marathon walkthrough knowledge per level; manual research.
 5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already
