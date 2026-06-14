@@ -175,6 +175,18 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
                 if of is not None and oc is not None and oc > of:
                     closed_open[pi] = (of, oc)
 
+    # Ride-on elevator polygons get their floor as a MOVABLE mesh (AM1Elevator at
+    # runtime), so we must NOT bake a static floor for them -- the slab IS the
+    # floor. Use the SAME detection as the elevator table so every dropped floor
+    # has a matching slab (drop ⟺ slab, no holes). Ceiling + walls stay baked.
+    elev_polys: set = set()
+    if poly_subset is None:
+        try:
+            import gen_platform_assets as _gp
+            elev_polys = {e["poly"] for e in _gp.elevators_for_level(data)}
+        except Exception:
+            elev_polys = set()
+
     # ---- Floors + ceilings -------------------------------------------------
     for idx, poly in enumerate(polys):
         n = poly["vertex_count"]
@@ -188,16 +200,17 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
         cz = ch * S
         ring2d = [(px(e), py(e)) for e in eids]
         ccw = _signed_area(ring2d) > 0
-        fmat = mat_for(poly["floor_shape"])
         cmat = mat_for(poly["ceiling_shape"])
-
-        floor_ids = [obj.vert(px(e), py(e), fz, *uv_e(e)) for e in eids]
-        ceil_ids = [obj.vert(px(e), py(e), cz, *uv_e(e)) for e in eids]
-
-        # Fan-triangulate (Marathon polygons are convex). Floor normal up (+Z).
         order = list(range(n)) if ccw else list(range(n - 1, -1, -1))
-        for i in range(1, n - 1):
-            obj.tri(floor_ids[order[0]], floor_ids[order[i]], floor_ids[order[i + 1]], fmat)
+
+        # Floor: skipped for elevator polys (the movable slab provides it).
+        if idx not in elev_polys:
+            fmat = mat_for(poly["floor_shape"])
+            floor_ids = [obj.vert(px(e), py(e), fz, *uv_e(e)) for e in eids]
+            for i in range(1, n - 1):  # fan-triangulate; floor normal up (+Z)
+                obj.tri(floor_ids[order[0]], floor_ids[order[i]], floor_ids[order[i + 1]], fmat)
+
+        ceil_ids = [obj.vert(px(e), py(e), cz, *uv_e(e)) for e in eids]
         rorder = order[::-1]
         for i in range(1, n - 1):
             obj.tri(ceil_ids[rorder[0]], ceil_ids[rorder[i]], ceil_ids[rorder[i + 1]], cmat)
