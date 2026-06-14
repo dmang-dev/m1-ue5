@@ -44,97 +44,36 @@ void AM1GameMode::BeginPlay()
 
 void AM1GameMode::SpawnLights()
 {
+	// Marathon lighting is now baked PER-SURFACE: scen_to_obj writes each surface's
+	// LITE brightness into its emissive material (tex_C_S_b<pct>), so the world is
+	// lit room-by-room with NO dynamic lights -- no hotspots, no black gaps, never
+	// brighter than the texture. All we do here is lock exposure to MANUAL so eye-
+	// adaptation can't re-normalise brightness and wash the baked mood back out.
+	// (The old per-room point-light path -- AM1Light + dimmed directional/fill --
+	// produced hotspots + black gaps and is retired; AM1Light/M1LightTable remain
+	// for a future MPC-based switchable-light system.)
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
 	}
-	const FString MapName = World->GetMapName();
-	const TArrayView<const FM1Light> Lights = M1LightsForLevel(MapName);
 
-	int32 Spawned = 0;
-	for (const FM1Light& L : Lights)
+	for (TActorIterator<APostProcessVolume> It(World); It; ++It)
 	{
-		if (L.LiteIndex < 0)
-		{
-			continue;  // sentinel (level has no lights)
-		}
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AM1Light* Light = World->SpawnActor<AM1Light>(
-			AM1Light::StaticClass(), FVector(L.X, L.Y, L.Z), FRotator::ZeroRotator, Params);
-		if (Light)
-		{
-			Light->InitFromLight(L);
-			++Spawned;
-		}
+		return;  // a PPV already present -> respect it
 	}
-
-	// With per-room lights present, knock the baked global key/fill way down so the
-	// level reads room-by-room (Marathon mood) instead of a flat directional wash.
-	// Done at runtime so no geometry rebake is needed to retune the ambient.
-	if (Spawned > 0)
+	if (APostProcessVolume* PPV = World->SpawnActor<APostProcessVolume>(
+			APostProcessVolume::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator))
 	{
-		// Directional key, dimmed. (A SkyLight is near-useless here -- it captures the
-		// surrounding scene, and enclosed Marathon levels have no sky, so its
-		// intensity barely registers. Use directional fill for the ambient floor.)
-		for (TActorIterator<ADirectionalLight> It(World); It; ++It)
-		{
-			if (ULightComponent* C = (*It)->GetLightComponent())
-			{
-				C->SetIntensity(0.50f);
-			}
-		}
-		for (TActorIterator<ASkyLight> It(World); It; ++It)
-		{
-			if (USkyLightComponent* C = (*It)->GetLightComponent())
-			{
-				C->SetIntensity(0.30f);
-			}
-		}
-		// Fill directional light from a different angle so surfaces facing away from
-		// the key still get a navigable floor of light (unlit corridors weren't lit
-		// by the per-room points alone -> near-black). Low intensity keeps mood.
-		if (ADirectionalLight* Fill = World->SpawnActor<ADirectionalLight>(
-				ADirectionalLight::StaticClass(),
-				FVector(0, 0, 1500), FRotator(-30.0f, 210.0f, 0.0f)))
-		{
-			if (ULightComponent* C = Fill->GetLightComponent())
-			{
-				C->SetIntensity(0.40f);
-				C->SetCastShadows(false);
-			}
-		}
-
-		// Use MANUAL exposure (no eye-adaptation): auto-exposure was normalizing
-		// brightness back up and erasing the per-room mood no matter how the lights
-		// were dimmed. Manual + a fixed bias makes the light levels directly control
-		// how bright the scene reads. Tunable at runtime -- no geometry rebake.
-		bool bHasPPV = false;
-		for (TActorIterator<APostProcessVolume> It(World); It; ++It)
-		{
-			bHasPPV = true;
-			break;
-		}
-		if (!bHasPPV)
-		{
-			if (APostProcessVolume* PPV = World->SpawnActor<APostProcessVolume>(
-					APostProcessVolume::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator))
-			{
-				PPV->bUnbound = true;
-				FPostProcessSettings& S = PPV->Settings;
-				S.bOverride_AutoExposureMethod = true;
-				S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
-				S.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
-				S.AutoExposureApplyPhysicalCameraExposure = 0;
-				S.bOverride_AutoExposureBias = true;
-				S.AutoExposureBias = 0.0f;  // manual EV; raise=brighter, lower=darker
-			}
-		}
+		PPV->bUnbound = true;
+		FPostProcessSettings& S = PPV->Settings;
+		S.bOverride_AutoExposureMethod = true;
+		S.AutoExposureMethod = EAutoExposureMethod::AEM_Manual;
+		S.bOverride_AutoExposureApplyPhysicalCameraExposure = true;
+		S.AutoExposureApplyPhysicalCameraExposure = 0;
+		S.bOverride_AutoExposureBias = true;
+		S.AutoExposureBias = 0.0f;  // manual EV; raise = brighter, lower = darker
 	}
-
-	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d lights for %s"),
-		Spawned, Lights.Num(), *MapName);
 }
 
 void AM1GameMode::PlayLevelMusic()

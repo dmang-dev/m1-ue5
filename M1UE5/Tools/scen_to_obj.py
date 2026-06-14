@@ -129,8 +129,30 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
 
     # Marathon tiles a 128px texture once per World-Unit (1024 internal units),
     # so UV = marathon_units / 1024.  Texture PNGs live in ../Shapes/Coll_NN/.
-    def mat_for(descriptor: int) -> str:
-        """Register + return a material name for a packed shape_descriptor."""
+    # Per-surface Marathon lighting: each surface carries the brightness of its
+    # LITE channel (POLY.floor_light / ceiling_light), baked into the material name
+    # as tex_C_S_b<pct>. The importer scales that material's emissive by pct/100, so
+    # every wall/floor reads at its authored brightness -- room-by-room mood with NO
+    # dynamic lights (so no hotspots, no black gaps, and never brighter than the
+    # texture). Floored at 20% so the dimmest rooms stay navigable, not pure black.
+    lite = data.get("LITE") or []
+
+    def light_pct(idx) -> int:
+        on = 1.0
+        if idx is not None and 0 <= idx < len(lite):
+            L = lite[idx]
+            on = L.get("max_intensity") or L.get("intensity") or 0.0
+        on = max(0.0, min(1.0, on))
+        # Lift the dark end off pure-black (filmic tonemapping crushes low emissive)
+        # while keeping bright rooms at full texture color: 0 -> 35%, 1.0 -> 100%.
+        disp = 0.35 + 0.65 * on
+        return int(round(disp * 10) * 10)   # 10% steps -> bounded material count
+
+    _wall_light = None  # set per-polygon in the wall loop; read by emit_wall
+
+    def mat_for(descriptor: int, light_idx=None) -> str:
+        """Register + return a material name for a packed shape_descriptor, with the
+        surface's LITE brightness baked in as a _b<pct> suffix."""
         if flat:
             obj.material("flat", None)   # one material, no textures (geometry-only test level)
             return "flat"
@@ -139,7 +161,10 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
             return "default"
         coll = (descriptor >> 8) & 0x1F
         shape = descriptor & 0xFF
-        name = f"tex_{coll}_{shape}"
+        if light_idx is None:
+            name = f"tex_{coll}_{shape}"
+        else:
+            name = f"tex_{coll}_{shape}_b{light_pct(light_idx)}"
         obj.material(name, f"../Shapes/Coll_{coll:02d}/bitmaps/{shape:03d}.png")
         return name
 
@@ -200,12 +225,12 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
         cz = ch * S
         ring2d = [(px(e), py(e)) for e in eids]
         ccw = _signed_area(ring2d) > 0
-        cmat = mat_for(poly["ceiling_shape"])
+        cmat = mat_for(poly["ceiling_shape"], poly.get("ceiling_light"))
         order = list(range(n)) if ccw else list(range(n - 1, -1, -1))
 
         # Floor: skipped for elevator polys (the movable slab provides it).
         if idx not in elev_polys:
-            fmat = mat_for(poly["floor_shape"])
+            fmat = mat_for(poly["floor_shape"], poly.get("floor_light"))
             floor_ids = [obj.vert(px(e), py(e), fz, *uv_e(e)) for e in eids]
             for i in range(1, n - 1):  # fan-triangulate; floor normal up (+Z)
                 obj.tri(floor_ids[order[0]], floor_ids[order[i]], floor_ids[order[i + 1]], fmat)
@@ -230,7 +255,7 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
         shape = texdef.get("shape", 0xFFFF)
         if shape == 0xFFFF or h1_i - h0_i <= 0.5:
             return
-        mat = mat_for(shape)
+        mat = mat_for(shape, _wall_light)   # wall lit by its polygon's floor_light
         x0 = texdef.get("x", 0) % 1024
         y0 = texdef.get("y", 0) % 1024
         u0 = x0 / 1024.0
@@ -250,6 +275,7 @@ def convert(level: dict, scale_cm_per_wu: float = 100.0, flip_y: bool = True,
         n = poly["vertex_count"]
         if n < 3:
             continue
+        _wall_light = poly.get("floor_light")   # emit_wall reads this via closure
         eids = poly["endpoints"][:n]
         sides_i = (poly.get("sides") or [])[:n]
         lines_i = (poly.get("lines") or [])[:n]

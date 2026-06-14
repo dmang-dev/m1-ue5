@@ -71,20 +71,14 @@ void AM1Platform::InitFromDoor(const FM1Door& Door)
 	// shape) from the shared material library, instead of the plain grey box.
 	if (Door.TexColl >= 0 && Door.TexShape >= 0)
 	{
-		// Prefer the lit/hybrid material so the door matches lit sector walls;
-		// fall back to the emissive library on flat-lit builds.
-		const FString Hybrid = FString::Printf(
-			TEXT("/Game/Materials_hybrid/tex_%d_%d.tex_%d_%d"),
-			Door.TexColl, Door.TexShape, Door.TexColl, Door.TexShape);
-		UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Hybrid);
-		if (!M)
-		{
-			const FString Emissive = FString::Printf(
-				TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
-				Door.TexColl, Door.TexShape, Door.TexColl, Door.TexShape);
-			M = LoadObject<UMaterialInterface>(nullptr, *Emissive);
-		}
-		if (M)
+		// Per-surface emissive: load the brightness-bucketed material matching the
+		// door's room (tex_<coll>_<shape>_b<bucket>) so it isn't a full-bright box
+		// among dim sector walls. TexBucket comes from the door poly's floor_light.
+		const FString Path = FString::Printf(
+			TEXT("/Game/Materials/tex_%d_%d_b%d.tex_%d_%d_b%d"),
+			Door.TexColl, Door.TexShape, Door.TexBucket,
+			Door.TexColl, Door.TexShape, Door.TexBucket);
+		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path))
 		{
 			Panel->SetMaterial(0, M);
 		}

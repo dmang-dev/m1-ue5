@@ -31,15 +31,16 @@ GEO = os.path.join(REPO, "Reference", "Geometry")
 RESULT = os.path.join(GEO, "ue5_build_result.json")
 
 # Terminal look-test knobs:
-#   M1_MATMODE = hybrid(default) / lit / emissive  -> material treatment
-#     hybrid: walls/floors are DEFAULT_LIT (respond to the per-room LITE lights,
-#     AM1GameMode::SpawnLights), terminal/screen collections stay unlit/emissive so
-#     CRTs always glow. This is the shipped look. emissive = flat full-bright (no
-#     lighting); use only for geometry inspection.
+#   M1_MATMODE = emissive(default) / lit / hybrid  -> material treatment
+#     emissive (shipped look): UNLIT, but scen_to_obj bakes each surface's LITE
+#     brightness into the material name (tex_C_S_b<pct>) and _make_material scales
+#     the emissive by it -> per-surface Marathon lighting (room-by-room mood) with
+#     NO dynamic lights, so no hotspots, no black gaps, never brighter than texture.
+#     lit/hybrid: DEFAULT_LIT, rely on dynamic lights (legacy; prone to washout).
 #   M1_CRISP   = textures imported uncompressed + no mipmaps (crisp pixel art)
 #   M1_FIXEXP  = drop a PostProcessVolume that locks auto-exposure (eye adaptation)
 # CRISP gets its own texture+material folders so it doesn't share assets.
-MATMODE = os.environ.get("M1_MATMODE", "hybrid")
+MATMODE = os.environ.get("M1_MATMODE", "emissive")
 CRISP = bool(os.environ.get("M1_CRISP"))
 FIXEXP = bool(os.environ.get("M1_FIXEXP"))
 _csfx = "_crisp" if CRISP else ""
@@ -148,6 +149,14 @@ def _make_material(name, tex, dest):
         coll = int(m.group(1))
     is_screen = (coll == 8)
     use_lit = (MATMODE == "lit") or (MATMODE == "hybrid" and not is_screen)
+    # Per-surface Marathon brightness: scen_to_obj bakes the surface's LITE level
+    # into the name as _b<pct>. In emissive mode we scale the emissive by it, so each
+    # surface reads at its room's authored brightness (no dynamic lights). Screens
+    # (coll 8) ignore it -- CRTs always glow full.
+    bm = re.search(r"_b(\d+)$", name)
+    bucket = (int(bm.group(1)) / 100.0) if bm else 1.0
+    if is_screen:
+        bucket = 1.0
     mat.set_editor_property("shading_model",
                             unreal.MaterialShadingModel.MSM_DEFAULT_LIT if use_lit
                             else unreal.MaterialShadingModel.MSM_UNLIT)
@@ -164,6 +173,13 @@ def _make_material(name, tex, dest):
                 mul.set_editor_property("const_b", 0.5)
                 mel.connect_material_expressions(node, "RGB", mul, "A")
                 mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+        elif bucket < 0.999:
+            # emissive scaled by the surface's LITE brightness
+            mul = mel.create_material_expression(
+                mat, unreal.MaterialExpressionMultiply, -140, 0)
+            mul.set_editor_property("const_b", bucket)
+            mel.connect_material_expressions(node, "RGB", mul, "A")
+            mel.connect_material_property(mul, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
         else:
             mel.connect_material_property(node, "RGB", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     else:
@@ -179,20 +195,24 @@ def _make_material(name, tex, dest):
 
 
 def _build_shared_library():
-    """Import every referenced bitmap once and wrap each in a shared material."""
+    """Import every referenced bitmap once and wrap each in a shared material.
+    Per-surface brightness means one texture (tex_C_S) backs many material variants
+    (tex_C_S_b30, _b70, ...); import each PNG only once and reuse it across variants."""
     mats = _scan_materials()
     lib = {}
-    tex_count = 0
+    tex_cache = {}  # absolute png -> imported Texture2D
     for name, abs_png in sorted(mats.items()):
         tex = None
         if abs_png and os.path.isfile(abs_png):
-            m = re.match(r"tex_(\d+)_(\d+)", name)
-            tname = f"T_{m.group(1)}_{int(m.group(2)):03d}" if m else "T_" + _safe(name)
-            tex = _import_texture(abs_png, tname, TEX_LIB)
-            if tex is not None:
-                tex_count += 1
+            if abs_png in tex_cache:
+                tex = tex_cache[abs_png]
+            else:
+                m = re.match(r"tex_(\d+)_(\d+)", name)
+                tname = f"T_{m.group(1)}_{int(m.group(2)):03d}" if m else "T_" + _safe(name)
+                tex = _import_texture(abs_png, tname, TEX_LIB)
+                tex_cache[abs_png] = tex
         lib[name] = _make_material(name, tex, MAT_LIB)
-    result["shared"] = {"materials": len(lib), "textures": tex_count}
+    result["shared"] = {"materials": len(lib), "textures": len(tex_cache)}
     return lib
 
 
