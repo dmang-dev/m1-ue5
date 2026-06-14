@@ -19,6 +19,7 @@
 #include "Engine/SkyLight.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Engine/PostProcessVolume.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
@@ -86,6 +87,32 @@ void AM1GameMode::SpawnLights()
 			if (USkyLightComponent* C = (*It)->GetLightComponent())
 			{
 				C->SetIntensity(0.5f);
+			}
+		}
+
+		// Soften eye-adaptation so it doesn't fully erase the per-room mood: spawn an
+		// unbound PostProcessVolume that narrows the auto-exposure range (instead of a
+		// hard lock, which over-brightens dim scenes to white) and biases slightly
+		// dark. Tunable at runtime -- no geometry rebake needed.
+		bool bHasPPV = false;
+		for (TActorIterator<APostProcessVolume> It(World); It; ++It)
+		{
+			bHasPPV = true;
+			break;
+		}
+		if (!bHasPPV)
+		{
+			if (APostProcessVolume* PPV = World->SpawnActor<APostProcessVolume>(
+					APostProcessVolume::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator))
+			{
+				PPV->bUnbound = true;
+				FPostProcessSettings& S = PPV->Settings;
+				S.bOverride_AutoExposureMinBrightness = true;
+				S.AutoExposureMinBrightness = 0.5f;
+				S.bOverride_AutoExposureMaxBrightness = true;
+				S.AutoExposureMaxBrightness = 2.0f;
+				S.bOverride_AutoExposureBias = true;
+				S.AutoExposureBias = -0.75f;
 			}
 		}
 	}
