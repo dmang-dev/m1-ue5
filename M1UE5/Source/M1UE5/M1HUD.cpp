@@ -148,11 +148,12 @@ void AM1HUD::DrawMotionSensor(AM1Character* Player, float BX, float BY, float Sc
 	}
 
 	// The bezel's bottom-left oval (PICT-128 art) is the empty sensor housing.
-	// Center + radius measured off the 640x480 bezel; sized to tuck inside the dark
-	// oval so blips/grid don't spill onto the silver frame.
-	const float Cx = BX + 72.0f * Scale;
-	const float Cy = BY + 350.0f * Scale;
-	const float R = 44.0f * Scale;
+	// Center + radius measured off the 640x480 bezel art (flood-fill of the enclosed
+	// dark screen: bbox x[16,165] y[313,437] -> centre (90,375), interior ~148x124).
+	// R fits inside the smaller (vertical) half-extent so nothing spills onto frame.
+	const float Cx = BX + 90.0f * Scale;
+	const float Cy = BY + 375.0f * Scale;
+	const float R = 54.0f * Scale;
 	const float RangeCm = 5000.0f;   // sensor reach; the oval edge = this distance
 
 	const FLinearColor Grid(0.12f, 0.85f, 0.35f, 0.45f);  // Marathon sensor green
