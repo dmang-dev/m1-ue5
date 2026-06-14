@@ -386,11 +386,14 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    **Light switches now work** — Kind-5 panels toggle every light on their LITE
    channel; harness-verified on L_01 (65/65 spawn; switch target=7 flips its 3
    lights on→off). `M1Lights` Exec lists spawned lights. **Visible only under
-   lit/hybrid materials** — validated on a hybrid rebake of Arrival (106/106 lights,
-   tonal depth, runs via the `-skipbuild` cook path). REMAINING: (a) the
-   **art-direction decision** — convert all 37 levels from the current flat-emissive
-   look to moody hybrid-lit?; (b) if yes, the **full 37-level hybrid rebake + recook**
-   and a **lighting tune pass** (`AM1Light::kIntensityScale`, DL-dim, exposure bias)
-   best done with a human eye; (c) optional follow-ups: ceiling-only lights
-   (`ceiling_light` ≠ `floor_light`, ~20% of polys) and animated `type`!=0 lights
-   (flicker/strobe via period/phase).
+   lit/hybrid materials.** **ROLLED OUT to all 37 levels:** full hybrid rebake
+   (`M1_MATMODE=hybrid`, now the **default** in `ue5_headless_build.py`) + full
+   recook into `Build\Windows` via the `-skipbuild` path (no .NET needed). Shipped
+   build is now LIT (was flat-emissive). Verified: L_00 (106/106 lights) + L_06
+   (157/157) `M1SelfTest` PASS; doors/elevators load the hybrid material lib (prefer
+   `/Game/Materials_hybrid`, fall back to emissive). v1 tune: `kIntensityScale=1700`
+   (kept modest — dense levels stack 100+ overlapping fill lights), DL/SkyLight
+   runtime-dimmed to 0.35/0.5, exposure softened (range 0.5–2.0, bias −0.75).
+   REMAINING (fine-tuning, best with a human eye in-game): per-level brightness
+   feel on the densest levels; ceiling-only lights (`ceiling_light` ≠ `floor_light`,
+   ~20% of polys); animated `type`!=0 lights (flicker/strobe via period/phase).

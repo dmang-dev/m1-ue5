@@ -33,8 +33,10 @@ public:
 	int32 GetLiteIndex() const { return LiteIndex; }
 	FString M1DebugString() const;
 
-	/** Candela per unit of LITE intensity (0..1). Tuned once for the look. */
-	static constexpr float kIntensityScale = 3200.0f;
+	/** Candela per unit of LITE intensity (0..1). Tuned once for the look. Kept
+	 *  modest because dense levels stack 100+ overlapping fill lights -- too high
+	 *  blows out where they overlap. */
+	static constexpr float kIntensityScale = 1700.0f;
 
 private:
 	UPROPERTY()

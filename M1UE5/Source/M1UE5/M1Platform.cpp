@@ -71,10 +71,20 @@ void AM1Platform::InitFromDoor(const FM1Door& Door)
 	// shape) from the shared material library, instead of the plain grey box.
 	if (Door.TexColl >= 0 && Door.TexShape >= 0)
 	{
-		const FString Path = FString::Printf(
-			TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
+		// Prefer the lit/hybrid material so the door matches lit sector walls;
+		// fall back to the emissive library on flat-lit builds.
+		const FString Hybrid = FString::Printf(
+			TEXT("/Game/Materials_hybrid/tex_%d_%d.tex_%d_%d"),
 			Door.TexColl, Door.TexShape, Door.TexColl, Door.TexShape);
-		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path))
+		UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Hybrid);
+		if (!M)
+		{
+			const FString Emissive = FString::Printf(
+				TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
+				Door.TexColl, Door.TexShape, Door.TexColl, Door.TexShape);
+			M = LoadObject<UMaterialInterface>(nullptr, *Emissive);
+		}
+		if (M)
 		{
 			Panel->SetMaterial(0, M);
 		}

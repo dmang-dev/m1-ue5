@@ -55,13 +55,22 @@ void AM1Elevator::InitFromElevator(const FM1Elevator& E)
 	// Engine cube is 100 cm; scale to footprint x thickness.
 	Slab->SetWorldScale3D(FVector(HalfX * 2.0f / 100.0f, HalfY * 2.0f / 100.0f, Thick / 100.0f));
 
-	// Skin the lift with its Marathon floor texture from the shared library.
+	// Skin the lift with its Marathon floor texture; prefer the lit/hybrid library
+	// so it matches lit sector floors, falling back to emissive on flat builds.
 	if (E.TexColl >= 0 && E.TexShape >= 0)
 	{
-		const FString Path = FString::Printf(
-			TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
+		const FString Hybrid = FString::Printf(
+			TEXT("/Game/Materials_hybrid/tex_%d_%d.tex_%d_%d"),
 			E.TexColl, E.TexShape, E.TexColl, E.TexShape);
-		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path))
+		UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Hybrid);
+		if (!M)
+		{
+			const FString Emissive = FString::Printf(
+				TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
+				E.TexColl, E.TexShape, E.TexColl, E.TexShape);
+			M = LoadObject<UMaterialInterface>(nullptr, *Emissive);
+		}
+		if (M)
 		{
 			Slab->SetMaterial(0, M);
 		}

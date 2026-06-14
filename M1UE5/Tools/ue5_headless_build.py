@@ -31,11 +31,15 @@ GEO = os.path.join(REPO, "Reference", "Geometry")
 RESULT = os.path.join(GEO, "ue5_build_result.json")
 
 # Terminal look-test knobs:
-#   M1_MATMODE = emissive(default) / lit / hybrid  -> material treatment
+#   M1_MATMODE = hybrid(default) / lit / emissive  -> material treatment
+#     hybrid: walls/floors are DEFAULT_LIT (respond to the per-room LITE lights,
+#     AM1GameMode::SpawnLights), terminal/screen collections stay unlit/emissive so
+#     CRTs always glow. This is the shipped look. emissive = flat full-bright (no
+#     lighting); use only for geometry inspection.
 #   M1_CRISP   = textures imported uncompressed + no mipmaps (crisp pixel art)
 #   M1_FIXEXP  = drop a PostProcessVolume that locks auto-exposure (eye adaptation)
 # CRISP gets its own texture+material folders so it doesn't share assets.
-MATMODE = os.environ.get("M1_MATMODE", "emissive")
+MATMODE = os.environ.get("M1_MATMODE", "hybrid")
 CRISP = bool(os.environ.get("M1_CRISP"))
 FIXEXP = bool(os.environ.get("M1_FIXEXP"))
 _csfx = "_crisp" if CRISP else ""
