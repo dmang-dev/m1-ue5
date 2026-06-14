@@ -60,7 +60,7 @@ FString AM1Panel::M1DebugString() const
 {
 	const TCHAR* K = Kind == 0 ? TEXT("shield-charger") : Kind == 1 ? TEXT("pattern-buffer")
 		: Kind == 2 ? TEXT("oxygen-recharger") : Kind == 3 ? TEXT("platform-switch")
-		: Kind == 4 ? TEXT("tag-switch") : TEXT("?");
+		: Kind == 4 ? TEXT("tag-switch") : Kind == 5 ? TEXT("light-switch") : TEXT("?");
 	const FVector L = GetActorLocation();
 	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) kind=%s cap=%.0f target=%d"),
 		L.X, L.Y, L.Z, K, Cap, Target);
@@ -138,6 +138,16 @@ bool AM1Panel::Activate(AM1Character* Player)
 		{
 			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor::Yellow,
 				FString::Printf(TEXT("Switch (opened %d door%s)"), Opened, Opened == 1 ? TEXT("") : TEXT("s")));
+		}
+	}
+	else if (Kind == 5)
+	{
+		// Light switch: interactive (clicks below), but there's no room-light
+		// system to toggle yet -- the build uses one global DirectionalLight, not
+		// per-LITE point lights, so flipping it would black out the whole level.
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor::Yellow, TEXT("Light switch"));
 		}
 	}
 	else

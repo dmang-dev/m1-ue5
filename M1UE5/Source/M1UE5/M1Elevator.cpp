@@ -54,6 +54,19 @@ void AM1Elevator::InitFromElevator(const FM1Elevator& E)
 
 	// Engine cube is 100 cm; scale to footprint x thickness.
 	Slab->SetWorldScale3D(FVector(HalfX * 2.0f / 100.0f, HalfY * 2.0f / 100.0f, Thick / 100.0f));
+
+	// Skin the lift with its Marathon floor texture from the shared library.
+	if (E.TexColl >= 0 && E.TexShape >= 0)
+	{
+		const FString Path = FString::Printf(
+			TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
+			E.TexColl, E.TexShape, E.TexColl, E.TexShape);
+		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path))
+		{
+			Slab->SetMaterial(0, M);
+		}
+	}
+
 	SetActorLocation(FVector(E.X, E.Y, 0.0f));
 	SetSlabTop(LowTop);
 	State = EState::Rest;

@@ -65,8 +65,10 @@ def panels_for_level(data):
             kind, cap, target = 3, 0.0, s.get("panel_perm", -1)  # platform switch: target = polygon_index
         elif pt == 7:
             kind, cap, target = 4, 0.0, s.get("panel_perm", -1)  # tag switch: target = tag
+        elif pt == 4:
+            kind, cap, target = 5, 0.0, s.get("panel_perm", -1)  # light switch (no room-light system yet)
         else:
-            continue  # terminal / light-switch -> handled elsewhere or deferred
+            continue  # terminal -> handled by gen_terminal_assets.py
         li = s.get("line_index", -1)
         if not (0 <= li < len(lins)):
             continue
@@ -102,7 +104,7 @@ def main():
         chargers += sum(1 for p in panels if p["kind"] == 0)
         buffers += sum(1 for p in panels if p["kind"] == 1)
         oxygen += sum(1 for p in panels if p["kind"] == 2)
-        switches += sum(1 for p in panels if p["kind"] in (3, 4))
+        switches += sum(1 for p in panels if p["kind"] in (3, 4, 5))
         levels.append(("L_" + stem, panels))
 
     lines = [
@@ -117,7 +119,8 @@ def main():
         "/** One Marathon wall control panel. Kind: 0 = shield charger (refill to",
         " *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger,",
         " *  3 = platform switch (Target = polygon index of the door it opens),",
-        " *  4 = tag switch (Target = tag; opens all doors with it). Position in cm. */",
+        " *  4 = tag switch (Target = tag; opens all doors with it),",
+        " *  5 = light switch (interactive; no room-light system yet). Position cm. */",
         "struct FM1Panel",
         "{",
         "\tfloat X, Y, Z;",

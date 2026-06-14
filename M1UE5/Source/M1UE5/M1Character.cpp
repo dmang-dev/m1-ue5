@@ -617,10 +617,17 @@ void AM1Character::M1Terms()
 	UE_LOG(LogTemp, Warning, TEXT("[M1Terms] total %d"), Terms.Num());
 }
 
-void AM1Character::M1Goto(float X, float Y, float Z)
+void AM1Character::M1Goto(float X, float Y, float Z, float Yaw)
 {
 	SetActorLocation(FVector(X, Y, Z), false, nullptr, ETeleportType::TeleportPhysics);
-	UE_LOG(LogTemp, Warning, TEXT("[M1Goto] -> (%.0f,%.0f,%.0f)"), X, Y, Z);
+	if (Yaw < 999.0f)
+	{
+		if (AController* C = GetController())
+		{
+			C->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
+		}
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Goto] -> (%.0f,%.0f,%.0f) yaw=%.0f"), X, Y, Z, Yaw);
 }
 
 void AM1Character::M1Activate(int32 PanelIndex)

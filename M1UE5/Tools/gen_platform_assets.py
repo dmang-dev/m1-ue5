@@ -41,6 +41,14 @@ def safe(stem):
     return re.sub(r"[^0-9A-Za-z]+", "_", stem).strip("_")
 
 
+def tex_cs(descriptor):
+    """Marathon shape_descriptor -> (collection, shape) for /Game/Materials/
+    tex_<coll>_<shape>. (-1,-1) for an empty/landscape descriptor."""
+    if not isinstance(descriptor, int) or descriptor == 0xFFFF:
+        return (-1, -1)
+    return ((descriptor >> 8) & 0x1F, descriptor & 0xFF)
+
+
 def aabb(epnt, eids):
     xs = [epnt[e]["x"] for e in eids]
     ys = [epnt[e]["y"] for e in eids]
@@ -104,6 +112,7 @@ def elevators_for_level(data):
                                else low_cm + ELEV_DEFAULT_RISE_CM))
         if high_cm - low_cm < ELEV_MIN_RISE_CM:
             continue
+        coll, shape = tex_cs(p.get("floor_shape"))
         out.append({
             "x": round((min_x + max_x) / 2.0 * S, 2),
             "y": round((min_y + max_y) / 2.0 * S, 2),
@@ -114,6 +123,7 @@ def elevators_for_level(data):
             "speed": round(max(abs(pl["speed"]), 1) * S * TICKS_PER_SEC, 1),
             "poly": pi,
             "tag": pl.get("tag", -1),
+            "coll": coll, "shape": shape,        # floor texture -> tex_<coll>_<shape>
         })
     return out
 
@@ -149,6 +159,7 @@ def doors_for_level(data):
         dwell = pl["delay"] / TICKS_PER_SEC
         if dwell <= 0.0:
             dwell = 3.0  # default open-dwell for instant-return doors
+        coll, shape = tex_cs(p.get("floor_shape"))
         out.append({
             "x": round(cx * S, 2),
             "y": round(cy * S, 2),               # +y: final imported frame
@@ -160,6 +171,7 @@ def doors_for_level(data):
             "dwell": round(dwell, 2),
             "poly": pi,                          # for platform-switch matching
             "tag": pl.get("tag", -1),            # for tag-switch matching
+            "coll": coll, "shape": shape,        # floor texture -> tex_<coll>_<shape>
         })
     return out
 
@@ -202,6 +214,7 @@ def main():
         "\tfloat Dwell;          // seconds held open before auto-close",
         "\tint32 PolyIndex;      // source polygon (platform-switch target)",
         "\tint32 Tag;            // platform tag (tag-switch target; -1 = none)",
+        "\tint32 TexColl, TexShape;  // floor texture -> /Game/Materials/tex_<coll>_<shape>",
         "};",
         "",
         "struct FM1LevelDoors",
@@ -217,12 +230,12 @@ def main():
         lines.append("static const FM1Door %s[] =" % arr)
         lines.append("{")
         for d in doors:
-            lines.append("\t{ %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.1ff, %.2ff, %d, %d },"
+            lines.append("\t{ %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.1ff, %.2ff, %d, %d, %d, %d },"
                          % (d["x"], d["y"], d["z"], d["sx"], d["sy"], d["sz"], d["speed"], d["dwell"],
-                            d["poly"], d["tag"]))
+                            d["poly"], d["tag"], d["coll"], d["shape"]))
         if not doors:
             # C++ forbids zero-size arrays; emit a sentinel kept out by Count=0.
-            lines.append("\t{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, 0.00f, -1, -1 },  // no doors")
+            lines.append("\t{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, 0.00f, -1, -1, -1, -1 },  // no doors")
         lines.append("};")
         lines.append("")
 
@@ -259,6 +272,7 @@ def main():
         "\tfloat LowZ, HighZ;     // slab-top travel range",
         "\tfloat Speed;           // cm/s",
         "\tint32 PolyIndex, Tag;  // switch targets (platform/tag switch)",
+        "\tint32 TexColl, TexShape;  // floor texture -> /Game/Materials/tex_<coll>_<shape>",
         "};",
         "",
         "struct FM1LevelElevators",
@@ -273,11 +287,11 @@ def main():
         lines.append("static const FM1Elevator GM1Elevators_%s[] =" % level_name)
         lines.append("{")
         for e in elevs:
-            lines.append("\t{ %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.1ff, %d, %d },"
+            lines.append("\t{ %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.2ff, %.1ff, %d, %d, %d, %d },"
                          % (e["x"], e["y"], e["sx"], e["sy"], e["low"], e["high"],
-                            e["speed"], e["poly"], e["tag"]))
+                            e["speed"], e["poly"], e["tag"], e["coll"], e["shape"]))
         if not elevs:
-            lines.append("\t{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1 },  // none")
+            lines.append("\t{ 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.0f, -1, -1, -1, -1 },  // none")
         lines.append("};")
         lines.append("")
     lines.append("static const FM1LevelElevators GM1LevelElevatorTable[] =")

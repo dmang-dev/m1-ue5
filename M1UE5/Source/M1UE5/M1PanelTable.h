@@ -9,7 +9,8 @@
 /** One Marathon wall control panel. Kind: 0 = shield charger (refill to
  *  Cap on use), 1 = pattern buffer (save on use), 2 = oxygen recharger,
  *  3 = platform switch (Target = polygon index of the door it opens),
- *  4 = tag switch (Target = tag; opens all doors with it). Position in cm. */
+ *  4 = tag switch (Target = tag; opens all doors with it),
+ *  5 = light switch (interactive; no room-light system yet). Position cm. */
 struct FM1Panel
 {
 	float X, Y, Z;
@@ -37,6 +38,7 @@ static const FM1Panel GM1Panels_L_00_Arrival[] =
 
 static const FM1Panel GM1Panels_L_01_Bigger_Guns_Nearby[] =
 {
+	{ 566.02f, 424.51f, 5.00f, 5, 0.0f, 7 },
 	{ 883.20f, 424.51f, 55.00f, 0, 150.0f, -1 },
 	{ 1400.00f, 2325.00f, 55.00f, 1, 0.0f, -1 },
 	{ 1000.00f, 1775.00f, 55.00f, 3, 0.0f, 221 },
@@ -46,10 +48,12 @@ static const FM1Panel GM1Panels_L_01_Bigger_Guns_Nearby[] =
 static const FM1Panel GM1Panels_L_02_Never_Burn_Money[] =
 {
 	{ 1350.00f, 50.00f, 55.00f, 1, 0.0f, -1 },
+	{ -225.00f, 375.00f, 55.00f, 5, 0.0f, 8 },
 	{ 200.00f, 525.00f, 174.92f, 1, 0.0f, -1 },
 	{ 50.00f, 950.00f, 55.00f, 0, 150.0f, -1 },
 	{ 200.00f, 775.00f, 174.92f, 3, 0.0f, 137 },
 	{ 1575.00f, 1650.00f, 174.92f, 1, 0.0f, -1 },
+	{ 1975.00f, 100.68f, 55.00f, 5, 0.0f, 7 },
 	{ -442.97f, 537.01f, 174.92f, 3, 0.0f, 176 },
 	{ 2300.00f, -1175.00f, 55.00f, 0, 450.0f, -1 },
 	{ 475.00f, 1425.00f, 174.92f, 0, 150.0f, -1 },
@@ -90,9 +94,11 @@ static const FM1Panel GM1Panels_L_05_The_Rose[] =
 	{ -350.00f, -275.00f, 555.00f, 1, 0.0f, -1 },
 	{ 1725.00f, 1950.00f, 55.00f, 3, 0.0f, 17 },
 	{ 1825.00f, 1275.00f, 55.00f, 3, 0.0f, 7 },
+	{ 1850.00f, 1300.00f, 555.00f, 5, 0.0f, 7 },
 	{ 1825.00f, 1325.00f, 55.00f, 3, 0.0f, 163 },
 	{ 2050.00f, 675.00f, 55.00f, 3, 0.0f, 37 },
 	{ -1600.00f, 2075.00f, 55.00f, 3, 0.0f, 123 },
+	{ 2275.00f, 600.00f, 55.00f, 5, 0.0f, 7 },
 	{ 2350.00f, 850.00f, 555.00f, 1, 0.0f, -1 },
 	{ -375.00f, -25.00f, 555.00f, 0, 150.0f, -1 },
 };
@@ -164,7 +170,9 @@ static const FM1Panel GM1Panels_L_09_Blaspheme_Quarantine[] =
 {
 	{ 800.00f, 150.00f, 55.00f, 0, 150.0f, -1 },
 	{ 725.00f, 150.00f, 55.00f, 3, 0.0f, 13 },
+	{ 850.00f, 750.00f, 55.00f, 5, 0.0f, 8 },
 	{ 650.00f, 750.00f, 55.00f, 3, 0.0f, 20 },
+	{ 25.00f, -275.00f, 55.00f, 5, 0.0f, 16 },
 	{ 2750.00f, -1225.00f, 55.00f, 3, 0.0f, 116 },
 	{ 2050.00f, -1150.00f, 55.00f, 1, 0.0f, -1 },
 	{ 775.00f, -375.00f, 55.00f, 1, 0.0f, -1 },
@@ -348,12 +356,15 @@ static const FM1Panel GM1Panels_L_26_Ingue_Ferroque[] =
 
 static const FM1Panel GM1Panels_L_27_Mars_Needs_Women[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
+	{ 835.06f, 329.79f, 55.00f, 5, 0.0f, 5 },
+	{ 1206.25f, 689.45f, 55.00f, 5, 0.0f, 6 },
+	{ 841.21f, 1052.44f, 367.50f, 5, 0.0f, 7 },
 };
 
 static const FM1Panel GM1Panels_L_28_Carnage_Palace_Deeee_Luxe[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
+	{ 250.00f, 525.00f, 55.00f, 5, 0.0f, 4 },
+	{ 1050.00f, 525.00f, 55.00f, 5, 0.0f, 5 },
 };
 
 static const FM1Panel GM1Panels_L_29_5_D_space[] =
@@ -368,7 +379,8 @@ static const FM1Panel GM1Panels_L_30_Arena[] =
 
 static const FM1Panel GM1Panels_L_31_E_equals_MC_WHAT[] =
 {
-	{ 0.00f, 0.00f, 0.00f, -1, 0.0f, -1 },  // none
+	{ 175.00f, 300.00f, 55.00f, 5, 0.0f, 8 },
+	{ 900.00f, 225.00f, 55.00f, 5, 0.0f, 9 },
 };
 
 static const FM1Panel GM1Panels_L_32_Showered_With_Grenades[] =
@@ -399,15 +411,15 @@ static const FM1Panel GM1Panels_L_36_You_don_t_need_to_see_my_I_D[] =
 static const FM1LevelPanels GM1LevelPanelTable[] =
 {
 	{ TEXT("L_00_Arrival"), GM1Panels_L_00_Arrival, 6 },
-	{ TEXT("L_01_Bigger_Guns_Nearby"), GM1Panels_L_01_Bigger_Guns_Nearby, 4 },
-	{ TEXT("L_02_Never_Burn_Money"), GM1Panels_L_02_Never_Burn_Money, 8 },
+	{ TEXT("L_01_Bigger_Guns_Nearby"), GM1Panels_L_01_Bigger_Guns_Nearby, 5 },
+	{ TEXT("L_02_Never_Burn_Money"), GM1Panels_L_02_Never_Burn_Money, 10 },
 	{ TEXT("L_03_Defend_THIS"), GM1Panels_L_03_Defend_THIS, 15 },
 	{ TEXT("L_04_Couch_Fishing"), GM1Panels_L_04_Couch_Fishing, 7 },
-	{ TEXT("L_05_The_Rose"), GM1Panels_L_05_The_Rose, 8 },
+	{ TEXT("L_05_The_Rose"), GM1Panels_L_05_The_Rose, 10 },
 	{ TEXT("L_06_Smells_Like_Napalm_Tastes_Like_Chicken"), GM1Panels_L_06_Smells_Like_Napalm_Tastes_Like_Chicken, 15 },
 	{ TEXT("L_07_Cool_Fusion"), GM1Panels_L_07_Cool_Fusion, 15 },
 	{ TEXT("L_08_G4_Sunbathing"), GM1Panels_L_08_G4_Sunbathing, 21 },
-	{ TEXT("L_09_Blaspheme_Quarantine"), GM1Panels_L_09_Blaspheme_Quarantine, 13 },
+	{ TEXT("L_09_Blaspheme_Quarantine"), GM1Panels_L_09_Blaspheme_Quarantine, 15 },
 	{ TEXT("L_10_Bob_B_Q"), GM1Panels_L_10_Bob_B_Q, 10 },
 	{ TEXT("L_11_Shake_Before_Using"), GM1Panels_L_11_Shake_Before_Using, 11 },
 	{ TEXT("L_12_Fire_Fire_Fire_Fire_Fire"), GM1Panels_L_12_Fire_Fire_Fire_Fire_Fire, 4 },
@@ -425,11 +437,11 @@ static const FM1LevelPanels GM1LevelPanelTable[] =
 	{ TEXT("L_24_Welcome_to_the_Revolution"), GM1Panels_L_24_Welcome_to_the_Revolution, 9 },
 	{ TEXT("L_25_Try_again"), GM1Panels_L_25_Try_again, 4 },
 	{ TEXT("L_26_Ingue_Ferroque"), GM1Panels_L_26_Ingue_Ferroque, 10 },
-	{ TEXT("L_27_Mars_Needs_Women"), GM1Panels_L_27_Mars_Needs_Women, 0 },
-	{ TEXT("L_28_Carnage_Palace_Deeee_Luxe"), GM1Panels_L_28_Carnage_Palace_Deeee_Luxe, 0 },
+	{ TEXT("L_27_Mars_Needs_Women"), GM1Panels_L_27_Mars_Needs_Women, 3 },
+	{ TEXT("L_28_Carnage_Palace_Deeee_Luxe"), GM1Panels_L_28_Carnage_Palace_Deeee_Luxe, 2 },
 	{ TEXT("L_29_5_D_space"), GM1Panels_L_29_5_D_space, 0 },
 	{ TEXT("L_30_Arena"), GM1Panels_L_30_Arena, 0 },
-	{ TEXT("L_31_E_equals_MC_WHAT"), GM1Panels_L_31_E_equals_MC_WHAT, 0 },
+	{ TEXT("L_31_E_equals_MC_WHAT"), GM1Panels_L_31_E_equals_MC_WHAT, 2 },
 	{ TEXT("L_32_Showered_With_Grenades"), GM1Panels_L_32_Showered_With_Grenades, 0 },
 	{ TEXT("L_33_Spiral_Insanity"), GM1Panels_L_33_Spiral_Insanity, 0 },
 	{ TEXT("L_34_Waldo_World_Arena"), GM1Panels_L_34_Waldo_World_Arena, 0 },

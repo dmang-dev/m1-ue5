@@ -95,8 +95,8 @@ public:
 	UFUNCTION(Exec) void M1Panels();
 	/** Log the level's terminals (index, id, pages, whether it's the exit). */
 	UFUNCTION(Exec) void M1Terms();
-	/** Teleport the player to a world location. */
-	UFUNCTION(Exec) void M1Goto(float X, float Y, float Z);
+	/** Teleport the player to a world location; optional Yaw aims the view. */
+	UFUNCTION(Exec) void M1Goto(float X, float Y, float Z, float Yaw = 1000.0f);
 	/** Directly activate the Nth spawned control panel (bypasses proximity). */
 	UFUNCTION(Exec) void M1Activate(int32 PanelIndex);
 	/** Open the Nth terminal directly (bypasses proximity/facing). Page it with

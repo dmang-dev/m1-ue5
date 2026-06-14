@@ -67,6 +67,19 @@ void AM1Platform::InitFromDoor(const FM1Door& Door)
 	PolyIndex = Door.PolyIndex;
 	Tag = Door.Tag;
 
+	// Skin the door with its Marathon floor texture (the platform's own surface
+	// shape) from the shared material library, instead of the plain grey box.
+	if (Door.TexColl >= 0 && Door.TexShape >= 0)
+	{
+		const FString Path = FString::Printf(
+			TEXT("/Game/Materials/tex_%d_%d.tex_%d_%d"),
+			Door.TexColl, Door.TexShape, Door.TexColl, Door.TexShape);
+		if (UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, *Path))
+		{
+			Panel->SetMaterial(0, M);
+		}
+	}
+
 	SetActorLocation(FVector(Door.X, Door.Y, ClosedZ));
 	State = EDoorState::Closed;
 }
@@ -110,8 +123,10 @@ FString AM1Platform::M1DebugString() const
 		State == EDoorState::Opening ? TEXT("OPENING") :
 		State == EDoorState::Open ? TEXT("OPEN") : TEXT("CLOSING");
 	const FVector L = GetActorLocation();
-	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) Z=%.0f closedZ=%.0f openZ=%.0f poly=%d tag=%d [%s]"),
-		L.X, L.Y, L.Z, L.Z, ClosedZ, OpenZ, PolyIndex, Tag, S);
+	const UMaterialInterface* M = Panel ? Panel->GetMaterial(0) : nullptr;
+	const FString MatName = M ? M->GetName() : TEXT("none");
+	return FString::Printf(TEXT("(%.0f,%.0f,%.0f) Z=%.0f closedZ=%.0f openZ=%.0f poly=%d tag=%d mat=%s [%s]"),
+		L.X, L.Y, L.Z, L.Z, ClosedZ, OpenZ, PolyIndex, Tag, *MatName, S);
 }
 
 void AM1Platform::Tick(float DeltaSeconds)
