@@ -35,6 +35,11 @@ private:
 	/** Spawn the current map's wall control panels (M1PanelTable.h). */
 	void SpawnPanels();
 
+	/** Spawn the current map's per-room LITE lights (M1LightTable.h) and, when any
+	 *  exist, dim the level's baked global DirectionalLight/SkyLight so the per-room
+	 *  point lights provide the mood instead of a flat key wash. */
+	void SpawnLights();
+
 	/** Pick a music track by campaign level index and play it looping (2D).
 	 *  M1 has no canonical per-level music, so this maps level i -> track i%16
 	 *  deterministically; non-campaign/test maps fall back to track 0. */

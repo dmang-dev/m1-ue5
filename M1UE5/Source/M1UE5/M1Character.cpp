@@ -23,6 +23,7 @@
 #include "M1Panel.h"
 #include "M1Platform.h"
 #include "M1Elevator.h"
+#include "M1Light.h"
 #include "M1Enemy.h"
 #include "EngineUtils.h"  // TActorIterator
 
@@ -600,6 +601,19 @@ void AM1Character::M1Panels()
 		UE_LOG(LogTemp, Warning, TEXT("[M1Panels] #%d %s"), i++, *(*It)->M1DebugString());
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[M1Panels] total %d"), i);
+}
+
+void AM1Character::M1Lights()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	int32 i = 0, on = 0;
+	for (TActorIterator<AM1Light> It(W); It; ++It)
+	{
+		if ((*It)->IsOn()) { ++on; }
+		UE_LOG(LogTemp, Warning, TEXT("[M1Lights] #%d %s"), i++, *(*It)->M1DebugString());
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Lights] total %d (on %d)"), i, on);
 }
 
 void AM1Character::M1Terms()

@@ -5,14 +5,20 @@
 #include "M1Platform.h"
 #include "M1Elevator.h"
 #include "M1Panel.h"
+#include "M1Light.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
 #include "M1PlatformTable.h"
 #include "M1PanelTable.h"
+#include "M1LightTable.h"
 #include "M1LevelEnvTable.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "Engine/World.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
@@ -31,7 +37,61 @@ void AM1GameMode::BeginPlay()
 	SpawnDoors();
 	SpawnElevators();
 	SpawnPanels();
+	SpawnLights();
 	PlayLevelMusic();
+}
+
+void AM1GameMode::SpawnLights()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const FString MapName = World->GetMapName();
+	const TArrayView<const FM1Light> Lights = M1LightsForLevel(MapName);
+
+	int32 Spawned = 0;
+	for (const FM1Light& L : Lights)
+	{
+		if (L.LiteIndex < 0)
+		{
+			continue;  // sentinel (level has no lights)
+		}
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AM1Light* Light = World->SpawnActor<AM1Light>(
+			AM1Light::StaticClass(), FVector(L.X, L.Y, L.Z), FRotator::ZeroRotator, Params);
+		if (Light)
+		{
+			Light->InitFromLight(L);
+			++Spawned;
+		}
+	}
+
+	// With per-room lights present, knock the baked global key/fill way down so the
+	// level reads room-by-room (Marathon mood) instead of a flat directional wash.
+	// Done at runtime so no geometry rebake is needed to retune the ambient.
+	if (Spawned > 0)
+	{
+		for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+		{
+			if (ULightComponent* C = (*It)->GetLightComponent())
+			{
+				C->SetIntensity(0.35f);
+			}
+		}
+		for (TActorIterator<ASkyLight> It(World); It; ++It)
+		{
+			if (USkyLightComponent* C = (*It)->GetLightComponent())
+			{
+				C->SetIntensity(0.5f);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("M1GameMode: spawned %d/%d lights for %s"),
+		Spawned, Lights.Num(), *MapName);
 }
 
 void AM1GameMode::PlayLevelMusic()

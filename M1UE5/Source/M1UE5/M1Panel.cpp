@@ -2,6 +2,7 @@
 #include "M1Character.h"
 #include "M1Platform.h"
 #include "M1Elevator.h"
+#include "M1Light.h"
 #include "M1Audio.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -142,12 +143,26 @@ bool AM1Panel::Activate(AM1Character* Player)
 	}
 	else if (Kind == 5)
 	{
-		// Light switch: interactive (clicks below), but there's no room-light
-		// system to toggle yet -- the build uses one global DirectionalLight, not
-		// per-LITE point lights, so flipping it would black out the whole level.
+		// Light switch: toggle every per-room light on this LITE channel (Target =
+		// LITE index). A channel is shared level-wide, so this flips all rooms on
+		// that channel -- faithful to Marathon, where a light is a global channel.
+		int32 Toggled = 0;
+		if (UWorld* W = GetWorld())
+		{
+			for (TActorIterator<AM1Light> It(W); It; ++It)
+			{
+				if ((*It)->GetLiteIndex() == Target)
+				{
+					(*It)->Toggle();
+					++Toggled;
+				}
+			}
+		}
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor::Yellow, TEXT("Light switch"));
+			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor::Yellow,
+				FString::Printf(TEXT("Light switch (%d light%s)"),
+					Toggled, Toggled == 1 ? TEXT("") : TEXT("s")));
 		}
 	}
 	else
