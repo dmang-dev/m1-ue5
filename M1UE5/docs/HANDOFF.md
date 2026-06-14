@@ -363,10 +363,22 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    elevator polys so the `AM1Elevator` slab IS the floor; drop ⟺ slab via the
    shared detection). Regenerated all 37 OBJs → re-imported (37/37, 0 errors) →
    cooked. **Full 37-level `M1SelfTest` sweep: 37/37 PASS** (every level grounded,
-   weapon + exit-terminal present, all systems spawned, no holes). Remaining
-   geometry niceties: door/elevator **textures** (plain boxes) + **light-switch**
-   (type 4; no lights yet).
+   weapon + exit-terminal present, all systems spawned, no holes).
+   **Cosmetic niceties — DONE.** Doors/elevators now wear their M1 floor_shape
+   texture (`tex_<coll>_<shape>` from the shared library) instead of the grey
+   engine box — generators emit TexColl/TexShape, the actors SetMaterial on init;
+   verified via `M1Doors` reporting `mat=tex_18_18 / tex_18_10 / tex_18_7` on
+   Arrival. **Light switches** (panel_type 4) now spawn as interactive Kind-5
+   panels (`M1Panels` shows `kind=light-switch`, 14 across the campaign); they
+   click + message but do NOT toggle lights — the build uses one global
+   DirectionalLight, so a per-room/per-LITE point-light system is the prerequisite
+   for real light switching (deferred, see #6).
 4. **Per-level exit-terminal curation** (~14 levels with no teleport-action
    phrase) — needs Marathon walkthrough knowledge per level; manual research.
 5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already
    play open/close one-shots that cover their motion.
+6. **Per-room lighting (LITE point lights)** — the build lights every level with a
+   single global DirectionalLight. Importing the `LITE` chunk as per-polygon
+   PointLights (intensity/period/mode) would restore Marathon's room-by-room mood
+   AND give the Kind-5 light switches something real to toggle. Prerequisite for
+   functional light switches.
