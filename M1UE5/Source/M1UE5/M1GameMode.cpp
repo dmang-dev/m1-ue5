@@ -140,12 +140,18 @@ void AM1GameMode::PlayLevelMusic()
 		return;
 	}
 	Track = ((Track % 16) + 16) % 16;
-	const FString Path = FString::Printf(
-		TEXT("/Game/Audio/Music/A_music_%02d.A_music_%02d"), Track, Track);
-	USoundBase* Song = LoadObject<USoundBase>(nullptr, *Path);
+	// Prefer the user's converted music from the runtime cache (Music/A_music_NN.wav)
+	// so a build needn't ship cooked Bungie music; fall back to the cooked asset.
+	USoundBase* Song = AM1RuntimeLevel::LoadRuntimeMusic(Track);
 	if (!Song)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("M1GameMode: music track missing: %s"), *Path);
+		const FString Path = FString::Printf(
+			TEXT("/Game/Audio/Music/A_music_%02d.A_music_%02d"), Track, Track);
+		Song = LoadObject<USoundBase>(nullptr, *Path);
+	}
+	if (!Song)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("M1GameMode: music track %d missing (cache + cooked)"), Track);
 		return;
 	}
 	// 2D, looping (the wave asset is flagged looping). The component does not

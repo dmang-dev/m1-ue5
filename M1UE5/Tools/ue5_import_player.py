@@ -25,7 +25,8 @@ import os
 
 import unreal
 
-ROOT = r"C:\m1-ue5\M1UE5"
+# Derive the project root from this script's location (no hardcoded drive path).
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COLL = os.path.join(ROOT, "Reference", "Shapes", "Coll_06")
 SHAPES_JSON = os.path.join(COLL, "shapes.json")
 BITMAPS = os.path.join(COLL, "bitmaps")

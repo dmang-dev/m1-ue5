@@ -43,6 +43,10 @@ public:
 	 *  fall back to the cooked USoundBase, so this is purely additive. */
 	static class USoundBase* LoadRuntimeSound(const FString& CookedAssetPath);
 
+	/** Load level-music track N as a looping transient USoundWave from the cache's
+	 *  Music/A_music_NN.wav (converted from the user's own Music/ OGGs), or null. */
+	static class USoundBase* LoadRuntimeMusic(int32 TrackIndex);
+
 	/** Build <DataRoot>/Geometry/<Stem>.obj into this actor's mesh. Returns the
 	 *  number of mesh sections created (0 = failed). Logs a [M1Runtime] summary. */
 	int32 BuildFromStem(const FString& Stem);
@@ -68,6 +72,10 @@ private:
 
 	/** Decode a PNG file on disk to a transient sRGB nearest-filtered texture. */
 	UTexture2D* LoadPNG(const FString& AbsPath);
+
+	/** Decode a 16-bit PCM WAV file into a transient USoundWave (RawPCMData path);
+	 *  shared by the runtime SFX + music loaders. */
+	static class USoundWave* DecodeWavFile(const FString& AbsPath, bool bLooping);
 
 	/** newmtl name -> absolute texture PNG path, parsed from the .mtl `map_Kd`. */
 	TMap<FString, FString> ParseMTL(const FString& MtlPath);

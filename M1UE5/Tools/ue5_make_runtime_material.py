@@ -21,7 +21,9 @@ import unreal
 
 MAT_DEST = "/Game/Runtime"
 MAT_NAME = "M_M1Runtime"
-OUT = r"C:\m1-ue5\M1UE5\Reference\runtime_material_result.json"
+# Derive from this script's location (no hardcoded drive path).
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                   "Reference", "runtime_material_result.json")
 
 mat_path = f"{MAT_DEST}/{MAT_NAME}"
 if unreal.EditorAssetLibrary.does_asset_exist(mat_path):

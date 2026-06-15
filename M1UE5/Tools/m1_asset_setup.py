@@ -140,6 +140,16 @@ def main(argv=None) -> int:
     n_obj = len(list((cache / "Geometry").glob("*.obj")))
     progress("geometry", "done", levels=n_obj)
 
+    # Music: decode the user's own Music/*.ogg -> cache/Music/A_music_NN.wav (the
+    # runtime loader reads these; absent music folder => silently skipped).
+    music_src = source / "Music"
+    if music_src.is_dir():
+        progress("music", "start")
+        import gen_music_assets
+        gen_music_assets.main(["--source", str(music_src), "--dest", str(cache / "Music")])
+        n_mus = len(list((cache / "Music").glob("A_music_*.wav")))
+        progress("music", "done", tracks=n_mus)
+
     # Ship the canonical sound id->name map (flattened) so the game's runtime WAV
     # loader can resolve cooked /Game/Audio/A_<name> paths to Sounds/<id>.wav.
     names_src = TOOLS / "m1_sound_names.json"

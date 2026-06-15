@@ -74,8 +74,10 @@ FString AM1RuntimeLevel::ResolveDataRoot()
 	{
 		return ProjRef;
 	}
-	// 4. Dev fallback (last resort when launched from a staged build on this box).
-	return TEXT("C:/m1-ue5/M1UE5/Reference");
+	// Nothing found: return the AppData cache path (no absolute dev path baked into
+	// the shipped binary). IsDataAvailable() is then false -> the "run Asset Setup"
+	// screen, which names exactly this location.
+	return AppData;
 }
 
 bool AM1RuntimeLevel::IsDataAvailable()
@@ -146,16 +148,26 @@ USoundBase* AM1RuntimeLevel::LoadRuntimeSound(const FString& CookedAssetPath)
 		return Store(nullptr);
 	}
 
-	// Decode the 16-bit PCM WAV into a transient USoundWave (RawPCMData path).
-	TArray<uint8> Bytes;
-	if (!FFileHelper::LoadFileToArray(Bytes, *Wavs[0]))
+	USoundWave* SW = DecodeWavFile(Wavs[0], /*bLooping*/ false);
+	if (SW)
 	{
-		return Store(nullptr);
+		UE_LOG(LogTemp, Log, TEXT("[M1Runtime] cached sound '%s' <- %s (%.2fs)"),
+			*Name, *FPaths::GetCleanFilename(Wavs[0]), SW->Duration);
+	}
+	return Store(SW);
+}
+
+USoundWave* AM1RuntimeLevel::DecodeWavFile(const FString& AbsPath, bool bLooping)
+{
+	TArray<uint8> Bytes;
+	if (!FFileHelper::LoadFileToArray(Bytes, *AbsPath))
+	{
+		return nullptr;
 	}
 	FWaveModInfo Wave;
 	if (!Wave.ReadWaveInfo(Bytes.GetData(), Bytes.Num()))
 	{
-		return Store(nullptr);
+		return nullptr;
 	}
 	USoundWave* SW = NewObject<USoundWave>(GetTransientPackage());
 	const int32 Channels = *Wave.pChannels;
@@ -168,9 +180,27 @@ USoundBase* AM1RuntimeLevel::LoadRuntimeSound(const FString& CookedAssetPath)
 	SW->Duration = (SampleRate > 0 && Channels > 0)
 		? static_cast<float>(Wave.SampleDataSize) / (SampleRate * Channels * sizeof(int16)) : 0.0f;
 	SW->SoundGroup = SOUNDGROUP_Default;
-	UE_LOG(LogTemp, Log, TEXT("[M1Runtime] cached sound '%s' <- %s (%d Hz, %dch, %.2fs)"),
-		*Name, *FPaths::GetCleanFilename(Wavs[0]), SampleRate, Channels, SW->Duration);
-	return Store(SW);
+	SW->bLooping = bLooping;
+	return SW;
+}
+
+USoundBase* AM1RuntimeLevel::LoadRuntimeMusic(int32 TrackIndex)
+{
+	static TMap<int32, USoundBase*> MusicCache;
+	if (USoundBase** Found = MusicCache.Find(TrackIndex))
+	{
+		return *Found;
+	}
+	const FString Path = FPaths::Combine(ResolveDataRoot(), TEXT("Music"),
+		FString::Printf(TEXT("A_music_%02d.wav"), TrackIndex));
+	USoundWave* SW = FPaths::FileExists(Path) ? DecodeWavFile(Path, /*bLooping*/ true) : nullptr;
+	if (SW)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[M1Runtime] cached music track %d <- %s (%.1fs)"),
+			TrackIndex, *FPaths::GetCleanFilename(Path), SW->Duration);
+	}
+	MusicCache.Add(TrackIndex, SW);
+	return SW;
 }
 
 UTexture2D* AM1RuntimeLevel::LoadPNG(const FString& AbsPath)
