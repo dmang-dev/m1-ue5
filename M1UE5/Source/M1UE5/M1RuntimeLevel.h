@@ -34,6 +34,11 @@ public:
 	 *  number of mesh sections created (0 = failed). Logs a [M1Runtime] summary. */
 	int32 BuildFromStem(const FString& Stem);
 
+	/** Read <DataRoot>/Geometry/<Stem>_placements.json "player_start" into OutLoc
+	 *  (UE cm, the SAME final space as the runtime geometry -- placements already
+	 *  match the editor-imported mesh) + OutYaw (deg). False if missing. */
+	static bool LoadPlayerStart(const FString& Stem, FVector& OutLoc, float& OutYaw);
+
 	/** Sections built + total vertices/triangles + world bounds extent (for the
 	 *  self-test). Valid after BuildFromStem. */
 	int32 NumSections = 0;
@@ -53,6 +58,12 @@ private:
 
 	/** newmtl name -> absolute texture PNG path, parsed from the .mtl `map_Kd`. */
 	TMap<FString, FString> ParseMTL(const FString& MtlPath);
+
+	/** Resolve a level stem to its actual Reference/Geometry base filename. The
+	 *  cooked .umap name and the OBJ/placements filename sanitize the M1 level name
+	 *  differently (e.g. "Low_Flying" vs "Low-Flying", trailing "_"), so we match by
+	 *  the reliable leading "NN_" index prefix when the exact stem isn't present. */
+	static FString ResolveGeoBasename(const FString& Stem);
 
 	/** Cache: absolute PNG path -> texture (one decode per unique image). */
 	UPROPERTY()

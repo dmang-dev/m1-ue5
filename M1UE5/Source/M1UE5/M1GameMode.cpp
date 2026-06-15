@@ -7,6 +7,7 @@
 #include "M1Panel.h"
 #include "M1Light.h"
 #include "M1PlayerState.h"
+#include "M1RuntimeLevel.h"
 #include "M1SaveGame.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
@@ -37,12 +38,37 @@ AM1GameMode::AM1GameMode()
 void AM1GameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	// Installer Phase 1: in runtime mode the persistent map (L_Runtime) is blank --
+	// build the current level's geometry at runtime BEFORE spawning the table-driven
+	// actors, so they (and the player's first-Tick placement) land on real geometry.
+	if (!AM1Character::GRuntimeLevelName.IsEmpty())
+	{
+		BuildRuntimeGeometry();
+	}
 	SpawnMonsters();
 	SpawnDoors();
 	SpawnElevators();
 	SpawnPanels();
 	SpawnLights();
 	PlayLevelMusic();
+}
+
+void AM1GameMode::BuildRuntimeGeometry()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	FString Stem = AM1Character::GRuntimeLevelName;  // "L_00_Arrival"
+	Stem.RemoveFromStart(TEXT("L_"));                 // -> "00_Arrival"
+	AM1RuntimeLevel* RL = World->SpawnActor<AM1RuntimeLevel>(
+		AM1RuntimeLevel::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator);
+	if (RL)
+	{
+		RL->BuildFromStem(Stem);
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Runtime] GameMode built runtime level '%s'"), *Stem);
 }
 
 void AM1GameMode::SpawnLights()
@@ -86,7 +112,7 @@ void AM1GameMode::PlayLevelMusic()
 	{
 		return;
 	}
-	const FString MapName = World->GetMapName();
+	const FString MapName = AM1Character::M1LevelKey(World);
 	// The menu runs its own game mode; never lay a campaign track over it.
 	if (MapName.Contains(TEXT("MainMenu")))
 	{
@@ -125,7 +151,7 @@ void AM1GameMode::SpawnPanels()
 	{
 		return;
 	}
-	const FString MapName = World->GetMapName();
+	const FString MapName = AM1Character::M1LevelKey(World);
 	const TArrayView<const FM1Panel> Panels = M1PanelsForLevel(MapName);
 
 	int32 Spawned = 0;
@@ -157,7 +183,7 @@ void AM1GameMode::SpawnDoors()
 	{
 		return;
 	}
-	const FString MapName = World->GetMapName();
+	const FString MapName = AM1Character::M1LevelKey(World);
 	const TArrayView<const FM1Door> Doors = M1DoorsForLevel(MapName);
 
 	int32 Spawned = 0;
@@ -185,7 +211,7 @@ void AM1GameMode::SpawnElevators()
 	{
 		return;
 	}
-	const FString MapName = World->GetMapName();
+	const FString MapName = AM1Character::M1LevelKey(World);
 	const TArrayView<const FM1Elevator> Elevs = M1ElevatorsForLevel(MapName);
 
 	int32 Spawned = 0;
@@ -219,7 +245,7 @@ void AM1GameMode::SpawnMonsters()
 
 	// GetMapName() is the short package name, PIE-prefixed in-editor
 	// (UEDPIE_0_L_00_Arrival); M1SpawnsForLevel matches by contained stem.
-	const FString MapName = World->GetMapName();
+	const FString MapName = AM1Character::M1LevelKey(World);
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride =

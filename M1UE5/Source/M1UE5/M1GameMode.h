@@ -23,6 +23,11 @@ public:
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
 private:
+	/** Installer Phase 1: build the current runtime level's geometry (AM1RuntimeLevel)
+	 *  into the blank persistent map. Only called when AM1Character::GRuntimeLevelName
+	 *  is set (runtime mode). */
+	void BuildRuntimeGeometry();
+
 	/** Spawn every monster placement for the current map (M1SpawnTable.h). */
 	void SpawnMonsters();
 

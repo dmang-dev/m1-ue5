@@ -20,7 +20,8 @@ public class M1UE5 : ModuleRules
 			"ProceduralMeshComponent",
 			"ImageWrapper",
 			"RenderCore",
-			"RHI"
+			"RHI",
+			"Json"   // parse <stem>_placements.json (player start) at runtime (Phase 1)
 		});
 	}
 }

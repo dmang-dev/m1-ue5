@@ -424,9 +424,16 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      geometry at runtime from OBJ/PNG (no cook): `M1Runtime <stem>` exec /
      `M1_RUNTIME_SELFTEST` hook. Packaged self-test: Arrival = 92 sections / 2738
      tris, PASS. Decisions locked: per-user **AppData** content cache, **locate-only**
-     data (no bundled downloader). **NEXT = Phase 1:** drive level loading through the
-     runtime path (vs `OpenLevel` cooked `.umap`) for all 37 + spawn doors/enemies/etc
-     from the committed tables + runtime WAV; reach `M1SelfTest` 37/37 parity.
+     data (no bundled downloader).
+   - **Phase 1 (all 37 via runtime path) DONE (core) + verified.** Blank persistent
+     `L_Runtime` map + runtime-mode statics (`GRuntimeLevelName`, `M1LevelKey`); enter
+     via `M1RunLevel <idx>` exec / `M1_RUNLEVEL` env; `AM1GameMode::BuildRuntimeGeometry`
+     builds geometry before table-driven actors spawn; `ResolveGeoBasename` matches the
+     OBJ by `NN_` prefix (cooked vs OBJ name sanitization differ); player teleports to
+     `placements.player_start` on Tick 1; checkpoints unchanged (index-keyed). Packaged
+     sweep built 00/05/13/20/28/36 at runtime, no crash. **NEXT = WAV runtime loader +
+     make runtime mode the campaign default (opt-in now) + Phase 2 AppData cache /
+     installer wizard.**
 
 > **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
 > fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget

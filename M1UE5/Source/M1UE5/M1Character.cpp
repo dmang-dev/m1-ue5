@@ -359,6 +359,29 @@ void AM1Character::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	// Runtime mode (Phase 1): place the pawn on the level's player_start once the
+	// GameMode has built the geometry (by the first Tick). One-shot. A full-state
+	// restore (below) overrides this with the exact saved pose.
+	if (bRuntimePlacePending)
+	{
+		bRuntimePlacePending = false;
+		if (!GPendingFullLoad)
+		{
+			FVector StartLoc; float StartYaw;
+			FString Stem = GRuntimeLevelName; Stem.RemoveFromStart(TEXT("L_"));
+			if (AM1RuntimeLevel::LoadPlayerStart(Stem, StartLoc, StartYaw))
+			{
+				const float HalfH = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+				SetActorLocation(StartLoc + FVector(0.0f, 0.0f, HalfH + 4.0f),
+					false, nullptr, ETeleportType::TeleportPhysics);
+				if (AController* C = GetController())
+				{
+					C->SetControlRotation(FRotator(0.0f, StartYaw, 0.0f));
+				}
+			}
+		}
+	}
+
 	// Save-anywhere: apply the full-state snapshot on the first Tick (Tick doesn't
 	// run while the chapter splash pauses the game, and by now the weapon's loadout
 	// arrays exist). One-shot: clears both the per-pawn and the static pending flags.
@@ -430,7 +453,7 @@ void AM1Character::OpenNearestTerminal()
 	}
 
 	// Match the running map (possibly PIE-prefixed) to its terminal list.
-	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(World->GetMapName());
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(M1LevelKey(World));
 	if (Terms.Num() == 0)
 	{
 		return;
@@ -565,6 +588,25 @@ void AM1Character::BeginPlay()
 		}
 	}
 
+	// Installer Phase 1 verification hook: if M1_RUNLEVEL=<index> is set AND we're not
+	// already in runtime mode, enter runtime mode for that campaign level (travels to
+	// L_Runtime, where the GameMode builds the geometry + this teleports onto the
+	// start). The GRuntimeLevelName guard stops it re-triggering after the travel.
+	if (GRuntimeLevelName.IsEmpty())
+	{
+		const FString RunLevel = FPlatformMisc::GetEnvironmentVariable(TEXT("M1_RUNLEVEL"));
+		if (!RunLevel.IsEmpty())
+		{
+			TWeakObjectPtr<AM1Character> WeakThis(this);
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda(
+				[WeakThis, RunLevel](float) -> bool
+				{
+					if (AM1Character* Self = WeakThis.Get()) { Self->M1RunLevel(RunLevel); }
+					return false;  // one-shot
+				}), 1.5f);
+		}
+	}
+
 	// Tight Marathon spaces (~1m rooms): a small near-clip stops the camera from
 	// seeing through a wall when the player is pressed right against it.
 	GNearClippingPlane = M1Tuning::GNearClipCm;
@@ -593,9 +635,14 @@ void AM1Character::BeginPlay()
 	Oxygen = M1Tuning::GPlayerOxygen;
 	if (UWorld* W = GetWorld())
 	{
-		const FM1LevelEnv* Env = M1LevelEnvForMap(W->GetMapName());
+		const FM1LevelEnv* Env = M1LevelEnvForMap(M1LevelKey(W));
 		bIsVacuumLevel = Env && Env->bVacuum;
 	}
+
+	// Runtime mode (Phase 1): the GameMode builds the level geometry in its BeginPlay;
+	// teleport this pawn onto the placements player_start on the first Tick (geometry
+	// exists by then). The blank L_Runtime map has no authored PlayerStart.
+	bRuntimePlacePending = !GRuntimeLevelName.IsEmpty();
 
 	// Carry shields forward from the checkpoint. The checkpoint is stamped with
 	// the level it belongs to (written on transition / New Game), so a stale save
@@ -604,7 +651,7 @@ void AM1Character::BeginPlay()
 	if (GetWorld() && !GPendingFullLoad)
 	{
 		int32 SavedIdx; float SavedShields;
-		const int32 CurIdx = M1LevelIndexForMap(GetWorld()->GetMapName());
+		const int32 CurIdx = M1CurrentLevelIndex(GetWorld());
 		if (CurIdx >= 0 && M1ReadCheckpoint(SavedIdx, SavedShields) && SavedIdx == CurIdx)
 		{
 			Health = FMath::Clamp(SavedShields, 1.0f, M1Tuning::GPlayerShields);
@@ -943,6 +990,30 @@ void AM1Character::M1Runtime(const FString& Stem)
 	}
 }
 
+void AM1Character::M1RunLevel(const FString& StemOrIndex)
+{
+	// Accept a campaign index ("0".."36") or a stem/name ("00_Arrival" /
+	// "L_00_Arrival"); default to level 0.
+	int32 Index = 0;
+	if (!StemOrIndex.IsEmpty())
+	{
+		if (StemOrIndex.IsNumeric())
+		{
+			Index = FMath::Clamp(FCString::Atoi(*StemOrIndex), 0, M1LevelCount() - 1);
+		}
+		else
+		{
+			FString Key = StemOrIndex;
+			if (!Key.StartsWith(TEXT("L_"))) { Key = TEXT("L_") + Key; }
+			const int32 Found = M1LevelIndexForMap(Key);
+			if (Found >= 0) { Index = Found; }
+		}
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Runtime] entering runtime mode for level %d (%s)"),
+		Index, *FPaths::GetCleanFilename(M1LevelPath(Index)));
+	M1EnterRuntimeLevel(this, Index);
+}
+
 void AM1Character::M1Net()
 {
 	UWorld* W = GetWorld();
@@ -998,7 +1069,7 @@ void AM1Character::M1Terms()
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
-	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(W->GetMapName());
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(M1LevelKey(W));
 	for (int32 i = 0; i < Terms.Num(); ++i)
 	{
 		UE_LOG(LogTemp, Warning,
@@ -1044,7 +1115,7 @@ void AM1Character::M1OpenTerm(int32 TermIndex)
 {
 	UWorld* W = GetWorld();
 	if (!W) { return; }
-	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(W->GetMapName());
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(M1LevelKey(W));
 	if (TermIndex < 0 || TermIndex >= Terms.Num())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[M1OpenTerm] no term #%d (have %d)"), TermIndex, Terms.Num());
@@ -1078,7 +1149,7 @@ void AM1Character::M1SelfTest()
 	{
 		return;
 	}
-	const FString Map = W->GetMapName();
+	const FString Map = M1LevelKey(W);
 	int32 nMon = 0, nDoor = 0, nPanel = 0, nElev = 0, nSwitch = 0;
 	for (TActorIterator<AM1Enemy> It(W); It; ++It) { ++nMon; }
 	for (TActorIterator<AM1Platform> It(W); It; ++It) { ++nDoor; }
@@ -1131,12 +1202,21 @@ void AM1Character::CycleLevel(int32 Direction)
 	{
 		return;
 	}
-	const int32 Index = FMath::Max(0, M1LevelIndexForMap(GetWorld()->GetMapName()));
+	const int32 Index = FMath::Max(0, M1CurrentLevelIndex(GetWorld()));
 	const int32 Next = ((Index + Direction) % GM1LevelCount + GM1LevelCount) % GM1LevelCount;
 	// Checkpoint the destination + carry current shields forward (Marathon
 	// shields never regenerate, so the next level starts where this one left off).
 	M1WriteCheckpoint(Next, Health);
-	UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+	// Stay in whichever mode we're in: runtime mode rebuilds the next level in
+	// L_Runtime; cooked mode opens the next cooked .umap.
+	if (!GRuntimeLevelName.IsEmpty())
+	{
+		M1EnterRuntimeLevel(this, Next);
+	}
+	else
+	{
+		UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+	}
 }
 
 void AM1Character::AdvanceLevel()
@@ -1146,7 +1226,7 @@ void AM1Character::AdvanceLevel()
 	{
 		return;
 	}
-	const int32 Index = M1LevelIndexForMap(World->GetMapName());
+	const int32 Index = M1CurrentLevelIndex(World);
 	if (Index < 0)
 	{
 		return;  // test / experimental map, not part of the campaign order
@@ -1164,7 +1244,14 @@ void AM1Character::AdvanceLevel()
 	}
 	M1WriteCheckpoint(Next, Health);  // carry shields forward (no regen)
 	UE_LOG(LogTemp, Log, TEXT("AdvanceLevel: %d -> %d via exit terminal"), Index, Next);
-	UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+	if (!GRuntimeLevelName.IsEmpty())
+	{
+		M1EnterRuntimeLevel(this, Next);
+	}
+	else
+	{
+		UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Next)));
+	}
 }
 
 bool AM1Character::IsLevelExitTerminal(int32 TermId) const
@@ -1178,7 +1265,7 @@ bool AM1Character::IsLevelExitTerminal(int32 TermId) const
 	// generated bExit flag (terminals whose text shows a teleport action). Among
 	// flagged terminals -- or all of them, when a level has none flagged -- the
 	// most-paged one is the exit (the level's main/control-room terminal).
-	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(World->GetMapName());
+	const TArrayView<const FM1Terminal> Terms = M1TerminalsForLevel(M1LevelKey(World));
 	bool bAnyExit = false;
 	for (const FM1Terminal& T : Terms)
 	{
@@ -1223,6 +1310,43 @@ int32 AM1Character::M1LevelIndexForMap(const FString& MapName)
 		}
 	}
 	return -1;
+}
+
+// --- Runtime-level mode (installer Phase 1) ---------------------------------
+FString AM1Character::GRuntimeLevelName;
+int32 AM1Character::GRuntimeLevelIndex = 0;
+
+const TCHAR* AM1Character::M1RuntimeMapPath()
+{
+	return TEXT("/Game/Levels/M1/L_Runtime");
+}
+
+FString AM1Character::M1LevelKey(UWorld* World)
+{
+	// Runtime mode: the persistent map is L_Runtime, so the campaign name drives the
+	// Contains()-based table lookups. Cooked mode: the real (PIE-prefixed) map name.
+	if (!GRuntimeLevelName.IsEmpty())
+	{
+		return GRuntimeLevelName;
+	}
+	return World ? World->GetMapName() : FString();
+}
+
+int32 AM1Character::M1CurrentLevelIndex(UWorld* World)
+{
+	if (!GRuntimeLevelName.IsEmpty())
+	{
+		return GRuntimeLevelIndex;
+	}
+	return M1LevelIndexForMap(World ? World->GetMapName() : FString());
+}
+
+void AM1Character::M1EnterRuntimeLevel(UObject* WorldCtx, int32 Index)
+{
+	GRuntimeLevelIndex = FMath::Clamp(Index, 0, GM1LevelCount - 1);
+	// The campaign name key for the tables, e.g. "L_00_Arrival".
+	GRuntimeLevelName = FPaths::GetCleanFilename(GM1Levels[GRuntimeLevelIndex]);
+	UGameplayStatics::OpenLevel(WorldCtx, FName(M1RuntimeMapPath()));
 }
 
 bool AM1Character::GPendingFullLoad = false;
@@ -1309,7 +1433,7 @@ void AM1Character::M1SaveFull()
 		return;
 	}
 	// Keep the checkpoint fields valid so menu Continue still resumes the level.
-	Save->LevelIndex = FMath::Max(0, M1LevelIndexForMap(W->GetMapName()));
+	Save->LevelIndex = FMath::Max(0, M1CurrentLevelIndex(W));
 	Save->Shields = Health;
 	Save->bValid = true;
 	// Full save-anywhere snapshot.

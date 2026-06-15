@@ -10,8 +10,12 @@
 #include "IImageWrapperModule.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "HAL/FileManager.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/Engine.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 AM1RuntimeLevel::AM1RuntimeLevel()
 {
@@ -139,11 +143,34 @@ namespace
 	}
 }
 
+FString AM1RuntimeLevel::ResolveGeoBasename(const FString& Stem)
+{
+	const FString GeoDir = FPaths::Combine(ResolveDataRoot(), TEXT("Geometry"));
+	if (FPaths::FileExists(FPaths::Combine(GeoDir, Stem + TEXT(".obj"))))
+	{
+		return Stem;  // exact match (e.g. "00_Arrival")
+	}
+	// Fall back to the leading "NN_" index prefix, which both naming schemes share.
+	int32 Underscore = INDEX_NONE;
+	if (Stem.FindChar(TEXT('_'), Underscore) && Underscore > 0)
+	{
+		const FString Prefix = Stem.Left(Underscore + 1);  // "20_"
+		TArray<FString> Found;
+		IFileManager::Get().FindFiles(Found, *(GeoDir / (Prefix + TEXT("*.obj"))), true, false);
+		if (Found.Num() > 0)
+		{
+			return FPaths::GetBaseFilename(Found[0]);  // actual OBJ base name
+		}
+	}
+	return Stem;
+}
+
 int32 AM1RuntimeLevel::BuildFromStem(const FString& Stem)
 {
 	const FString Root = ResolveDataRoot();
-	const FString ObjPath = FPaths::Combine(Root, TEXT("Geometry"), Stem + TEXT(".obj"));
-	const FString MtlPath = FPaths::Combine(Root, TEXT("Geometry"), Stem + TEXT(".mtl"));
+	const FString Base = ResolveGeoBasename(Stem);
+	const FString ObjPath = FPaths::Combine(Root, TEXT("Geometry"), Base + TEXT(".obj"));
+	const FString MtlPath = FPaths::Combine(Root, TEXT("Geometry"), Base + TEXT(".mtl"));
 
 	TArray<FString> Lines;
 	if (!FFileHelper::LoadFileToStringArray(Lines, *ObjPath))
@@ -282,4 +309,33 @@ int32 AM1RuntimeLevel::BuildFromStem(const FString& Stem)
 			FString::Printf(TEXT("M1Runtime %s: %d sections, %d tris"), *Stem, NumSections, TotalTris));
 	}
 	return NumSections;
+}
+
+bool AM1RuntimeLevel::LoadPlayerStart(const FString& Stem, FVector& OutLoc, float& OutYaw)
+{
+	const FString Path = FPaths::Combine(ResolveDataRoot(), TEXT("Geometry"),
+		ResolveGeoBasename(Stem) + TEXT("_placements.json"));
+	FString Json;
+	if (!FFileHelper::LoadFileToString(Json, *Path))
+	{
+		return false;
+	}
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* PS = nullptr;
+	if (!Root->TryGetObjectField(TEXT("player_start"), PS) || !PS || !PS->IsValid())
+	{
+		return false;
+	}
+	// Placements are already in the final UE space that matches the imported (and
+	// thus the runtime-built) geometry -- no Y negation here.
+	OutLoc = FVector((*PS)->GetNumberField(TEXT("x")),
+	                 (*PS)->GetNumberField(TEXT("y")),
+	                 (*PS)->GetNumberField(TEXT("z")));
+	OutYaw = (*PS)->HasField(TEXT("facing_deg")) ? (*PS)->GetNumberField(TEXT("facing_deg")) : 0.0f;
+	return true;
 }

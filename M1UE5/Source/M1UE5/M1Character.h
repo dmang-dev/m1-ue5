@@ -52,6 +52,19 @@ public:
 	static bool M1ReadCheckpoint(int32& OutLevelIndex, float& OutShields);
 	static bool M1HasCheckpoint();
 
+	/** --- Runtime-level mode (installer Phase 1): when GRuntimeLevelName is non-empty
+	 *  the game runs a level built AT RUNTIME (AM1RuntimeLevel) inside the persistent
+	 *  L_Runtime map -- so table lookups key off this campaign name (e.g.
+	 *  "L_00_Arrival") instead of the persistent map's name. The statics survive level
+	 *  travel within the process. M1LevelKey returns the active key for all the
+	 *  Contains()-based table lookups (runtime name, else the real map name). --- */
+	static FString GRuntimeLevelName;   // "" = cooked-map mode (use real map name)
+	static int32 GRuntimeLevelIndex;    // campaign index of the runtime level
+	static const TCHAR* M1RuntimeMapPath();
+	static FString M1LevelKey(class UWorld* World);
+	static int32 M1CurrentLevelIndex(class UWorld* World);
+	static void M1EnterRuntimeLevel(class UObject* WorldCtx, int32 Index);
+
 	/** --- Player preferences (Preferences menu), persisted to the "M1Settings"
 	 *  slot. The statics are the live values consumed by the look handlers; the menu
 	 *  edits them and calls M1SaveSettings. Loaded once at pawn BeginPlay. --- */
@@ -136,6 +149,10 @@ public:
 	 *  OBJ/PNG intermediates (no cook) via AM1RuntimeLevel and report sections/tris.
 	 *  Default stem "00_Arrival". Proves the bring-your-own-assets loader works. */
 	UFUNCTION(Exec) void M1Runtime(const FString& Stem);
+	/** Installer Phase 1: enter RUNTIME mode for a campaign level (index "0".."36"
+	 *  or a stem like "00_Arrival") -- travels to L_Runtime and builds that level
+	 *  entirely from intermediates (geometry + table-driven actors + player start). */
+	UFUNCTION(Exec) void M1RunLevel(const FString& StemOrIndex);
 
 	/** --- Record/replay ("films"), via UE's Replay/DemoNetDriver. Records the
 	 *  replication stream to Saved/Demos/<name>.replay; play it back as a spectator.
@@ -299,6 +316,11 @@ private:
 	 *  full-state save on its first Tick (after the chapter splash unpauses and the
 	 *  weapon component has initialised its loadout arrays). */
 	bool bPendingRestore = false;
+
+	/** Installer Phase 1 one-shot: in runtime mode, teleport this pawn onto the
+	 *  level's placements player_start on the first Tick (after the GameMode has
+	 *  built the runtime geometry in its BeginPlay). */
+	bool bRuntimePlacePending = false;
 
 	/** One-shot: tint the body from this pawn's (replicated) PlayerState color once
 	 *  it's available (team color, or a per-player hue in FFA). */

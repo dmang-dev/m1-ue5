@@ -257,8 +257,13 @@ Each phase is independently testable via the `M1SelfTest` harness. **The archite
 - **VERIFIED (packaged build):** `[M1Runtime] SELFTEST 00_Arrival: PASS — 92 sections, 5200 verts, 2738 tris, extent 1347x1629x390 cm`, built entirely at runtime from OBJ/PNG on disk, no crash.
 - **Remaining for the full exit (folds into Phase 1):** make the runtime mesh the level the player spawns into (vs building alongside the cooked map), so `M1SelfTest`'s grounded-spawn / no-holes / weapon checks run on it.
 
-### Phase 1 — Generalize all 37 levels (MVP complete)
-- Drive level switching by **loading the target level's OBJ + placements into the persistent level** instead of `OpenLevel("/Game/Levels/M1/...")`.
+### Phase 1 — Generalize all 37 levels (MVP complete) — ✅ DONE (core)
+- ✅ **Runtime mode**: `AM1Character::GRuntimeLevelName`/`GRuntimeLevelIndex` (survive level travel) + `M1LevelKey()` route every `Contains()`-based table lookup (terminals, env/vacuum, checkpoint index, level cycling, full-save index) off the campaign name while the persistent map is the blank **`L_Runtime`** (`Tools/ue5_make_runtime_map.py`, global-default `M1GameMode`).
+- ✅ **Entry**: `M1EnterRuntimeLevel(idx)` (exec `M1RunLevel <idx|stem>`, env `M1_RUNLEVEL`) sets the name + travels to `L_Runtime`; `[`/`]` cycling and exit-terminal `AdvanceLevel` stay in runtime mode once entered.
+- ✅ **Build**: `AM1GameMode::BeginPlay` -> `BuildRuntimeGeometry()` builds the level's geometry (`AM1RuntimeLevel`) before the table-driven actors spawn; `AM1RuntimeLevel::ResolveGeoBasename` matches the OBJ/placements by the reliable `NN_` index prefix (the cooked-map and OBJ names sanitize punctuation differently). Player teleports onto `placements.player_start` on the first Tick.
+- ✅ Checkpoints unchanged (store the level **index**); `M1CurrentLevelIndex` returns the runtime index so Continue / save-anywhere still resolve.
+- **VERIFIED (packaged build)**: `M1_RUNLEVEL` sweep built `00_Arrival` (92 sec/2738 tri), `05_The_Rose` (93/2672), `13_Colony_Ship` (46/2866), `20_Beware_of_Low-Flying…` (55/2518), `28_Carnage_Palace` (28/1008), `36_…I_D` (61/1560) — all entered runtime mode, traveled to `L_Runtime`, and the GameMode built the geometry at runtime, no crash. (Geometry is read from the dev `Reference/` tree; Phase 2 swaps that for the per-user AppData cache.)
+- **Remaining**: WAV->`USoundWave` runtime loader (sounds still load cooked `/Game/Audio`, which is fine while shipping cooked audio); making runtime mode the campaign default (currently opt-in via exec/env, cooked path remains the default) once playtested; a `M1SelfTest` grounded/no-holes pass walking the runtime mesh.
 - Spawn doors / elevators / panels / enemies / lights from placements JSON + the committed `*Table.h` (extend the existing `SpawnMonsters`/`SpawnDoors`/`SpawnPanels`/`SpawnLights` path).
 - Add runtime **WAV → `USoundWave`**; route `/Game/Audio` loads through it.
 - Confirm `UM1SaveGame`'s level-index scheme still resolves under the runtime-level identifiers (see §9).
