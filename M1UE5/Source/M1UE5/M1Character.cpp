@@ -32,6 +32,8 @@
 #include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op replication)
 #include "Engine/GameInstance.h"  // StartRecordingReplay / PlayReplay (films)
+#include "GameFramework/GameStateBase.h"  // PlayerArray (scoreboard)
+#include "GameFramework/PlayerState.h"     // GetScore / GetPlayerName
 
 namespace
 {
@@ -541,6 +543,14 @@ void AM1Character::BeginPlay()
 	// loadout arrays before we restore them.
 	bPendingRestore = GPendingFullLoad;
 
+	// Co-op/DM: tint the visible body so teammates/opponents read as bright player
+	// markers, not grey cubes. (No-op if the material lacks a "Color" param.) A real
+	// player sprite billboard is a later art pass.
+	if (Body)
+	{
+		Body->SetVectorParameterValueOnMaterials(TEXT("Color"), FVector(0.95f, 0.45f, 0.05f));
+	}
+
 	// Build the render target the HUD draws into the bezel's viewport hole. Hole
 	// is ~450x273 px in the 640x480 bezel (aspect 1.648); 960x582 supersamples it.
 	if (SceneCapture)
@@ -727,17 +737,24 @@ void AM1Character::M1Respawn()
 
 void AM1Character::M1Frags()
 {
-	if (UWorld* W = GetWorld())
+	// Read the replicated PlayerState scores -> works on clients too, any net mode.
+	UWorld* W = GetWorld();
+	AGameStateBase* GS = W ? W->GetGameState() : nullptr;
+	if (!GS)
 	{
-		if (AM1DeathmatchGameMode* DM = W->GetAuthGameMode<AM1DeathmatchGameMode>())
+		UE_LOG(LogTemp, Warning, TEXT("[M1Frags] no game state"));
+		return;
+	}
+	for (int32 i = 0; i < GS->PlayerArray.Num(); ++i)
+	{
+		const APlayerState* PS = GS->PlayerArray[i];
+		if (PS)
 		{
-			DM->LogScoreboard();
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[M1Frags] not a deathmatch game (no scoreboard)"));
+			UE_LOG(LogTemp, Warning, TEXT("[M1Frags] %s = %d"),
+				*PS->GetPlayerName(), FMath::RoundToInt(PS->GetScore()));
 		}
 	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Frags] players=%d"), GS->PlayerArray.Num());
 }
 
 void AM1Character::M1Net()

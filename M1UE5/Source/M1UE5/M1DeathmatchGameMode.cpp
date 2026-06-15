@@ -5,14 +5,17 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/GameStateBase.h"
+#include "TimerManager.h"
 
 AM1DeathmatchGameMode::AM1DeathmatchGameMode()
 {
 	DefaultPawnClass = AM1Character::StaticClass();
 	PlayerControllerClass = AM1PlayerController::StaticClass();
-	// No campaign HUD bezel override needed; AM1Character's HUD is set by the
-	// player controller path. Bots/teams are later; v1 is free-for-all.
+	PrimaryActorTick.bCanEverTick = true;       // time-based modes (KOTH/Tag) score on tick
+	PrimaryActorTick.bStartWithTickEnabled = true;
 }
 
 AActor* AM1DeathmatchGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -20,7 +23,6 @@ AActor* AM1DeathmatchGameMode::ChoosePlayerStart_Implementation(AController* Pla
 	UWorld* World = GetWorld();
 	if (World)
 	{
-		// Round-robin across all PlayerStarts so co-op/DM players don't stack.
 		TArray<APlayerStart*> Starts;
 		for (TActorIterator<APlayerStart> It(World); It; ++It)
 		{
@@ -36,43 +38,81 @@ AActor* AM1DeathmatchGameMode::ChoosePlayerStart_Implementation(AController* Pla
 	return Super::ChoosePlayerStart_Implementation(Player);
 }
 
+void AM1DeathmatchGameMode::AddScore(AController* C, int32 Delta)
+{
+	if (!C || !C->PlayerState)
+	{
+		return;
+	}
+	const int32 NewScore = FMath::Max(0, FMath::RoundToInt(C->PlayerState->GetScore()) + Delta);
+	C->PlayerState->SetScore(static_cast<float>(NewScore));
+	if (!bRoundOver && NewScore >= ScoreLimit)
+	{
+		EndRound(C);
+	}
+}
+
+void AM1DeathmatchGameMode::AwardKill(AController* Killer, AController* Victim)
+{
+	if (Killer && Killer != Victim)
+	{
+		AddScore(Killer, +1);          // a frag
+	}
+	else if (Victim)
+	{
+		AddScore(Victim, -1);          // suicide / environment death
+	}
+}
+
 void AM1DeathmatchGameMode::HandlePlayerDeath(AM1Character* Victim, AController* Killer)
 {
-	if (!Victim)
+	if (!Victim || bRoundOver)
 	{
 		return;
 	}
 	AController* VictimCtrl = Victim->GetController();
+	AwardKill(Killer, VictimCtrl);
 
-	// Score: a kill credits the killer; a suicide / environment death costs a frag.
-	if (Killer && Killer != VictimCtrl)
-	{
-		Frags.FindOrAdd(Killer) += 1;
-	}
-	else if (VictimCtrl)
-	{
-		int32& F = Frags.FindOrAdd(VictimCtrl);
-		F = FMath::Max(0, F - 1);
-	}
-
-	// Respawn: heal to full and teleport to a fresh PlayerStart (instant respawn).
+	// Instant respawn: teleport to a fresh start + heal.
 	if (AActor* Start = ChoosePlayerStart(VictimCtrl))
 	{
 		Victim->SetActorLocationAndRotation(Start->GetActorLocation(), Start->GetActorRotation(),
 			false, nullptr, ETeleportType::TeleportPhysics);
 	}
 	Victim->M1Respawn();
-
-	LogScoreboard();
 }
 
-void AM1DeathmatchGameMode::LogScoreboard() const
+void AM1DeathmatchGameMode::Tick(float DeltaSeconds)
 {
-	int32 i = 0;
-	for (const TPair<TObjectPtr<AController>, int32>& Pair : Frags)
+	Super::Tick(DeltaSeconds);
+	if (!bRoundOver)
 	{
-		const FString Who = Pair.Key ? Pair.Key->GetName() : TEXT("?");
-		UE_LOG(LogTemp, Warning, TEXT("[M1Frags] #%d %s = %d"), i++, *Who, Pair.Value);
+		ScoreTick(DeltaSeconds);
 	}
-	UE_LOG(LogTemp, Warning, TEXT("[M1Frags] players=%d"), Frags.Num());
+}
+
+void AM1DeathmatchGameMode::EndRound(AController* Winner)
+{
+	bRoundOver = true;
+	const FString Name = (Winner && Winner->PlayerState)
+		? Winner->PlayerState->GetPlayerName() : TEXT("?");
+	UE_LOG(LogTemp, Warning, TEXT("[M1Net] %s ROUND OVER -- winner: %s (%d)"),
+		*GetModeName(), *Name, Winner && Winner->PlayerState
+			? FMath::RoundToInt(Winner->PlayerState->GetScore()) : 0);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(30, 8.0f, FColor::Yellow,
+			FString::Printf(TEXT("%s WINNER: %s"), *GetModeName(), *Name));
+	}
+	// Restart the same map after a short delay (PlayerStates -> scores reset on travel).
+	if (UWorld* World = GetWorld())
+	{
+		FString Map = World->GetMapName();
+		Map.RemoveFromStart(World->StreamingLevelsPrefix);
+		FTimerHandle Th;
+		World->GetTimerManager().SetTimer(Th, FTimerDelegate::CreateLambda([World, Map]()
+		{
+			World->ServerTravel(Map + TEXT("?listen"), false);
+		}), 6.0f, false);
+	}
 }

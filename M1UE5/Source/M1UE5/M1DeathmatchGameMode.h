@@ -7,12 +7,13 @@
 class AM1Character;
 
 /**
- * Marathon net deathmatch -- "Carnage" / Every Man for Himself: free-for-all frag
- * scoring with instant respawn. Select it per-map via the URL game option, e.g.
+ * Base Marathon net mode -- "Carnage" / Every Man for Himself: free-for-all frag
+ * scoring with instant respawn, to a frag limit. Score lives on the built-in
+ * (replicated) APlayerState::Score, so client HUDs / M1Frags see it. KOTH and Tag
+ * subclass this and override the scoring hooks. Select per-map via the URL:
  *   M1UE5.exe /Game/Levels/M1/L_30_Arena?game=/Script/M1UE5.M1DeathmatchGameMode?listen
- * Players are server-authoritative (see AM1Character) and shootable (capsule blocks
- * the weapon's Visibility trace), so PvP damage flows through the normal damage path.
- * KOTH and Kill-the-Man-with-the-Ball (Tag) are follow-up modes.
+ * Players are server-authoritative (AM1Character) and shootable (capsule blocks the
+ * weapon Visibility trace), so PvP damage flows through the normal damage path.
  */
 UCLASS()
 class M1UE5_API AM1DeathmatchGameMode : public AGameModeBase
@@ -22,22 +23,37 @@ class M1UE5_API AM1DeathmatchGameMode : public AGameModeBase
 public:
 	AM1DeathmatchGameMode();
 
-	/** Called from AM1Character::TakeDamage when a player dies in this mode: credits
-	 *  the killer a frag (suicide/environment = -1), respawns the victim at a random
-	 *  PlayerStart with full shields, and logs the running scoreboard. */
+	virtual void Tick(float DeltaSeconds) override;
+
+	/** Called from AM1Character::TakeDamage when a player dies: scores the kill
+	 *  (AwardKill), respawns the victim at a fresh PlayerStart, and checks the win. */
 	void HandlePlayerDeath(AM1Character* Victim, AController* Killer);
 
-	/** Spread players across the map's PlayerStarts (round-robin) instead of stacking
-	 *  everyone on the first one. */
+	/** Round-robin the map's PlayerStarts instead of stacking everyone on one. */
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
-	/** Log the current scoreboard (M1Frags harness reaches it via the auth GM). */
-	void LogScoreboard() const;
+	/** Short mode label for the HUD/log ("CARNAGE", "KING OF THE HILL", "TAG"). */
+	virtual FString GetModeName() const { return TEXT("CARNAGE"); }
+
+protected:
+	/** Score a kill. Base: +1 to the killer (suicide/environment: -1 to the victim).
+	 *  KOTH overrides to no-op (only hill time scores); Tag transfers the "ball". */
+	virtual void AwardKill(AController* Killer, AController* Victim);
+
+	/** Per-tick scoring for time-based modes (KOTH hill, Tag ball). Base: nothing. */
+	virtual void ScoreTick(float DeltaSeconds) {}
+
+	/** Add to a controller's replicated PlayerState score; then check the limit. */
+	void AddScore(AController* C, int32 Delta);
+
+	/** Frags/points to win; reaching it ends the round (announce + restart). */
+	UPROPERTY(EditDefaultsOnly, Category = "M1Net")
+	int32 ScoreLimit = 10;
+
+	bool bRoundOver = false;
 
 private:
-	/** Frags per controller (kills). */
-	UPROPERTY()
-	TMap<TObjectPtr<AController>, int32> Frags;
+	void EndRound(AController* Winner);
 
 	int32 NextStart = 0;  // round-robin index into the PlayerStarts
 };
