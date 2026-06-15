@@ -173,6 +173,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
 	void FireShot();
@@ -191,14 +192,18 @@ private:
 	TArray<FM1WeaponDef> Weapons;
 
 	/** Per-weapon current ammo (parallel to Weapons). Infinite mags store a
-	 *  large sentinel so GetAmmo() stays meaningful but never empties. */
+	 *  large sentinel so GetAmmo() stays meaningful but never empties. Replicated
+	 *  so co-op clients' HUD shows the server-authoritative ammo. */
+	UPROPERTY(Replicated)
 	TArray<int32> Ammo;
 
 	/** Per-weapon secondary ammo (parallel; only meaningful when SecMagSize >= 0,
 	 *  e.g. the AR's 7-grenade magazine). */
+	UPROPERTY(Replicated)
 	TArray<int32> SecAmmo;
 
-	int32 CurrentIndex = 1;  // start on the Magnum
+	UPROPERTY(Replicated)
+	int32 CurrentIndex = 1;  // start on the Magnum (replicated: drives the viewmodel)
 	float LastFireTime = -1000.0f;
 	float LastSecFireTime = -1000.0f;
 	bool bReloading = false;

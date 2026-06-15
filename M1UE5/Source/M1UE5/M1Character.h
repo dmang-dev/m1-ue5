@@ -172,6 +172,11 @@ protected:
 	UFUNCTION(Server, Reliable) void ServerStopAltFire();
 	UFUNCTION(Server, Reliable) void ServerReload();
 
+	/** Weapon selection (server-authoritative; CurrentIndex replicates back). */
+	void SelectWeaponSlot(int32 Index);
+	UFUNCTION(Server, Reliable) void ServerSelectWeapon(int32 Index);
+	UFUNCTION(Server, Reliable) void ServerCycleWeapon(int32 Dir);
+
 	/** Weapon selection: number keys 1-7 pick a slot; the scroll wheel cycles. */
 	void OnSelectWeapon1();
 	void OnSelectWeapon2();

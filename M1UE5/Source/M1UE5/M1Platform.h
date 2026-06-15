@@ -58,5 +58,8 @@ private:
 	int32 Tag = -1;              // platform tag (tag-switch target)
 
 	bool PlayerNear() const;
-	void PlayDoorSound(USoundBase* Sound) const;
+	/** Play the open/close one-shot on ALL machines so co-op clients hear the door.
+	 *  NetMulticast -> must be invoked from the server (authority). */
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastDoorSound(USoundBase* Sound);
 };

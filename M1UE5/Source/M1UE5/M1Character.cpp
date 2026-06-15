@@ -439,28 +439,41 @@ void AM1Character::CloseTerminal()
 	}
 }
 
-void AM1Character::OnSelectWeapon1() { if (Weapon) { Weapon->SelectWeapon(0); } }
-void AM1Character::OnSelectWeapon2() { if (Weapon) { Weapon->SelectWeapon(1); } }
-void AM1Character::OnSelectWeapon3() { if (Weapon) { Weapon->SelectWeapon(2); } }
-void AM1Character::OnSelectWeapon4() { if (Weapon) { Weapon->SelectWeapon(3); } }
-void AM1Character::OnSelectWeapon5() { if (Weapon) { Weapon->SelectWeapon(4); } }
-void AM1Character::OnSelectWeapon6() { if (Weapon) { Weapon->SelectWeapon(5); } }
-void AM1Character::OnSelectWeapon7() { if (Weapon) { Weapon->SelectWeapon(6); } }
+// Weapon selection is server-authoritative (CurrentIndex replicates -> if a client
+// switched locally the server would just override it). Host/standalone selects
+// directly; a client requests it via a Server RPC.
+void AM1Character::SelectWeaponSlot(int32 Index)
+{
+	if (!Weapon) { return; }
+	if (HasAuthority()) { Weapon->SelectWeapon(Index); } else { ServerSelectWeapon(Index); }
+}
+void AM1Character::OnSelectWeapon1() { SelectWeaponSlot(0); }
+void AM1Character::OnSelectWeapon2() { SelectWeaponSlot(1); }
+void AM1Character::OnSelectWeapon3() { SelectWeaponSlot(2); }
+void AM1Character::OnSelectWeapon4() { SelectWeaponSlot(3); }
+void AM1Character::OnSelectWeapon5() { SelectWeaponSlot(4); }
+void AM1Character::OnSelectWeapon6() { SelectWeaponSlot(5); }
+void AM1Character::OnSelectWeapon7() { SelectWeaponSlot(6); }
 
 void AM1Character::OnNextWeapon()
 {
-	if (Weapon)
-	{
-		Weapon->NextWeapon();
-	}
+	if (!Weapon) { return; }
+	if (HasAuthority()) { Weapon->NextWeapon(); } else { ServerCycleWeapon(+1); }
 }
 
 void AM1Character::OnPrevWeapon()
 {
-	if (Weapon)
-	{
-		Weapon->PrevWeapon();
-	}
+	if (!Weapon) { return; }
+	if (HasAuthority()) { Weapon->PrevWeapon(); } else { ServerCycleWeapon(-1); }
+}
+
+void AM1Character::ServerSelectWeapon_Implementation(int32 Index)
+{
+	if (Weapon) { Weapon->SelectWeapon(Index); }
+}
+void AM1Character::ServerCycleWeapon_Implementation(int32 Dir)
+{
+	if (Weapon) { if (Dir >= 0) { Weapon->NextWeapon(); } else { Weapon->PrevWeapon(); } }
 }
 
 void AM1Character::BeginPlay()

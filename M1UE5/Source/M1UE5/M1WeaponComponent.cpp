@@ -1,6 +1,7 @@
 #include "M1WeaponComponent.h"
 
 #include "M1Audio.h"
+#include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op ammo replication)
 
 #include "M1Projectile.h"
 #include "M1Impact.h"
@@ -27,6 +28,10 @@ namespace
 UM1WeaponComponent::UM1WeaponComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+
+	// Co-op: replicate ammo + current weapon so a client's HUD shows correct ammo
+	// and the right viewmodel (fire/select are server-authoritative on the pawn).
+	SetIsReplicatedByDefault(true);
 
 	// --- Canonical M1 SFX. The "Monster"/"Ambient"/"Weapon" folders are
 	// py-marathon-utils' cosmetic id//1000 buckets, not real categories. Load
@@ -237,6 +242,14 @@ UM1WeaponComponent::UM1WeaponComponent()
 		W.SecImpactSound = SndRicochet;
 		Weapons.Add(W);
 	}
+}
+
+void UM1WeaponComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UM1WeaponComponent, Ammo);
+	DOREPLIFETIME(UM1WeaponComponent, SecAmmo);
+	DOREPLIFETIME(UM1WeaponComponent, CurrentIndex);
 }
 
 void UM1WeaponComponent::BeginPlay()

@@ -101,7 +101,7 @@ void AM1Platform::ForceOpen()
 		return;
 	}
 	State = EDoorState::Opening;
-	PlayDoorSound(OpenSound);
+	MulticastDoorSound(OpenSound);
 }
 
 bool AM1Platform::PlayerNear() const
@@ -131,7 +131,7 @@ bool AM1Platform::PlayerNear() const
 	return false;
 }
 
-void AM1Platform::PlayDoorSound(USoundBase* Sound) const
+void AM1Platform::MulticastDoorSound_Implementation(USoundBase* Sound)
 {
 	if (Sound)
 	{
@@ -173,7 +173,7 @@ void AM1Platform::Tick(float DeltaSeconds)
 		if (PlayerNear())
 		{
 			State = EDoorState::Opening;
-			PlayDoorSound(OpenSound);
+			MulticastDoorSound(OpenSound);
 		}
 		break;
 
@@ -194,7 +194,7 @@ void AM1Platform::Tick(float DeltaSeconds)
 		if (!PlayerNear() && OpenTimer >= Dwell)
 		{
 			State = EDoorState::Closing;
-			PlayDoorSound(CloseSound);
+			MulticastDoorSound(CloseSound);
 		}
 		break;
 
@@ -202,7 +202,7 @@ void AM1Platform::Tick(float DeltaSeconds)
 		if (PlayerNear())   // don't crush -- re-open if the player steps back in
 		{
 			State = EDoorState::Opening;
-			PlayDoorSound(OpenSound);
+			MulticastDoorSound(OpenSound);
 			break;
 		}
 		{
