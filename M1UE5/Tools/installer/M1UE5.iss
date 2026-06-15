@@ -93,15 +93,25 @@ begin
   DataPage.Add('Marathon 1 data folder (optional):');
 end;
 
+// The chosen data folder: the wizard page if set, else the /DATADIR=<path> command
+// line (so a silent/scripted install -- /VERYSILENT /DATADIR=... -- can convert too).
+function ResolvedDataDir: string;
+begin
+  Result := Trim(DataPage.Values[0]);
+  if Result = '' then
+    Result := Trim(ExpandConstant('{param:DataDir|}'));
+end;
+
 function GetDataDir(Param: string): string;
 begin
-  Result := DataPage.Values[0];
+  Result := ResolvedDataDir;
 end;
 
 function DataDirChosen: Boolean;
+var Dir: string;
 begin
-  Result := (Trim(DataPage.Values[0]) <> '') and
-            FileExists(AddBackslash(DataPage.Values[0]) + 'Map.scen');
+  Dir := ResolvedDataDir;
+  Result := (Dir <> '') and FileExists(AddBackslash(Dir) + 'Map.scen');
 end;
 
 // Validate the folder when the user leaves the data page (allow blank = defer).

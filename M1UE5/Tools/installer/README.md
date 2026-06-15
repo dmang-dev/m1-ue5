@@ -15,14 +15,25 @@ frozen converter into `%LOCALAPPDATA%\M1UE5\Data`, and launches the game.
   `<Engine>\Engine\Extras\Redist\en-us`. Bundled + run silently if present; skipped if not.
 
 ## Build steps (on the packaging machine)
-1. **Game payload** — cook + exe-swap so `Build\Windows\M1UE5.exe` is current:
-   `RunUAT BuildCookRun … -stage -pak -archive -archivedirectory=Build` then copy the
-   fresh `Binaries\Win64\M1UE5.exe` over `Build\Windows\M1UE5\Binaries\Win64\M1UE5.exe`.
+1. **Game payload** — cook + exe-swap so `Build\Windows\M1UE5.exe` is current.
+   Since runtime mode is the campaign default, the **release cook ships only the menu
+   + the blank runtime map** (no Bungie-baked per-level geometry in the pak):
+   `RunUAT BuildCookRun … -cook "-map=L_MainMenu+L_Runtime" -stage -pak -archive -archivedirectory=Build`
+   then copy the fresh `Binaries\Win64\M1UE5.exe` over
+   `Build\Windows\M1UE5\Binaries\Win64\M1UE5.exe`. (Levels build at runtime from the
+   per-user cache; `/Game/Sprites|Audio|UI|Runtime` still cook via DirectoriesToAlwaysCook.)
 2. **Frozen converter** —
    `pip install pyinstaller py-marathon-utils[images] soundfile`
    `cd Tools && pyinstaller m1_asset_setup.spec --noconfirm --distpath ..\Build\AssetSetup\dist --workpath ..\Build\AssetSetup\work`
 3. **(optional) redist** — copy the UE/VC redists into `Tools\installer\redist\`.
 4. **Compile** — `Tools\installer\build_installer.ps1` → `Build\Installer\M1UE5-Setup.exe`.
+
+## Install modes
+- **Interactive** — `M1UE5-Setup.exe`: Welcome → EULA → pick the data folder → install.
+- **Silent / scripted** — `M1UE5-Setup.exe /VERYSILENT /DATADIR="<Marathon data folder>"`
+  installs without prompts and converts that data during setup (the `.iss` reads
+  `{param:DataDir}`). Omit `/DATADIR` to defer (the in-game "run Asset Setup" screen
+  + the Start-Menu shortcut cover it). `/LOG="setup.log"` captures a setup transcript.
 
 ## Code signing / SmartScreen
 The installer is unsigned by default, so Windows SmartScreen shows "Windows protected
