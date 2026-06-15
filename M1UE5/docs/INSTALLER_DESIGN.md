@@ -310,10 +310,17 @@ Each phase is independently testable via the `M1SelfTest` harness. **The archite
   (build steps, code-signing options, the clean-VM exit criterion).
 - **Code signing**: pursue **SignPath Foundation / OSSign** (free OSS certs); else
   publish the installer SHA-256 + document the SmartScreen "Run anyway" bypass.
-- **Remaining (packaging machine only)**: install Inno Setup 6 + run
-  `build_installer.ps1` to emit `M1UE5-Setup.exe`, then run the **clean-VM**
-  exit-criterion test (Setup → EULA → locate data → convert → launch). Not doable on
-  the dev box (no `iscc`, no VM); the `.iss`/EULA/script are complete + reviewable.
+- ✅ **COMPILED + run end-to-end** (Inno Setup 6 via winget): `build_installer.ps1`
+  emits `M1UE5-Setup.exe` (~461 MB). A **real silent install against Steam's "Classic
+  Marathon" data** was verified on a dev box: `M1UE5-Setup.exe /VERYSILENT
+  /DATADIR="…\Classic Marathon"` → per-user/no-admin install → the bundled
+  `M1AssetSetup.exe` converted that data to `%LOCALAPPDATA%\M1UE5\Data` (37 levels +
+  manifest) **during setup** → the installed game built Arrival at runtime from the
+  cache → the uninstaller cleanly removed it. (The run caught + fixed a silent-mode bug:
+  the custom data page now pre-fills from `/DATADIR` and is skipped when `WizardSilent`.)
+- **Remaining = a literal clean VM** (no UE / no Python) for the formal exit criterion —
+  can't provision one here, but the install is per-user/no-admin and the converter is a
+  frozen no-Python bundle (Phase 2), so the dev-box run exercises the same paths.
 
 ### Phase 4 — Optional packaging & original-content track — framework DONE; full art = long-term
 - **(4a) pak skin — SKIPPED (by design).** The loose per-user cache performs fine (verified:

@@ -91,6 +91,17 @@ begin
     'You may leave this blank and run "Asset Setup" later from the Start Menu.',
     False, '');
   DataPage.Add('Marathon 1 data folder (optional):');
+  // Pre-fill from /DATADIR so the page shows it (interactive) and is non-empty
+  // (avoids the input-dir validation when proceeding).
+  DataPage.Values[0] := Trim(ExpandConstant('{param:DataDir|}'));
+end;
+
+// In a silent install the page isn't shown; skip it so its (possibly empty) value
+// doesn't trip the built-in "enter a full path" validation. /DATADIR still drives
+// the conversion via ResolvedDataDir.
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := WizardSilent and (PageID = DataPage.ID);
 end;
 
 // The chosen data folder: the wizard page if set, else the /DATADIR=<path> command

@@ -444,8 +444,14 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      (per-user/no-admin, EULA gate, locate-only data page, runs `M1AssetSetup.exe` at
      setup, redists, shortcuts, uninstaller) + `EULA.txt` + `build_installer.ps1` +
      `README.md`. In-game `IsDataAvailable()` -> `ShowDataMissing()` when no cache.
-     **Actually built `Build\Installer\M1UE5-Setup.exe` (461 MB, ISCC exit 0)** via
-     Inno Setup 6 (winget per-user). Remaining = clean-VM end-to-end run (no VM here).
+     **Built + RUN END-TO-END.** `M1UE5-Setup.exe` (461 MB) compiled via Inno Setup 6;
+     a real silent install against Steam's "Classic Marathon" data verified the whole
+     flow: `/VERYSILENT /DATADIR="…\Classic Marathon"` -> per-user install -> bundled
+     `M1AssetSetup.exe` converted it to `%LOCALAPPDATA%\M1UE5\Data` (37 levels) DURING
+     setup -> the installed game built Arrival from the cache -> uninstaller removed it.
+     The lean cook (`L_MainMenu+L_Runtime`) means no Bungie geometry in the pak. (Fixed
+     a silent-mode bug: the data page pre-fills from `/DATADIR` + is skipped when
+     `WizardSilent`.) Remaining = a literal clean VM for the formal exit criterion.
    - **Phase 4 (framework) + both gameplay follow-ups DONE + verified.**
      * Runtime mode is now the **campaign default**: `OnNewGame`/`OnContinue` ->
        `M1EnterRuntimeLevel`; chapter splash uses the runtime index. (Cooked `L_NN`
