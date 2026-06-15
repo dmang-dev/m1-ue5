@@ -429,11 +429,22 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
    the saved enemies via `AM1GameMode::SpawnMonsters`. Harness-verified. FOLLOW-UP:
    wire a menu "Restore Game" entry to `M1LoadFull`; optionally save door/platform/
    light states (currently transient/auto).
-2. **Replication foundation + co-op** — make the core actors replicate
-   (`AM1Character` movement/health/oxygen/weapon, `AM1Enemy`, `AM1Projectile`,
-   doors/elevators/panels, pickups); listen-server; co-op campaign. NOTE: verification
-   needs two instances (listen server + client), not the single-instance console
-   harness. Sub-steps: (a) replicate player movement+vitals; (b) replicate enemies +
-   server-authoritative damage; (c) replicate interactables; (d) co-op join/spawn/HUD.
+2. **Replication foundation + co-op — DONE (core).** Verified with a real
+   listen-server + client (`M1UE5.exe <map>?listen` + `M1UE5.exe 127.0.0.1`, separate
+   `-LOG` files): both instances stay alive (the earlier "crash" was the test's
+   `Stop-Process -Force` closing both windows at once), client is `Welcomed by server`,
+   `Join succeeded`, and `M1Net` (new Exec) reports `players=2`.
+   - (2a) `AM1Character` replicates: bReplicates + ReplicateMovement (ACharacter
+     movement auto-replicates) + Replicated Health/Oxygen.
+   - (2b) `AM1Enemy` replicates; AI runs server-only (HasAuthority); clients render
+     from replicated mirrors RepState/RepFacingYaw (no more client double-sim).
+   - (2c) `AM1Platform`/`AM1Elevator` replicate; state machines authority-gated;
+     PlayerNear/PlayerOn check every connected player.
+   - (2d) Visible co-op body (bOwnerNoSee placeholder box) + server-authoritative
+     weapon fire (client routes OnFire/etc. through Server RPCs).
+   REMAINING POLISH (needs interactive 2-player playtest): client-side fire feedback
+   (muzzle-flash/ammo HUD replication), per-player spawn points, multicast door/lift
+   SFX, player sprite billboard instead of the box. NOTE: verification needs TWO
+   instances, not the single-instance console harness.
 3. **Record/replay** — UE Replay/Demo system (DemoNetDriver) + playback UI; rides on #2.
 4. **Deathmatch modes** — Carnage/EMFH, KOTH, Tag; scoring; net arenas; builds on #2.
