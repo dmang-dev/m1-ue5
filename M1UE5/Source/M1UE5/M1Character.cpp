@@ -199,46 +199,47 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	PlayerInputComponent->BindAction("PrevWeapon", IE_Pressed, this, &AM1Character::OnPrevWeapon);
 }
 
+// Weapon actions are SERVER-AUTHORITATIVE for co-op: hitscan, damage and ammo all
+// run on the server (the only authority over the replicated enemies). The local
+// host/standalone fires directly (HasAuthority); a remote client routes through a
+// Server RPC, which fires from the client pawn's replicated aim. (Client-side fire
+// feedback -- muzzle flash / ammo HUD -- is a later replication polish.)
 void AM1Character::OnFire()
 {
-	// Reading a terminal suppresses weapon fire (the gun isn't even drawn).
-	if (!bTerminalOpen && Weapon)
-	{
-		Weapon->StartFire();
-	}
+	if (bTerminalOpen || !Weapon) { return; }
+	if (HasAuthority()) { Weapon->StartFire(); } else { ServerStartFire(); }
 }
 
 void AM1Character::OnFireStop()
 {
-	if (Weapon)
-	{
-		Weapon->StopFire();
-	}
+	if (!Weapon) { return; }
+	if (HasAuthority()) { Weapon->StopFire(); } else { ServerStopFire(); }
 }
 
 void AM1Character::OnAltFire()
 {
-	if (!bTerminalOpen && Weapon)
-	{
-		Weapon->StartAltFire();
-	}
+	if (bTerminalOpen || !Weapon) { return; }
+	if (HasAuthority()) { Weapon->StartAltFire(); } else { ServerStartAltFire(); }
 }
 
 void AM1Character::OnAltFireStop()
 {
-	if (Weapon)
-	{
-		Weapon->StopAltFire();
-	}
+	if (!Weapon) { return; }
+	if (HasAuthority()) { Weapon->StopAltFire(); } else { ServerStopAltFire(); }
 }
 
 void AM1Character::OnReload()
 {
-	if (Weapon)
-	{
-		Weapon->Reload();
-	}
+	if (!Weapon) { return; }
+	if (HasAuthority()) { Weapon->Reload(); } else { ServerReload(); }
 }
+
+// Server RPC bodies (run on the server; *_Implementation is the actual work).
+void AM1Character::ServerStartFire_Implementation()    { if (Weapon) { Weapon->StartFire(); } }
+void AM1Character::ServerStopFire_Implementation()     { if (Weapon) { Weapon->StopFire(); } }
+void AM1Character::ServerStartAltFire_Implementation() { if (Weapon) { Weapon->StartAltFire(); } }
+void AM1Character::ServerStopAltFire_Implementation()  { if (Weapon) { Weapon->StopAltFire(); } }
+void AM1Character::ServerReload_Implementation()       { if (Weapon) { Weapon->Reload(); } }
 
 void AM1Character::OnUse()
 {

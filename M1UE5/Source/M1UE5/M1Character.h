@@ -164,6 +164,14 @@ protected:
 	void OnAltFireStop();
 	void OnReload();
 
+	/** Server-authoritative weapon actions (co-op): a remote client routes its fire
+	 *  through these so hitscan/damage/ammo run on the server. */
+	UFUNCTION(Server, Reliable) void ServerStartFire();
+	UFUNCTION(Server, Reliable) void ServerStopFire();
+	UFUNCTION(Server, Reliable) void ServerStartAltFire();
+	UFUNCTION(Server, Reliable) void ServerStopAltFire();
+	UFUNCTION(Server, Reliable) void ServerReload();
+
 	/** Weapon selection: number keys 1-7 pick a slot; the scroll wheel cycles. */
 	void OnSelectWeapon1();
 	void OnSelectWeapon2();
