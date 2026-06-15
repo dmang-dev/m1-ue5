@@ -446,5 +446,21 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
    (muzzle-flash/ammo HUD replication), per-player spawn points, multicast door/lift
    SFX, player sprite billboard instead of the box. NOTE: verification needs TWO
    instances, not the single-instance console harness.
-3. **Record/replay** — UE Replay/Demo system (DemoNetDriver) + playback UI; rides on #2.
-4. **Deathmatch modes** — Carnage/EMFH, KOTH, Tag; scoring; net arenas; builds on #2.
+3. **Record/replay — DONE.** `M1Rec [name]` / `M1RecStop` / `M1Play [name]` wrap
+   UGameInstance Start/Stop/PlayReplay (DemoNetDriver); films land in
+   Saved/Demos/<name>.replay. Verified single-player: recorded film4351.replay
+   (10 KB, "Demo stopped at frame 284"), played back ("ReplayStreamingReady").
+   Works because Phase 2 replication feeds the demo driver.
+4. **Deathmatch — DONE (Carnage v1).** `AM1DeathmatchGameMode` (free-for-all frags +
+   instant respawn + round-robin spawns); players shootable (capsule blocks the
+   Visibility trace -> PvP + co-op friendly fire); AM1Character death routes to the
+   DM mode (frag/respawn) vs campaign (level reload). Select per-map:
+   `...L_30_Arena?game=/Script/M1UE5.M1DeathmatchGameMode?listen`. `M1Frags` logs the
+   scoreboard. Verified the mode loads + 2 players connect; PvP fragging needs a
+   2-human playtest. FOLLOW-UPS: KOTH + Tag modes; replicated scoreboard for client
+   HUDs; frag-limit / round end; teams.
+
+BUILD GOTCHA (important): on this box the build can silently NO-OP (source mtimes not
+seen as newer than the .obj -> "Result: Succeeded" but the exe isn't relinked, so
+exe-swap ships stale code). Force-touch edited sources before building, and confirm
+`Binaries\Win64\M1UE5.exe` LastWriteTime advanced before exe-swapping.
