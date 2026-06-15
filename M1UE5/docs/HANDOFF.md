@@ -498,7 +498,9 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
      + the tintable `M_M1Player` (Sprite×Tint). `AM1Character` falls back to a colored
      box if those assets aren't cooked (verified: the pre-recook packaged build ran the
      box path without crashing). **Generated (Bungie-derived) → not committed; ships via
-     `DirectoriesToAlwaysCook=/Game/Sprites` on recook.**
+     `DirectoriesToAlwaysCook=/Game/Sprites`. RECOOK DONE** — the packaged
+     `Build\Windows` now cooks all 38 maps + `T_player_v0..4` + `M_M1Player`, and boots
+     clean with the sprite assets loaded (no load errors).
    - **VERIFIED (boot + scoring, single instance):** KOTH/Tag/Team all load
      (`Game class is 'M1*GameMode'`), spawn their hill/ball (`[M1Net] KOTH hill at
      (2125,1988,96) r=500`, `[M1Net] TAG ball at (2125,1988,156)`), no crash. KOTH ran
@@ -510,3 +512,11 @@ BUILD GOTCHA (important): on this box the build can silently NO-OP (source mtime
 seen as newer than the .obj -> "Result: Succeeded" but the exe isn't relinked, so
 exe-swap ships stale code). Force-touch edited sources before building, and confirm
 `Binaries\Win64\M1UE5.exe` LastWriteTime advanced before exe-swapping.
+
+COOK GOTCHA (destructive): build the `-map=` list with PowerShell-native paths only.
+A Bash-tool `/tmp/...` file is NOT readable from the PowerShell tool (`/tmp` resolves
+differently), so `$ml = Get-Content /tmp/maps.txt` silently yields `$null` ->
+`-map=` (empty) -> the cooker prunes the cooked dir down to ~1 map and the archived
+`Build\Windows` ships almost no levels (the run still says BUILD SUCCESSFUL). Generate
+the leaf list with `Get-ChildItem` inside the same PowerShell call, assert it's
+non-empty, then verify `find Saved\Cooked ... -name "L_*.umap" | wc -l == 38` after.
