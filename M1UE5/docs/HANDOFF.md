@@ -167,7 +167,7 @@ teardown is a benign editor-shutdown crash, not a failure.)
 | Sprites (enemies, weapons, HUD icons) | ✅ | CLUT-correct, index-0 transparent |
 | Audio | ✅ v1 | 104 sounds + **16 looping level-music tracks**, played per level by the canonical **`Minf.song_index`** (`M1LevelEnvTable.h` → `AM1GameMode::PlayLevelMusic`); door open/close SFX wired; platform-move loop SFX TODO |
 | Weapons | ✅ v1 | 7 + secondaries; **muzzle-flash overlay** + **impact sparks** (`AM1Impact`, emissive engine-sphere pop on hitscan/projectile hits). Persistent scorch decals still TODO; debug hit spheres/lines now `#if WITH_EDITOR` |
-| Enemies | ✅ v1 | 2232 placements, ranged + 8-dir |
+| Enemies | ✅ v1 | 2232 placements, ranged + 8-dir; **attack-pose animation** (Stand/Walk/Dead/**Attack** sprite states from each monster's melee/ranged attack shape; `MulticastAttackAnim` plays it on server+clients during `PerformAttack`) |
 | Terminals (lore) | ✅ | readable pages, paging |
 | Main menu + chapter screens | ✅ | authentic bitmaps |
 | **Doors** (#11) | ✅ v1 | 473 door panels; **switch→door wiring** (119 switches); **ride-on elevators** (35 wide platforms via `AM1Elevator` — movable floor slab, rises to neighbour floor, carries the rider). All harness-verified (switch target 244 opened door poly 244; player rode elevator 100→200) |

@@ -93,6 +93,16 @@ private:
 	 *  fire an AM1Projectile (the firer's Instigator, so it ignores itself but
 	 *  CAN hit other monsters -- Marathon infighting). */
 	void PerformAttack(APawn* Player, bool bMelee);
+
+	/** Trigger the brief attack pose on every machine (server + clients) so the
+	 *  attack animation shows in net play, not just on the authority. */
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastAttackAnim();
+
+	/** If currently inside the attack-pose window, draw the Attack sprite frame for
+	 *  this tick and return true (so the caller skips the walk/stand selection). */
+	bool TryDrawAttack(float Now);
+
 	void Die();
 
 	/** Camera-facing sprite card (engine Plane + M_M1Sprite dynamic instance). */
@@ -169,4 +179,7 @@ private:
 
 	float AnimTime = 0.0f;
 	int32 AnimFrame = -1;
+	/** Local (not replicated) end time of the current attack-pose window; set by
+	 *  MulticastAttackAnim so the pose plays on the authority and every client. */
+	float AttackAnimUntil = 0.0f;
 };

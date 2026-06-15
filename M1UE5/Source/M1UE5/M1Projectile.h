@@ -13,9 +13,9 @@ class USoundBase;
 /**
  * A simple ballistic projectile for the energy/explosive Marathon weapons
  * (Fusion bolt, rocket). Spawned by UM1WeaponComponent for bProjectile weapons;
- * flies straight (no gravity in v1), and on contact plays an explosion SFX +
- * draws a debug burst, then destroys itself. Actual area damage is a later pass
- * (no enemies yet).
+ * flies straight (no gravity in v1). On contact it plays an explosion SFX + impact
+ * spark and applies damage: radial (ApplyRadialDamage, shooter NOT exempt -- rocket
+ * jumps) when BlastRadius > 0, else a direct point hit; then destroys itself.
  */
 UCLASS()
 class M1UE5_API AM1Projectile : public AActor

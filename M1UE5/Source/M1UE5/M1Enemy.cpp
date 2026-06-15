@@ -390,6 +390,10 @@ void AM1Enemy::Tick(float DeltaSeconds)
 	{
 		// CLIENT: no AI -- position/rotation come from replication. Pick the sprite
 		// from the replicated state; advance the walk animation locally.
+		if (TryDrawAttack(World->GetTimeSeconds()))
+		{
+			return;  // attack pose (triggered by MulticastAttackAnim) wins this tick
+		}
 		const bool bMovingC = GetVelocity().SizeSquared2D() > 100.0f;
 		if (VisState == EM1EnemyState::Chase && bMovingC && Row->Walk.FramesPerView > 1)
 		{
@@ -509,6 +513,12 @@ void AM1Enemy::Tick(float DeltaSeconds)
 		}
 	}
 
+	// Attack pose overrides walk/stand while its window is active (server path).
+	if (TryDrawAttack(Now))
+	{
+		return;
+	}
+
 	// --- Walk animation: advance the walk grid's frame on its own timer while
 	// actually moving; fall back to the stand pose when stopped. Both states
 	// pick their (view, frame) from the camera angle every tick. ---
@@ -532,6 +542,32 @@ void AM1Enemy::Tick(float DeltaSeconds)
 	}
 }
 
+void AM1Enemy::MulticastAttackAnim_Implementation()
+{
+	UWorld* World = GetWorld();
+	if (!Row || !World)
+	{
+		return;
+	}
+	const float FrameTime = FMath::Max(Row->Attack.FrameTicks / 30.0f, 0.033f);
+	const float Dur = FMath::Clamp(Row->Attack.FramesPerView * FrameTime, 0.25f, 0.8f);
+	AttackAnimUntil = World->GetTimeSeconds() + Dur;
+}
+
+bool AM1Enemy::TryDrawAttack(float Now)
+{
+	if (!Row || Now >= AttackAnimUntil
+		|| Row->Attack.FramesPerView <= 0 || !Row->Attack.Textures)
+	{
+		return false;
+	}
+	const float FrameTime = FMath::Max(Row->Attack.FrameTicks / 30.0f, 0.033f);
+	const float Duration = Row->Attack.FramesPerView * FrameTime;
+	const float Elapsed = FMath::Max(0.0f, Duration - (AttackAnimUntil - Now));
+	UpdateSpriteForState(Row->Attack, static_cast<int32>(Elapsed / FrameTime));
+	return true;
+}
+
 void AM1Enemy::PerformAttack(APawn* Player, bool bMelee)
 {
 	UWorld* World = GetWorld();
@@ -540,10 +576,10 @@ void AM1Enemy::PerformAttack(APawn* Player, bool bMelee)
 		return;
 	}
 
-	// Show the stand pose for the attack beat (no dedicated attack frames in v1);
-	// the walk cycle resumes on the next animated tick.
+	// Play the dedicated attack pose on every machine for the attack beat; the
+	// walk/stand selection resumes when the window expires.
 	AnimFrame = 0;
-	UpdateSpriteForState(Row->Stand, 0);
+	MulticastAttackAnim();
 
 	if (bMelee)
 	{

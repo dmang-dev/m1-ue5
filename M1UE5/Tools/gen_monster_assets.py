@@ -375,6 +375,19 @@ def build():
 
         # Stats (units per the module docstring).
         atk = attack_info(mon, projectiles)
+
+        # Attack pose: the melee/ranged attack each carry their own animation
+        # shape, but ONLY when that attack actually exists (type != -1; shape 0 is
+        # a valid index, so we gate on type, not the shape value). Prefer the
+        # ranged pose for ranged monsters, else melee; fall back to stand so the
+        # enemy always has attack frames to play.
+        me_atk = mon.get("melee_attack") or {}
+        ra_atk = mon.get("ranged_attack") or {}
+        states["attack_ranged"] = rs(ra_atk.get("shape")) if ra_atk.get("type", -1) != -1 else None
+        states["attack_melee"] = rs(me_atk.get("shape")) if me_atk.get("type", -1) != -1 else None
+        attack = (states["attack_ranged"] if atk["ranged"] else states["attack_melee"]) \
+                 or states["attack_ranged"] or states["attack_melee"] or stand
+
         name = MONSTER_NAMES.get(mtype, "Mon%02d" % mtype)
         row = {
             "type": mtype,
@@ -409,6 +422,7 @@ def build():
             "stand": state_block(stand),
             "walk": state_block(walk),
             "dead": state_block(dead),
+            "attack": state_block(attack),
             "sprite_width_cm": stand["width_cm"],
             "sprite_height_cm": stand["height_cm"],
         }
@@ -512,8 +526,8 @@ def write_monster_table(rows):
     lines.append("};\n")
     lines.append("/** One Marathon 1 monster type (stats in UE cm / seconds; see")
     lines.append(" *  Tools/gen_monster_assets.py for the unit conversions). Sounds are full")
-    lines.append(" *  asset paths or empty. Stand/Walk/Dead carry shared multi-view sprite")
-    lines.append(" *  grids; ProjDamage = projectile base + half random (expected value). */")
+    lines.append(" *  asset paths or empty. Stand/Walk/Dead/Attack carry shared multi-view")
+    lines.append(" *  sprite grids; ProjDamage = projectile base + half random (expected value). */")
     lines.append("struct FM1MonsterRow")
     lines.append("{")
     lines.append("\tint32 Type;")
@@ -546,13 +560,14 @@ def write_monster_table(rows):
     lines.append("\tFM1SpriteState Stand;")
     lines.append("\tFM1SpriteState Walk;")
     lines.append("\tFM1SpriteState Dead;")
+    lines.append("\tFM1SpriteState Attack;      // played briefly when the enemy attacks")
     lines.append("\tfloat SpriteWidthCm;")
     lines.append("\tfloat SpriteHeightCm;")
     lines.append("};\n")
 
     # Per-(type,state) texture-path arrays first; the rows reference them.
     for r in rows:
-        for st in ("stand", "walk", "dead"):
+        for st in ("stand", "walk", "dead", "attack"):
             emit_state_array(lines, "GM1Tex_%d_%s" % (r["type"], st), r[st])
 
     def state_init(r, st):
@@ -566,7 +581,7 @@ def write_monster_table(rows):
         lines.append(
             "\t{ %d, TEXT(\"%s\"), %s, %s, %s, %s, %s, %s, %s, %s, "
             "%s, %s, %s, %s, %d, %s, %s, %s, %s, TEXT(\"%s\"), TEXT(\"%s\"), "
-            "TEXT(\"%s\"), TEXT(\"%s\"), TEXT(\"%s\"), %s, %s, %s, %s, %s },"
+            "TEXT(\"%s\"), TEXT(\"%s\"), TEXT(\"%s\"), %s, %s, %s, %s, %s, %s },"
             % (r["type"], r["name"], fmt_f(r["vitality"]), fmt_f(r["radius_cm"]),
                fmt_f(r["height_cm"]), fmt_f(r["speed_cms"]), fmt_f(r["visual_range_cm"]),
                fmt_f(r["attack_range_cm"]), fmt_f(r["attack_interval_s"]),
@@ -578,6 +593,7 @@ def write_monster_table(rows):
                r["proj_flyby_sound"], r["melee_sound"],
                r["activation_sound"], r["random_sound"], r["death_sound"],
                state_init(r, "stand"), state_init(r, "walk"), state_init(r, "dead"),
+               state_init(r, "attack"),
                fmt_f(r["sprite_width_cm"]), fmt_f(r["sprite_height_cm"])))
     lines.append("};\n")
     lines.append("static const int32 GM1MonsterTableCount = UE_ARRAY_COUNT(GM1MonsterTable);\n")
