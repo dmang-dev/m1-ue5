@@ -431,9 +431,18 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      builds geometry before table-driven actors spawn; `ResolveGeoBasename` matches the
      OBJ by `NN_` prefix (cooked vs OBJ name sanitization differ); player teleports to
      `placements.player_start` on Tick 1; checkpoints unchanged (index-keyed). Packaged
-     sweep built 00/05/13/20/28/36 at runtime, no crash. **NEXT = WAV runtime loader +
-     make runtime mode the campaign default (opt-in now) + Phase 2 AppData cache /
-     installer wizard.**
+     sweep built 00/05/13/20/28/36 at runtime, no crash.
+   - **Phase 2 (Asset Setup wizard + per-user cache) DONE (core) + verified.**
+     `Tools/m1_asset_setup.py` (locate-only + SHA-256 + `extract_reference --shapes` +
+     `scen_to_obj --all` -> `%LOCALAPPDATA%\M1UE5\Data` + `.m1_assets_done` manifest/skip
+     marker, `@PROGRESS` lines). `AM1RuntimeLevel::ResolveDataRoot` prefers that AppData
+     cache. Frozen via `Tools/m1_asset_setup.spec` (PyInstaller `--onedir`, bundles
+     py-marathon-utils + Pillow + soundfile/libsndfile) -> `M1AssetSetup.exe`. VERIFIED:
+     wizard converted M1SOURCE -> AppData cache (37 levels + manifest); the packaged game
+     built Arrival at runtime FROM the AppData cache (no dev `Reference/`, no env).
+     **NEXT = Phase 3: Inno `.iss` (EULA gate + run `M1AssetSetup.exe` during setup +
+     bundle UE redists) + a "data not found, run setup" in-game message; plus the WAV
+     runtime loader and flipping runtime mode to the campaign default.**
 
 > **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
 > fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget

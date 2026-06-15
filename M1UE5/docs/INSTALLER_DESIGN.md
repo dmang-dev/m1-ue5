@@ -269,10 +269,26 @@ Each phase is independently testable via the `M1SelfTest` harness. **The archite
 - Confirm `UM1SaveGame`'s level-index scheme still resolves under the runtime-level identifiers (see §9).
 - **Exit criterion:** `M1SelfTest` 37/37 parity with the cooked build; existing checkpoints resolve.
 
-### Phase 2 — First-run conversion UX
-- Build the **frozen converter** (`--onedir`, single entrypoint, stdout progress) per §7.
-- Build the **Asset Setup wizard** (detect → locate → verify → convert with progress; per-user cache + marker; skip on subsequent runs; async build to hide the hitch).
-- **Exit criterion:** on a clean machine with no UE and no Python, a user with their own data reaches gameplay.
+### Phase 2 — First-run conversion UX — ✅ DONE (core)
+- ✅ **Asset Setup wizard** `Tools/m1_asset_setup.py`: locate-only (explicit `--source`,
+  else `M1SOURCE` / `M1_SOURCE`/`ALEPHONE_DATA` env; never downloads), **SHA-256**
+  verifies the four data files, converts via `extract_reference --shapes` +
+  `scen_to_obj --all` into the per-user cache, writes `.m1_assets_done` (the manifest +
+  skip marker: source hashes, py-marathon-utils version, tools commit, level count).
+  Emits `@PROGRESS <json>` lines for the installer GUI; `--force` reconverts.
+- ✅ **Per-user cache wiring**: `AM1RuntimeLevel::ResolveDataRoot` now prefers
+  `%LOCALAPPDATA%\M1UE5\Data` (then env override, then in-project `Reference/`), keyed on
+  the cache actually holding `Geometry/`. No admin elevation.
+- ✅ **Frozen converter**: `Tools/m1_asset_setup.spec` (PyInstaller `--onedir`) bundles
+  py-marathon-utils + Pillow + soundfile/libsndfile -> `M1AssetSetup.exe` (no Python on
+  the user's machine).
+- **VERIFIED**: the wizard converted `M1SOURCE` -> `%LOCALAPPDATA%\M1UE5\Data` (37
+  levels + Shapes/Sounds/Physics/Maps + manifest), and the **packaged game built
+  `00_Arrival` at runtime from that AppData cache** (`built '00_Arrival' from
+  C:/Users/.../AppData/Local/M1UE5/Data`), with no dev `Reference/` and no env override.
+- **Remaining**: the first-run hand-off is currently manual (run the wizard, then the
+  game finds the cache) -- Phase 3's Inno installer runs `M1AssetSetup.exe` during setup
+  and the game shows a "data not found, run setup" message if the cache is missing.
 
 ### Phase 3 — Inno installer + distribution polish
 - Author the `.iss`: Welcome, EULA gate, dir page with disk-space warning, payload + redist install, launch wizard, Start-Menu entries, uninstaller with the §6.4 prompt policy.

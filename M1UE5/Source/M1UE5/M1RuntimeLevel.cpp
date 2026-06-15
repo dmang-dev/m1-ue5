@@ -11,6 +11,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformProcess.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/Engine.h"
 #include "Dom/JsonObject.h"
@@ -35,19 +36,34 @@ AM1RuntimeLevel::AM1RuntimeLevel()
 
 FString AM1RuntimeLevel::ResolveDataRoot()
 {
+	// A root is "ready" only if it holds the converted intermediates (Geometry/).
+	auto HasData = [](const FString& Dir)
+	{
+		return !Dir.IsEmpty() && FPaths::DirectoryExists(FPaths::Combine(Dir, TEXT("Geometry")));
+	};
+
+	// 1. Explicit override (testing / a custom install location).
 	const FString Env = FPlatformMisc::GetEnvironmentVariable(TEXT("M1_DATA_ROOT"));
-	if (!Env.IsEmpty() && FPaths::DirectoryExists(Env))
+	if (HasData(Env))
 	{
 		return Env;
 	}
+	// 2. The per-user install cache the Asset Setup wizard writes (Phase 2 default):
+	//    %LOCALAPPDATA%\M1UE5\Data -- no admin elevation, survives reinstalls.
+	const FString AppData = FPaths::Combine(FPlatformProcess::UserSettingsDir(),
+		TEXT("M1UE5"), TEXT("Data"));
+	if (HasData(AppData))
+	{
+		return AppData;
+	}
+	// 3. In-project Reference/ (dev tree / running from the project dir).
 	const FString ProjRef = FPaths::Combine(FPaths::ProjectDir(), TEXT("Reference"));
-	if (FPaths::DirectoryExists(ProjRef))
+	if (HasData(ProjRef))
 	{
 		return ProjRef;
 	}
-	// Dev fallback (Phase 0 PoC running from a packaged build without a cache yet).
-	const FString Dev = TEXT("C:/m1-ue5/M1UE5/Reference");
-	return Dev;
+	// 4. Dev fallback (last resort when launched from a staged build on this box).
+	return TEXT("C:/m1-ue5/M1UE5/Reference");
 }
 
 UTexture2D* AM1RuntimeLevel::LoadPNG(const FString& AbsPath)
