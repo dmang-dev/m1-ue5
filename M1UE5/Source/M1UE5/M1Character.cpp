@@ -30,6 +30,7 @@
 #include "EngineUtils.h"  // TActorIterator
 #include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op replication)
+#include "Engine/GameInstance.h"  // StartRecordingReplay / PlayReplay (films)
 
 namespace
 {
@@ -722,6 +723,34 @@ void AM1Character::M1Net()
 	for (TActorIterator<AM1Enemy> It(W); It; ++It) { ++Enemies; }
 	UE_LOG(LogTemp, Warning, TEXT("[M1Net] mode=%s authority=%d players=%d enemies=%d"),
 		Mode, HasAuthority() ? 1 : 0, Players, Enemies);
+}
+
+void AM1Character::M1Rec(const FString& Name)
+{
+	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	if (!GI) { return; }
+	const FString N = Name.IsEmpty() ? TEXT("m1film") : Name;
+	GI->StartRecordingReplay(N, N);
+	if (GEngine) { GEngine->AddOnScreenDebugMessage(22, 3.0f, FColor::Red, FString::Printf(TEXT("REC film '%s'"), *N)); }
+	UE_LOG(LogTemp, Warning, TEXT("[M1Rec] recording film '%s'"), *N);
+}
+
+void AM1Character::M1RecStop()
+{
+	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	if (!GI) { return; }
+	GI->StopRecordingReplay();
+	if (GEngine) { GEngine->AddOnScreenDebugMessage(22, 3.0f, FColor::Yellow, TEXT("film saved")); }
+	UE_LOG(LogTemp, Warning, TEXT("[M1Rec] stopped + saved film"));
+}
+
+void AM1Character::M1Play(const FString& Name)
+{
+	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	if (!GI) { return; }
+	const FString N = Name.IsEmpty() ? TEXT("m1film") : Name;
+	UE_LOG(LogTemp, Warning, TEXT("[M1Play] playing film '%s'"), *N);
+	GI->PlayReplay(N);
 }
 
 void AM1Character::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

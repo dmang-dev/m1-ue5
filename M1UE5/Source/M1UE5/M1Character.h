@@ -115,6 +115,13 @@ public:
 	UFUNCTION(Exec) void M1Radar();
 	/** Log net mode + authority + replicated player/enemy counts (co-op debug). */
 	UFUNCTION(Exec) void M1Net();
+
+	/** --- Record/replay ("films"), via UE's Replay/DemoNetDriver. Records the
+	 *  replication stream to Saved/Demos/<name>.replay; play it back as a spectator.
+	 *  Works in single-player too (the actors replicate to the demo driver). --- */
+	UFUNCTION(Exec) void M1Rec(const FString& Name);      // start recording (default "m1film")
+	UFUNCTION(Exec) void M1RecStop();                     // stop + flush to disk
+	UFUNCTION(Exec) void M1Play(const FString& Name);     // play back the named film
 	/** Log the level's terminals (index, id, pages, whether it's the exit). */
 	UFUNCTION(Exec) void M1Terms();
 	/** Teleport the player to a world location; optional Yaw aims the view. */
