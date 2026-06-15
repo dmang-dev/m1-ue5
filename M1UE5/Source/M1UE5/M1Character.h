@@ -74,6 +74,10 @@ public:
 	/** Top up shields toward Cap (1x/2x/3x charger); never reduces. */
 	void RefillShields(float Cap);
 
+	/** Deathmatch respawn: restore shields + oxygen to full (the DM game mode also
+	 *  teleports the pawn to a spawn point). */
+	void M1Respawn();
+
 	/** Top up suit oxygen toward Cap (oxygen recharger); never reduces. */
 	void RefillOxygen(float Cap);
 
@@ -115,6 +119,8 @@ public:
 	UFUNCTION(Exec) void M1Radar();
 	/** Log net mode + authority + replicated player/enemy counts (co-op debug). */
 	UFUNCTION(Exec) void M1Net();
+	/** Log the deathmatch scoreboard (server/host only; via the auth game mode). */
+	UFUNCTION(Exec) void M1Frags();
 
 	/** --- Record/replay ("films"), via UE's Replay/DemoNetDriver. Records the
 	 *  replication stream to Saved/Demos/<name>.replay; play it back as a spectator.

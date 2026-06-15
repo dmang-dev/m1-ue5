@@ -27,6 +27,7 @@
 #include "M1Elevator.h"
 #include "M1Light.h"
 #include "M1Enemy.h"
+#include "M1DeathmatchGameMode.h"
 #include "EngineUtils.h"  // TActorIterator
 #include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op replication)
@@ -109,6 +110,9 @@ AM1Character::AM1Character()
 	// default capsule pokes through every ceiling ("stuck in the ceiling") and
 	// can't spawn in the start rooms. Size to fit a 90cm room and always spawn.
 	GetCapsuleComponent()->InitCapsuleSize(22.0f, 32.0f);  // r=22, hh=32 (64cm tall)
+	// Block the weapon hitscan channel so the player is SHOOTABLE -- enables PvP
+	// deathmatch damage and Marathon's co-op friendly fire (enemies do the same).
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	SpawnCollisionHandlingMethod = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
@@ -590,10 +594,15 @@ float AM1Character::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 
 	if (Health <= 0.0f)
 	{
-		// Marathon restart-on-death v1: reload the current level (pattern
-		// buffers / saves are a later system).
-		if (UWorld* World = GetWorld())
+		UWorld* World = GetWorld();
+		if (AM1DeathmatchGameMode* DM = World ? World->GetAuthGameMode<AM1DeathmatchGameMode>() : nullptr)
 		{
+			// Deathmatch: credit the killer + respawn (no level reload).
+			DM->HandlePlayerDeath(this, EventInstigator);
+		}
+		else if (World)
+		{
+			// Campaign restart-on-death v1: reload the current level.
 			UGameplayStatics::OpenLevel(this, FName(*World->GetName()));
 		}
 	}
@@ -707,6 +716,28 @@ void AM1Character::M1Radar()
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[M1Radar] within %.0fcm: %d blips (%d active, %d friendly)"),
 		RangeCm, Total, Active, Friendly);
+}
+
+void AM1Character::M1Respawn()
+{
+	Health = M1Tuning::GPlayerShields;
+	Oxygen = M1Tuning::GPlayerOxygen;
+	ShowShields();
+}
+
+void AM1Character::M1Frags()
+{
+	if (UWorld* W = GetWorld())
+	{
+		if (AM1DeathmatchGameMode* DM = W->GetAuthGameMode<AM1DeathmatchGameMode>())
+		{
+			DM->LogScoreboard();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[M1Frags] not a deathmatch game (no scoreboard)"));
+		}
+	}
 }
 
 void AM1Character::M1Net()
