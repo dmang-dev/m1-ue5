@@ -13,6 +13,11 @@ AM1Elevator::AM1Elevator()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
+	// Co-op: the lift logic runs on the server (Tick authority-gated); its movement
+	// replicates so clients see + ride it (UE based-movement carries riders).
+	bReplicates = true;
+	SetReplicateMovement(true);
+
 	Slab = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Slab"));
 	RootComponent = Slab;
 	Slab->SetMobility(EComponentMobility::Movable);
@@ -89,20 +94,33 @@ void AM1Elevator::SetSlabTop(float TopZ)
 
 bool AM1Elevator::PlayerOn() const
 {
-	APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
-	if (!Player)
+	UWorld* W = GetWorld();
+	if (!W)
 	{
 		return false;
 	}
-	const FVector P = Player->GetActorLocation();
 	const FVector C = GetActorLocation();
-	// Within the footprint (small margin) and standing on/just above the slab top.
-	if (FMath::Abs(P.X - C.X) > HalfX + 25.0f || FMath::Abs(P.Y - C.Y) > HalfY + 25.0f)
+	// Co-op: ride if ANY player stands on the slab (runs on the server).
+	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
 	{
-		return false;
+		const APlayerController* PC = It->Get();
+		const APawn* Player = PC ? PC->GetPawn() : nullptr;
+		if (!Player)
+		{
+			continue;
+		}
+		const FVector P = Player->GetActorLocation();
+		if (FMath::Abs(P.X - C.X) > HalfX + 25.0f || FMath::Abs(P.Y - C.Y) > HalfY + 25.0f)
+		{
+			continue;
+		}
+		const float dz = P.Z - SlabTop();
+		if (dz > -20.0f && dz < 160.0f)
+		{
+			return true;
+		}
 	}
-	const float dz = P.Z - SlabTop();
-	return dz > -20.0f && dz < 160.0f;
+	return false;
 }
 
 void AM1Elevator::ForceActivate()
@@ -121,6 +139,13 @@ void AM1Elevator::ForceActivate()
 void AM1Elevator::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// Server-authoritative lift; clients receive the replicated slab position.
+	if (!HasAuthority())
+	{
+		return;
+	}
+
 	const float Step = Speed * DeltaSeconds;
 	const float Top = SlabTop();
 

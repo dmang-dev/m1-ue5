@@ -12,6 +12,11 @@ AM1Platform::AM1Platform()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
+	// Co-op: the door's state machine runs on the server (Tick is authority-gated);
+	// its movement replicates so clients see it open/close.
+	bReplicates = true;
+	SetReplicateMovement(true);
+
 	Panel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Panel"));
 	RootComponent = Panel;
 	Panel->SetMobility(EComponentMobility::Movable);
@@ -101,14 +106,29 @@ void AM1Platform::ForceOpen()
 
 bool AM1Platform::PlayerNear() const
 {
-	APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
-	if (!Player)
+	UWorld* W = GetWorld();
+	if (!W)
 	{
 		return false;
 	}
-	const FVector D = Player->GetActorLocation() - GetActorLocation();
-	const float HorizSq = D.X * D.X + D.Y * D.Y;
-	return HorizSq <= ActivateRadius * ActivateRadius && FMath::Abs(D.Z) < VerticalReach;
+	// Co-op: ANY player opens the door. (Runs on the server, whose controller
+	// iterator holds every connected player.)
+	for (FConstPlayerControllerIterator It = W->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PC = It->Get();
+		const APawn* Player = PC ? PC->GetPawn() : nullptr;
+		if (!Player)
+		{
+			continue;
+		}
+		const FVector D = Player->GetActorLocation() - GetActorLocation();
+		const float HorizSq = D.X * D.X + D.Y * D.Y;
+		if (HorizSq <= ActivateRadius * ActivateRadius && FMath::Abs(D.Z) < VerticalReach)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void AM1Platform::PlayDoorSound(USoundBase* Sound) const
@@ -136,6 +156,13 @@ FString AM1Platform::M1DebugString() const
 void AM1Platform::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	// Server-authoritative: the door logic + movement runs only on the server;
+	// clients receive the replicated position.
+	if (!HasAuthority())
+	{
+		return;
+	}
 
 	const FVector Loc = GetActorLocation();
 	const float Step = Speed * DeltaSeconds;

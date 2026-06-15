@@ -9,6 +9,7 @@ class USoundBase;
 class UM1WeaponComponent;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
+class UStaticMeshComponent;
 
 /**
  * First-person walking pawn for the Marathon levels: WASD to walk, mouse to
@@ -177,6 +178,12 @@ protected:
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	UCameraComponent* FirstPersonCamera;
+
+	/** Co-op: a simple visible body so OTHER players see this pawn. Hidden for the
+	 *  controlling client (bOwnerNoSee) since they're first-person. Placeholder box
+	 *  -- replace with a player sprite billboard later. */
+	UPROPERTY(VisibleAnywhere, Category = "Coop")
+	UStaticMeshComponent* Body;
 
 	/** Marathon teleport SFX, played on level arrival (BeginPlay) so cycling
 	 *  levels feels like Marathon's inter-level teleport. */

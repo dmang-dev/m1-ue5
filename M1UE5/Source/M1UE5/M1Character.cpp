@@ -1,6 +1,8 @@
 #include "M1Character.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -139,6 +141,21 @@ AM1Character::AM1Character()
 	}
 
 	Weapon = CreateDefaultSubobject<UM1WeaponComponent>(TEXT("Weapon"));
+
+	// Co-op visible body: a placeholder box other players see. Hidden for the owning
+	// (first-person) client via bOwnerNoSee; no collision (the capsule handles it).
+	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
+	Body->SetupAttachment(GetCapsuleComponent());
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> BodyCube(
+		TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (BodyCube.Succeeded())
+	{
+		Body->SetStaticMesh(BodyCube.Object);
+	}
+	Body->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.62f));  // ~capsule-sized
+	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Body->SetOwnerNoSee(true);   // owner is first-person; only teammates see it
+	Body->SetCastShadow(false);
 
 	// Renders the world into the bezel's 4:3 viewport hole. Attached to the eye so
 	// it shares the player's view; the HUD composites its target into the frame.
