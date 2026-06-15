@@ -8,8 +8,9 @@ class USoundBase;
 
 /**
  * Static definition of one Marathon weapon (stats + behavior flags + SFX).
- * Later these may be populated from Physics.phys; for now the full M1 arsenal
- * is built in C++ in the component constructor.
+ * The arsenal is built from the generated M1WeaponTable.h (Tools/gen_weapon_stats.py,
+ * canonical Physics.phys stats): stats in the component constructor, SFX loaded by
+ * path in BeginPlay.
  */
 USTRUCT()
 struct FM1WeaponDef

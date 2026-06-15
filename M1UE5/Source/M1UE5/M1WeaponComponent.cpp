@@ -1,6 +1,7 @@
 #include "M1WeaponComponent.h"
 
 #include "M1Audio.h"
+#include "M1WeaponTable.h"  // GENERATED canonical weapon stats (gen_weapon_stats.py)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op ammo replication)
 
 #include "M1Projectile.h"
@@ -33,213 +34,37 @@ UM1WeaponComponent::UM1WeaponComponent()
 	// and the right viewmodel (fire/select are server-authoritative on the pawn).
 	SetIsReplicatedByDefault(true);
 
-	// --- Canonical M1 SFX. The "Monster"/"Ambient"/"Weapon" folders are
-	// py-marathon-utils' cosmetic id//1000 buckets, not real categories. Load
-	// once via ConstructorHelpers (constructor-only) and share across defs. ---
-	static ConstructorHelpers::FObjectFinder<USoundBase> MagnumFire(
-		TEXT("/Game/Audio/Monster/A_magnum_firing.A_magnum_firing"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> MagnumReload(
-		TEXT("/Game/Audio/Monster/A_magnum_reloading.A_magnum_reloading"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> EmptyGun(
-		TEXT("/Game/Audio/Monster/A_empty_gun.A_empty_gun"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> Ricochet(
-		TEXT("/Game/Audio/Ambient/A_metallic_ricochet.A_metallic_ricochet"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> FusionFire(
-		TEXT("/Game/Audio/Weapon/A_fusion_firing.A_fusion_firing"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> FusionExplode(
-		TEXT("/Game/Audio/Weapon/A_fusion_exploding.A_fusion_exploding"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> RifleFire(
-		TEXT("/Game/Audio/Monster/A_assault_rifle_firing.A_assault_rifle_firing"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> RocketFire(
-		TEXT("/Game/Audio/Weapon/A_rocket_firing.A_rocket_firing"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> RocketExplode(
-		TEXT("/Game/Audio/Monster/A_rocket_exploding.A_rocket_exploding"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> FlamethrowerFire(
-		TEXT("/Game/Audio/Weapon/A_flamethrower.A_flamethrower"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> EnforcerAttack(
-		TEXT("/Game/Audio/Weapon/A_enforcer_attack.A_enforcer_attack"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> GrenadeFire(
-		TEXT("/Game/Audio/Monster/A_grenade_launcher_firing.A_grenade_launcher_firing"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> GrenadeExplode(
-		TEXT("/Game/Audio/Weapon/A_grenade_exploding.A_grenade_exploding"));
-	static ConstructorHelpers::FObjectFinder<USoundBase> FusionCharge(
-		TEXT("/Game/Audio/Weapon/A_fusion_charging.A_fusion_charging"));
-
-	USoundBase* const SndMagnumFire   = MagnumFire.Succeeded()      ? MagnumFire.Object      : nullptr;
-	USoundBase* const SndMagnumReload = MagnumReload.Succeeded()    ? MagnumReload.Object    : nullptr;
-	USoundBase* const SndEmpty        = EmptyGun.Succeeded()        ? EmptyGun.Object        : nullptr;
-	USoundBase* const SndRicochet     = Ricochet.Succeeded()        ? Ricochet.Object        : nullptr;
-	USoundBase* const SndFusionFire   = FusionFire.Succeeded()      ? FusionFire.Object      : nullptr;
-	USoundBase* const SndFusionExpl   = FusionExplode.Succeeded()   ? FusionExplode.Object   : nullptr;
-	USoundBase* const SndRifleFire    = RifleFire.Succeeded()       ? RifleFire.Object       : nullptr;
-	USoundBase* const SndRocketFire   = RocketFire.Succeeded()      ? RocketFire.Object      : nullptr;
-	USoundBase* const SndRocketExpl   = RocketExplode.Succeeded()   ? RocketExplode.Object   : nullptr;
-	USoundBase* const SndFlame        = FlamethrowerFire.Succeeded()? FlamethrowerFire.Object: nullptr;
-	USoundBase* const SndEnforcer     = EnforcerAttack.Succeeded()  ? EnforcerAttack.Object  : nullptr;
-	USoundBase* const SndGrenadeFire  = GrenadeFire.Succeeded()     ? GrenadeFire.Object     : nullptr;
-	USoundBase* const SndGrenadeExpl  = GrenadeExplode.Succeeded()  ? GrenadeExplode.Object  : nullptr;
-	USoundBase* const SndFusionCharge = FusionCharge.Succeeded()    ? FusionCharge.Object    : nullptr;
-
-	// --- The 7 M1 weapons (canonical stats), indices 0..6. ---
-	Weapons.Reserve(7);
-
-	// 0: Fist — infinite-ammo melee, no SFX.
+	// --- Build the arsenal STATS from the generated table (M1WeaponTable.h, from
+	// Tools/gen_weapon_stats.py) -- a single regenerable source instead of hardcoded
+	// constants. SFX assets are loaded in BeginPlay (LoadObject at runtime, not in
+	// the CDO constructor, where ConstructorHelpers would be the only safe option). ---
+	Weapons.Reserve(GM1WeaponTableCount);
+	for (int32 i = 0; i < GM1WeaponTableCount; ++i)
 	{
+		const FM1WeaponRow& R = GM1WeaponTable[i];
 		FM1WeaponDef W;
-		W.Name = TEXT("Fist");
-		W.FireInterval = 0.333f;
-		W.MagSize = -1;
-		W.ReloadTime = 0.0f;
-		W.Damage = 50.0f;
-		W.Range = 90.0f;
-		W.bProjectile = false;
-		W.ProjectileSpeed = 0.0f;
-		W.BlastRadius = 0.0f;
-		W.bAutomatic = false;
-		W.bMelee = true;
-		W.bDepletes = false;
-		Weapons.Add(W);
-	}
-
-	// 1: Magnum (.44 AM pistol).
-	{
-		FM1WeaponDef W;
-		W.Name = TEXT("Magnum");
-		W.FireInterval = 0.233f;
-		W.MagSize = 8;
-		W.ReloadTime = 1.0f;
-		W.Damage = 20.0f;
-		W.Range = 8000.0f;
-		W.bAutomatic = false;
-		W.FireSound = SndMagnumFire;
-		W.ReloadSound = SndMagnumReload;
-		W.EmptySound = SndEmpty;
-		W.ImpactSound = SndRicochet;
-		Weapons.Add(W);
-	}
-
-	// 2: Fusion Pistol — energy projectile, no blast.
-	{
-		FM1WeaponDef W;
-		W.Name = TEXT("Fusion Pistol");
-		W.FireInterval = 0.167f;
-		W.MagSize = 20;
-		W.ReloadTime = 2.0f;
-		W.Damage = 30.0f;
-		W.Range = 8000.0f;
-		W.bProjectile = true;
-		W.ProjectileSpeed = 750.0f;
-		W.BlastRadius = 0.0f;
-		W.bAutomatic = false;
-		W.FireSound = SndFusionFire;
-		W.ReloadSound = SndMagnumReload;
-		W.EmptySound = SndEmpty;
-		W.ImpactSound = SndFusionExpl;
-		// Secondary: charged heavy bolt — hold RMB 0.5s (15 ticks), released bolt
-		// does 80 dmg at 999 cm/s. Shares the 20-cell magazine.
-		W.bHasSecondary = true;
-		W.SecDamage = 80.0f;
-		W.SecFireInterval = 0.333f;
-		W.SecMagSize = -1;
-		W.bSecProjectile = true;
-		W.SecProjectileSpeed = 999.0f;
-		W.SecChargeTime = 0.5f;
-		W.SecFireSound = SndFusionFire;
-		W.SecChargeSound = SndFusionCharge;
-		W.SecImpactSound = SndFusionExpl;
-		Weapons.Add(W);
-	}
-
-	// 3: Assault Rifle (MA-75) — full-auto hitscan.
-	{
-		FM1WeaponDef W;
-		W.Name = TEXT("Assault Rifle");
-		W.FireInterval = 0.0333f;
-		W.MagSize = 52;
-		W.ReloadTime = 1.5f;
-		W.Damage = 8.0f;
-		W.Range = 8000.0f;
-		W.bAutomatic = true;
-		W.FireSound = SndRifleFire;
-		W.ReloadSound = SndMagnumReload;
-		W.EmptySound = SndEmpty;
-		W.ImpactSound = SndRicochet;
-		// Secondary: grenade launcher — its own 7-round magazine, 80 dmg with a
-		// 75cm blast, 750 cm/s, 0.167s (5 ticks) between grenades.
-		W.bHasSecondary = true;
-		W.SecDamage = 80.0f;
-		W.SecFireInterval = 0.167f;
-		W.SecMagSize = 7;
-		W.bSecProjectile = true;
-		W.SecProjectileSpeed = 750.0f;
-		W.SecBlastRadius = 75.0f;
-		W.SecFireSound = SndGrenadeFire;
-		W.SecImpactSound = SndGrenadeExpl;
-		Weapons.Add(W);
-	}
-
-	// 4: Rocket Launcher (SPNKR) — explosive projectile.
-	{
-		FM1WeaponDef W;
-		W.Name = TEXT("Rocket Launcher");
-		W.FireInterval = 0.5f;
-		W.MagSize = 2;
-		W.ReloadTime = 3.0f;
-		W.Damage = 250.0f;
-		W.Range = 8000.0f;
-		W.bProjectile = true;
-		W.ProjectileSpeed = 750.0f;
-		W.BlastRadius = 150.0f;
-		W.bAutomatic = false;
-		W.FireSound = SndRocketFire;
-		W.ReloadSound = SndMagnumReload;
-		W.EmptySound = SndEmpty;
-		W.ImpactSound = SndRocketExpl;
-		Weapons.Add(W);
-	}
-
-	// 5: Flamethrower (TOZT) — short-range full-auto hitscan, no impact SFX.
-	{
-		FM1WeaponDef W;
-		W.Name = TEXT("Flamethrower");
-		W.FireInterval = 0.0333f;
-		W.MagSize = 210;
-		W.ReloadTime = 2.0f;
-		W.Damage = 8.0f;
-		W.Range = 600.0f;
-		W.bAutomatic = true;
-		W.FireSound = SndFlame;
-		W.ReloadSound = SndMagnumReload;
-		W.EmptySound = SndEmpty;
-		Weapons.Add(W);
-	}
-
-	// 6: Alien Weapon — full-auto, depletes (never reloads), no reload SFX.
-	{
-		FM1WeaponDef W;
-		W.Name = TEXT("Alien Weapon");
-		W.FireInterval = 0.0333f;
-		W.MagSize = 150;
-		W.ReloadTime = 0.0f;
-		W.Damage = 10.0f;
-		W.Range = 2000.0f;
-		W.bAutomatic = true;
-		W.bDepletes = true;
-		W.FireSound = SndEnforcer;
-		W.EmptySound = SndEmpty;
-		W.ImpactSound = SndRicochet;
-		// Secondary: charged 15-bolt burst (burst_count 15, 10-tick charge),
-		// spraying from the shared 150-bolt pool.
-		W.bHasSecondary = true;
-		W.SecDamage = 10.0f;
-		W.SecFireInterval = 0.333f;
-		W.SecMagSize = -1;
-		W.bSecProjectile = false;
-		W.SecChargeTime = 0.333f;
-		W.SecBurstCount = 15;
-		W.SecRange = 2000.0f;
-		W.SecFireSound = SndEnforcer;
-		W.SecImpactSound = SndRicochet;
+		W.Name = R.Name;
+		W.Damage = R.Damage;
+		W.FireInterval = R.FireInterval;
+		W.MagSize = R.MagSize;
+		W.Range = R.Range;
+		W.ReloadTime = R.ReloadTime;
+		W.bAutomatic = R.bAutomatic;
+		W.bMelee = R.bMelee;
+		W.bProjectile = R.bProjectile;
+		W.ProjectileSpeed = R.ProjectileSpeed;
+		W.BlastRadius = R.BlastRadius;
+		W.bDepletes = R.bDepletes;
+		W.bHasSecondary = R.bHasSecondary;
+		W.SecDamage = R.SecDamage;
+		W.SecFireInterval = R.SecFireInterval;
+		W.SecMagSize = R.SecMagSize;
+		W.bSecProjectile = R.bSecProjectile;
+		W.SecProjectileSpeed = R.SecProjectileSpeed;
+		W.SecBlastRadius = R.SecBlastRadius;
+		W.SecChargeTime = R.SecChargeTime;
+		W.SecBurstCount = R.SecBurstCount;
+		W.SecRange = R.SecRange;
 		Weapons.Add(W);
 	}
 }
@@ -255,6 +80,24 @@ void UM1WeaponComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 void UM1WeaponComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Load each weapon's SFX by path from the table (runtime LoadObject, not in the
+	// CDO constructor). Empty path = silent. Runs on server + clients.
+	auto LoadSnd = [](const TCHAR* Path) -> USoundBase*
+	{
+		return (Path && Path[0]) ? LoadObject<USoundBase>(nullptr, Path) : nullptr;
+	};
+	for (int32 i = 0; i < Weapons.Num() && i < GM1WeaponTableCount; ++i)
+	{
+		const FM1WeaponRow& R = GM1WeaponTable[i];
+		Weapons[i].FireSound    = LoadSnd(R.FireSound);
+		Weapons[i].ReloadSound  = LoadSnd(R.ReloadSound);
+		Weapons[i].EmptySound   = LoadSnd(R.EmptySound);
+		Weapons[i].ImpactSound  = LoadSnd(R.ImpactSound);
+		Weapons[i].SecFireSound   = LoadSnd(R.SecFireSound);
+		Weapons[i].SecChargeSound = LoadSnd(R.SecChargeSound);
+		Weapons[i].SecImpactSound = LoadSnd(R.SecImpactSound);
+	}
 
 	// Init per-weapon ammo: full mag, or the infinite sentinel for MagSize < 0.
 	Ammo.SetNum(Weapons.Num());
