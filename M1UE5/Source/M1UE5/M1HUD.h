@@ -49,6 +49,10 @@ private:
 	 *  friendly = amber; active (chasing) blips are brighter/larger. */
 	void DrawMotionSensor(AM1Character* Player, float BezelX, float BezelY, float Scale);
 
+	/** Net co-op/deathmatch scoreboard (top-right): player names + replicated scores.
+	 *  Drawn only in networked sessions. */
+	void DrawScoreboard();
+
 	/** Bezel texture loader (/Game/UI/HUD/T_hud_bezel), cached. */
 	UTexture2D* GetBezelTexture();
 

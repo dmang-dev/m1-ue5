@@ -13,6 +13,8 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/GameStateBase.h"  // scoreboard PlayerArray
+#include "GameFramework/PlayerState.h"
 
 namespace
 {
@@ -103,6 +105,48 @@ void AM1HUD::DrawHUD()
 	{
 		DrawViewmodel(Weapon, 0.0f, 0.0f, Canvas->SizeX, Canvas->SizeY);
 		DrawInterfacePanel(Player, Weapon);
+	}
+
+	DrawScoreboard();
+}
+
+void AM1HUD::DrawScoreboard()
+{
+	// Only in networked sessions (co-op / deathmatch); single-player has no board.
+	UWorld* W = GetWorld();
+	if (!W || W->GetNetMode() == NM_Standalone || !Canvas)
+	{
+		return;
+	}
+	AGameStateBase* GS = W->GetGameState();
+	if (!GS || GS->PlayerArray.Num() == 0)
+	{
+		return;
+	}
+	UFont* Font = GEngine ? GEngine->GetMediumFont() : nullptr;
+	if (!Font)
+	{
+		return;
+	}
+	// Top-right rows: "<player>  <score>" over a dark strip, sorted high-to-low.
+	TArray<APlayerState*> Players = GS->PlayerArray;
+	Players.Sort([](const APlayerState& A, const APlayerState& B) { return A.GetScore() > B.GetScore(); });
+	const float Sc = FMath::Max(1.0f, Canvas->SizeX / 1280.0f);
+	const float RowH = 18.0f * Sc;
+	const float W0 = 220.0f * Sc;
+	const float X = Canvas->SizeX - W0 - 12.0f * Sc;
+	float Y = 12.0f * Sc;
+	DrawRect(FLinearColor(0.0f, 0.0f, 0.0f, 0.55f), X - 6.0f * Sc, Y - 4.0f * Sc,
+		W0 + 12.0f * Sc, RowH * (Players.Num() + 1) + 8.0f * Sc);
+	DrawText(TEXT("SCORE"), FLinearColor(0.2f, 1.0f, 0.4f, 1.0f), X, Y, Font, Sc);
+	Y += RowH;
+	for (const APlayerState* PS : Players)
+	{
+		if (!PS) { continue; }
+		const FString Row = FString::Printf(TEXT("%s   %d"),
+			*PS->GetPlayerName(), FMath::RoundToInt(PS->GetScore()));
+		DrawText(Row, FLinearColor(0.85f, 0.95f, 0.85f, 1.0f), X, Y, Font, Sc);
+		Y += RowH;
 	}
 }
 
