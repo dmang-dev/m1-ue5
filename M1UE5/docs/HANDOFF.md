@@ -457,8 +457,20 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
    DM mode (frag/respawn) vs campaign (level reload). Select per-map:
    `...L_30_Arena?game=/Script/M1UE5.M1DeathmatchGameMode?listen`. `M1Frags` logs the
    scoreboard. Verified the mode loads + 2 players connect; PvP fragging needs a
-   2-human playtest. FOLLOW-UPS: KOTH + Tag modes; replicated scoreboard for client
-   HUDs; frag-limit / round end; teams.
+   2-human playtest.
+   - **Modes (DONE):** `AM1DeathmatchGameMode` is now a subclassable base (replicated
+     APlayerState::Score, ScoreLimit=10 -> EndRound announce + ServerTravel restart,
+     virtual AwardKill + ScoreTick). `AM1KOTHGameMode` (score by time on the hill =
+     PlayerStarts centroid r=500; verified ScoreTick runs) and `AM1TagGameMode` (Kill
+     the Man with the Ball: frag to grab it, carrier scores/sec). Select via
+     `?game=/Script/M1UE5.M1KOTHGameMode` / `M1TagGameMode`.
+   - **Scoreboard (DONE):** scores on the replicated APlayerState::Score; `M1Frags`
+     reads GameState->PlayerArray (clients too); `AM1HUD::DrawScoreboard` draws a
+     top-right board in net sessions.
+   - **Player body (DONE v1):** tinted orange marker (bOwnerNoSee); a real player
+     sprite billboard is a later art/pipeline task.
+   - REMAINING FOLLOW-UPS: teams; authored hill/ball actors (vs computed); per-player
+     body colors; live scoring + frag-limit round-end need a 2-human playtest.
 
 BUILD GOTCHA (important): on this box the build can silently NO-OP (source mtimes not
 seen as newer than the .obj -> "Result: Succeeded" but the exe isn't relinked, so
