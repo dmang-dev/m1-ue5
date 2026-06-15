@@ -315,9 +315,28 @@ Each phase is independently testable via the `M1SelfTest` harness. **The archite
   exit-criterion test (Setup → EULA → locate data → convert → launch). Not doable on
   the dev box (no `iscc`, no VM); the `.iss`/EULA/script are complete + reviewable.
 
-### Phase 4 — Optional packaging & original-content track
-- **(4a)** Wrap the per-user cache in a `UnrealPak`/IoStore content pak mounted via `FCoreDelegates` (the only sane reading of option (d)). **Skip if the loose cache performs acceptably.**
-- **(4b)** Long-term: a **Freedoom-style fully-original replacement data set** — the only path to a self-contained distributable with zero Bungie IP.
+### Phase 4 — Optional packaging & original-content track — framework DONE; full art = long-term
+- **(4a) pak skin — SKIPPED (by design).** The loose per-user cache performs fine (verified:
+  levels build at runtime in well under a second). `UnrealPak`/IoStore only *packages*
+  already-cooked assets — it can't cook the loose intermediates — so wrapping them in a
+  pak adds build complexity for ~no benefit. Revisit only if loose-file I/O ever bites.
+- **(4b) original-content track — FRAMEWORK + first art step done.**
+  - ✅ **Self-contained data path**: `AM1RuntimeLevel::ResolveDataRoot` adds a **bundled**
+    tier (`<install>\M1Data`, between the user's AppData cache and the dev tree), so a
+    release can ship its own original/re-themed data set and run with **no user data**.
+  - ✅ **Clean-room texture generator** `Tools/gen_original_textures.py`: emits ORIGINAL,
+    deterministic, **non-derived** wall/floor textures for exactly the (collection, shape)
+    IDs the converted levels reference (read from the cache MTLs) into a Shapes-compatible
+    layout. Verified: 133 textures across the 6 wall collections. (Placeholder original art
+    — a real art pass swaps in hand-authored originals through the identical pipeline.)
+  - ✅ **Runtime audio from data** (also removes cooked Bungie SFX from the picture):
+    `AM1RuntimeLevel::LoadRuntimeSound` decodes the cache's `Sounds/<id>.wav` (mapped via
+    the shipped `sound_names.json`) into transient `USoundWave`s; weapon + monster SFX
+    route through it with a cooked fallback. Verified: 20 cache WAVs resolved + decoded.
+  - **Remaining for a TRUE zero-Bungie-IP release** (long-term content work, not code):
+    original geometry/level re-authoring (the shape is functional/weakly-protected but
+    should be re-themed), original sounds + music + terminal art, then assemble an
+    `M1Data` bundle from originals only. Counsel review of the geometry posture advised.
 
 ---
 

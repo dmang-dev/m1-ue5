@@ -2,6 +2,7 @@
 
 #include "M1Audio.h"
 #include "M1WeaponTable.h"  // GENERATED canonical weapon stats (gen_weapon_stats.py)
+#include "M1RuntimeLevel.h"  // runtime WAV loader (bring-your-own-assets audio)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op ammo replication)
 
 #include "M1Projectile.h"
@@ -81,11 +82,14 @@ void UM1WeaponComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Load each weapon's SFX by path from the table (runtime LoadObject, not in the
-	// CDO constructor). Empty path = silent. Runs on server + clients.
+	// Load each weapon's SFX by path from the table. Prefer the runtime data cache
+	// (the user's converted WAVs) so a build needn't ship cooked Bungie audio; fall
+	// back to the cooked /Game/Audio asset. Empty path = silent.
 	auto LoadSnd = [](const TCHAR* Path) -> USoundBase*
 	{
-		return (Path && Path[0]) ? LoadObject<USoundBase>(nullptr, Path) : nullptr;
+		if (!Path || !Path[0]) { return nullptr; }
+		if (USoundBase* Cached = AM1RuntimeLevel::LoadRuntimeSound(Path)) { return Cached; }
+		return LoadObject<USoundBase>(nullptr, Path);
 	};
 	for (int32 i = 0; i < Weapons.Num() && i < GM1WeaponTableCount; ++i)
 	{

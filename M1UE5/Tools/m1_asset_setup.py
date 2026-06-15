@@ -140,6 +140,17 @@ def main(argv=None) -> int:
     n_obj = len(list((cache / "Geometry").glob("*.obj")))
     progress("geometry", "done", levels=n_obj)
 
+    # Ship the canonical sound id->name map (flattened) so the game's runtime WAV
+    # loader can resolve cooked /Game/Audio/A_<name> paths to Sounds/<id>.wav.
+    names_src = TOOLS / "m1_sound_names.json"
+    if names_src.is_file():
+        try:
+            m = json.loads(names_src.read_text(encoding="utf-8")).get("map", {})
+            (cache / "sound_names.json").write_text(json.dumps(m), encoding="utf-8")
+            progress("sounds", "done", names=len(m))
+        except Exception as e:
+            progress("sounds", "warn", message=str(e))
+
     manifest = {
         "hashes": hashes,
         "source": str(source),

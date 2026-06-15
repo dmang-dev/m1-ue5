@@ -440,16 +440,24 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      py-marathon-utils + Pillow + soundfile/libsndfile) -> `M1AssetSetup.exe`. VERIFIED:
      wizard converted M1SOURCE -> AppData cache (37 levels + manifest); the packaged game
      built Arrival at runtime FROM the AppData cache (no dev `Reference/`, no env).
-   - **Phase 3 (Inno installer) DONE (authored) + in-game safety net verified.**
-     `Tools/installer/`: `M1UE5.iss` (per-user/no-admin, EULA gate, locate-only data
-     page, runs `M1AssetSetup.exe` at setup, redists, shortcuts, uninstaller) +
-     `EULA.txt` + `build_installer.ps1` + `README.md`. In-game:
-     `AM1RuntimeLevel::IsDataAvailable()` -> `AM1PlayerController::ShowDataMissing()`
-     when the cache is absent (regression-verified the data-present path still builds
-     from the cache). **Remaining = packaging machine only:** install Inno Setup +
-     `build_installer.ps1` -> `M1UE5-Setup.exe`, then the clean-VM end-to-end test
-     (no `iscc`/VM on this box). **Other follow-ups:** WAV runtime loader; flip runtime
-     mode to the campaign default (opt-in now); optional Phase 4 pak skin / original-art.
+   - **Phase 3 (Inno installer) DONE + COMPILED.** `Tools/installer/`: `M1UE5.iss`
+     (per-user/no-admin, EULA gate, locate-only data page, runs `M1AssetSetup.exe` at
+     setup, redists, shortcuts, uninstaller) + `EULA.txt` + `build_installer.ps1` +
+     `README.md`. In-game `IsDataAvailable()` -> `ShowDataMissing()` when no cache.
+     **Actually built `Build\Installer\M1UE5-Setup.exe` (461 MB, ISCC exit 0)** via
+     Inno Setup 6 (winget per-user). Remaining = clean-VM end-to-end run (no VM here).
+   - **Phase 4 (framework) + both gameplay follow-ups DONE + verified.**
+     * Runtime mode is now the **campaign default**: `OnNewGame`/`OnContinue` ->
+       `M1EnterRuntimeLevel`; chapter splash uses the runtime index. (Cooked `L_NN`
+       still ship as a fallback; a no-IP release would drop them from the cook.)
+     * **WAV runtime loader** `AM1RuntimeLevel::LoadRuntimeSound` (cache `Sounds/<id>.wav`
+       via shipped `sound_names.json` -> transient `USoundWave`); weapon + monster SFX
+       route through it w/ cooked fallback. Verified: 20 cache WAVs decoded, no crash.
+       (Music still cooked -- no cache source.)
+     * **Self-contained path**: `ResolveDataRoot` bundled `<install>\M1Data` tier;
+       `Tools/gen_original_textures.py` clean-room textures (133 across 6 collections).
+     * 4a pak skin **skipped** (loose cache fine). **Remaining = long-term content:**
+       original geometry/sounds/music/terminal art for a true zero-Bungie-IP release.
 
 > **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
 > fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget

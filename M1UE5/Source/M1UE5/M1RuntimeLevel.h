@@ -36,6 +36,13 @@ public:
 	 *  then shows a "data not found, run setup" message instead of empty levels. */
 	static bool IsDataAvailable();
 
+	/** Runtime audio: load a Marathon SFX as a transient USoundWave from the data
+	 *  cache's Sounds/ (the user's converted audio), mapping the cooked asset path
+	 *  /Game/Audio/<fam>/A_<name> -> <name> -> sound id (sound_names.json) ->
+	 *  Sounds/**\<id>.wav. Returns null when there's no cache match -- callers then
+	 *  fall back to the cooked USoundBase, so this is purely additive. */
+	static class USoundBase* LoadRuntimeSound(const FString& CookedAssetPath);
+
 	/** Build <DataRoot>/Geometry/<Stem>.obj into this actor's mesh. Returns the
 	 *  number of mesh sections created (0 = failed). Logs a [M1Runtime] summary. */
 	int32 BuildFromStem(const FString& Stem);

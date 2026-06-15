@@ -5,6 +5,7 @@
 
 #include "M1MonsterTable.h"
 #include "M1Projectile.h"
+#include "M1RuntimeLevel.h"  // runtime WAV loader (bring-your-own-assets audio)
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -176,16 +177,19 @@ bool AM1Enemy::InitFromType(int32 MonsterType)
 	UpdateSpriteForState(Row->Stand, 0);
 
 	// --- Sounds (empty path = silent). ---
-	ActivationSound = (Row->ActivationSound && Row->ActivationSound[0])
-		? LoadObject<USoundBase>(nullptr, Row->ActivationSound) : nullptr;
-	RandomSound = (Row->RandomSound && Row->RandomSound[0])
-		? LoadObject<USoundBase>(nullptr, Row->RandomSound) : nullptr;
-	DeathSound = (Row->DeathSound && Row->DeathSound[0])
-		? LoadObject<USoundBase>(nullptr, Row->DeathSound) : nullptr;
-	ProjFlybySound = (Row->ProjFlybySound && Row->ProjFlybySound[0])
-		? LoadObject<USoundBase>(nullptr, Row->ProjFlybySound) : nullptr;
-	MeleeSound = (Row->MeleeSound && Row->MeleeSound[0])
-		? LoadObject<USoundBase>(nullptr, Row->MeleeSound) : nullptr;
+	// Prefer the runtime data cache (user's converted WAVs) so a build needn't ship
+	// cooked Bungie audio; fall back to the cooked /Game/Audio asset. Empty = silent.
+	auto LoadSnd = [](const TCHAR* Path) -> USoundBase*
+	{
+		if (!Path || !Path[0]) { return nullptr; }
+		if (USoundBase* Cached = AM1RuntimeLevel::LoadRuntimeSound(Path)) { return Cached; }
+		return LoadObject<USoundBase>(nullptr, Path);
+	};
+	ActivationSound = LoadSnd(Row->ActivationSound);
+	RandomSound     = LoadSnd(Row->RandomSound);
+	DeathSound      = LoadSnd(Row->DeathSound);
+	ProjFlybySound  = LoadSnd(Row->ProjFlybySound);
+	MeleeSound      = LoadSnd(Row->MeleeSound);
 
 	SnapToFloor();
 

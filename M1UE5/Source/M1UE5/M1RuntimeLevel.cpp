@@ -17,6 +17,10 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Sound/SoundBase.h"
+#include "Sound/SoundWave.h"
+#include "AudioDecompress.h"   // FWaveModInfo (runtime WAV header parse)
+#include "Misc/PackageName.h"
 
 AM1RuntimeLevel::AM1RuntimeLevel()
 {
@@ -56,7 +60,15 @@ FString AM1RuntimeLevel::ResolveDataRoot()
 	{
 		return AppData;
 	}
-	// 3. In-project Reference/ (dev tree / running from the project dir).
+	// 3. Bundled data shipped next to the game (a SELF-CONTAINED build drops an
+	//    original/re-themed data set in <install>\M1Data -- enables a release that
+	//    needs no user data once original art exists; see INSTALLER_DESIGN Phase 4).
+	const FString Bundled = FPaths::Combine(FPaths::ProjectDir(), TEXT("M1Data"));
+	if (HasData(Bundled))
+	{
+		return Bundled;
+	}
+	// 4. In-project Reference/ (dev tree / running from the project dir).
 	const FString ProjRef = FPaths::Combine(FPaths::ProjectDir(), TEXT("Reference"));
 	if (HasData(ProjRef))
 	{
@@ -72,6 +84,93 @@ bool AM1RuntimeLevel::IsDataAvailable()
 	TArray<FString> Objs;
 	IFileManager::Get().FindFiles(Objs, *(GeoDir / TEXT("*.obj")), true, false);
 	return Objs.Num() > 0;
+}
+
+USoundBase* AM1RuntimeLevel::LoadRuntimeSound(const FString& CookedAssetPath)
+{
+	// One decode per unique sound; a cached null means "no cache match, use cooked".
+	static TMap<FString, USoundBase*> Cache;
+	if (USoundBase** Found = Cache.Find(CookedAssetPath))
+	{
+		return *Found;
+	}
+
+	const FString Root = ResolveDataRoot();
+
+	// Lazily build the canonical-name -> sound-id reverse map from the cache's
+	// sound_names.json (shipped by the Asset Setup wizard; id -> name).
+	static bool bNamesLoaded = false;
+	static TMap<FString, int32> NameToId;
+	if (!bNamesLoaded)
+	{
+		bNamesLoaded = true;
+		FString Json;
+		if (FFileHelper::LoadFileToString(Json, *FPaths::Combine(Root, TEXT("sound_names.json"))))
+		{
+			TSharedPtr<FJsonObject> Obj;
+			const TSharedRef<TJsonReader<>> R = TJsonReaderFactory<>::Create(Json);
+			if (FJsonSerializer::Deserialize(R, Obj) && Obj.IsValid())
+			{
+				for (const auto& Pair : Obj->Values)   // { "5000": "magnum_firing", ... }
+				{
+					NameToId.Add(Pair.Value->AsString(), FCString::Atoi(*Pair.Key));
+				}
+			}
+		}
+	}
+
+	auto Store = [&](USoundBase* S) -> USoundBase* { Cache.Add(CookedAssetPath, S); return S; };
+
+	// "/Game/Audio/Monster/A_magnum_firing.A_magnum_firing" -> "magnum_firing".
+	FString Name = FPackageName::GetShortName(CookedAssetPath);
+	Name.Split(TEXT("."), &Name, nullptr);   // drop the ".AssetName" suffix
+	Name.RemoveFromStart(TEXT("A_"));
+	const int32* IdPtr = NameToId.Find(Name);
+	if (!IdPtr)
+	{
+		return Store(nullptr);
+	}
+
+	// Find Sounds/**/<id>.wav (extract_reference writes 5-digit ids; tolerate either).
+	const FString SoundsDir = FPaths::Combine(Root, TEXT("Sounds"));
+	TArray<FString> Wavs;
+	IFileManager::Get().FindFilesRecursive(Wavs, *SoundsDir,
+		*FString::Printf(TEXT("%05d.wav"), *IdPtr), true, false);
+	if (Wavs.Num() == 0)
+	{
+		IFileManager::Get().FindFilesRecursive(Wavs, *SoundsDir,
+			*FString::Printf(TEXT("%d.wav"), *IdPtr), true, false);
+	}
+	if (Wavs.Num() == 0)
+	{
+		return Store(nullptr);
+	}
+
+	// Decode the 16-bit PCM WAV into a transient USoundWave (RawPCMData path).
+	TArray<uint8> Bytes;
+	if (!FFileHelper::LoadFileToArray(Bytes, *Wavs[0]))
+	{
+		return Store(nullptr);
+	}
+	FWaveModInfo Wave;
+	if (!Wave.ReadWaveInfo(Bytes.GetData(), Bytes.Num()))
+	{
+		return Store(nullptr);
+	}
+	USoundWave* SW = NewObject<USoundWave>(GetTransientPackage());
+	const int32 Channels = *Wave.pChannels;
+	const int32 SampleRate = *Wave.pSamplesPerSec;
+	SW->SetSampleRate(SampleRate);
+	SW->NumChannels = Channels;
+	SW->RawPCMDataSize = Wave.SampleDataSize;
+	SW->RawPCMData = static_cast<uint8*>(FMemory::Malloc(Wave.SampleDataSize));
+	FMemory::Memcpy(SW->RawPCMData, Wave.SampleDataStart, Wave.SampleDataSize);
+	SW->Duration = (SampleRate > 0 && Channels > 0)
+		? static_cast<float>(Wave.SampleDataSize) / (SampleRate * Channels * sizeof(int16)) : 0.0f;
+	SW->SoundGroup = SOUNDGROUP_Default;
+	UE_LOG(LogTemp, Log, TEXT("[M1Runtime] cached sound '%s' <- %s (%d Hz, %dch, %.2fs)"),
+		*Name, *FPaths::GetCleanFilename(Wavs[0]), SampleRate, Channels, SW->Duration);
+	return Store(SW);
 }
 
 UTexture2D* AM1RuntimeLevel::LoadPNG(const FString& AbsPath)

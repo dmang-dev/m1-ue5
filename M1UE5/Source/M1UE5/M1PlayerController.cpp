@@ -51,19 +51,23 @@ void AM1PlayerController::BeginPlay()
 
 void AM1PlayerController::MaybeShowChapterScreen()
 {
-	// Level index lives in the map name as "L_<NN>_..." (e.g. L_00_Arrival).
-	const FString Map = GetWorld() ? GetWorld()->GetMapName() : FString();
-	const int32 P = Map.Find(TEXT("L_"));
-	if (P == INDEX_NONE)
+	// Level index: in runtime mode the map is the blank L_Runtime, so use the active
+	// campaign index; otherwise parse it from the cooked map name "L_<NN>_...".
+	int32 Idx = -1;
+	if (!AM1Character::GRuntimeLevelName.IsEmpty())
 	{
-		return;
+		Idx = AM1Character::GRuntimeLevelIndex;
 	}
-	const FString Digits = Map.Mid(P + 2, 2);
-	if (Digits.Len() < 2 || !Digits.IsNumeric())
+	else
 	{
-		return;
+		const FString Map = GetWorld() ? GetWorld()->GetMapName() : FString();
+		const int32 P = Map.Find(TEXT("L_"));
+		if (P == INDEX_NONE) { return; }
+		const FString Digits = Map.Mid(P + 2, 2);
+		if (Digits.Len() < 2 || !Digits.IsNumeric()) { return; }
+		Idx = FCString::Atoi(*Digits);
 	}
-	const int32 Idx = FCString::Atoi(*Digits);
+	if (Idx < 0) { return; }
 
 	// Only six story-beat levels ship a chapter screen; LoadObject returns null
 	// for the rest, which silently skips the splash.
@@ -224,7 +228,9 @@ void AM1PlayerController::OnNewGame()
 	// viewport into the next level and its button lambdas dereference this (now
 	// destroyed) controller on the next input event -> crash.
 	CloseMenu();
-	UGameplayStatics::OpenLevel(this, FName(AM1Character::M1LevelPath(0)));
+	// Runtime mode is the campaign default: build levels from the converted data at
+	// runtime (L_Runtime) rather than opening a cooked per-level .umap.
+	AM1Character::M1EnterRuntimeLevel(this, 0);
 }
 
 void AM1PlayerController::OnContinue()
@@ -236,7 +242,7 @@ void AM1PlayerController::OnContinue()
 		return;
 	}
 	CloseMenu();
-	UGameplayStatics::OpenLevel(this, FName(AM1Character::M1LevelPath(Idx)));
+	AM1Character::M1EnterRuntimeLevel(this, Idx);  // runtime default (see OnNewGame)
 }
 
 void AM1PlayerController::OnQuitGame()
