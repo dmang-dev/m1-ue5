@@ -308,6 +308,64 @@ void AM1PlayerController::ShowEpilogue()
 	PresentMenu(Screen, /*bPause*/ true);
 }
 
+void AM1PlayerController::ShowDataMissing()
+{
+	if (bMenuOpen)
+	{
+		return;
+	}
+	// Shown when runtime mode is requested but no converted data cache exists (a
+	// fresh install before the Asset Setup wizard has run). The installer normally
+	// runs M1AssetSetup.exe during setup, so this is the safety net.
+	static const TCHAR* const Lines[] = {
+		TEXT("MARATHON DATA NOT FOUND"),
+		TEXT(""),
+		TEXT("This build loads your own Marathon 1 data at runtime, but no"),
+		TEXT("converted data was found in:"),
+		TEXT("    %LOCALAPPDATA%\\M1UE5\\Data"),
+		TEXT(""),
+		TEXT("Run the M1UE5 Asset Setup (M1AssetSetup.exe) and point it at your"),
+		TEXT("Marathon 1 data folder (Map.scen, Shapes.shps, Sounds.sndz,"),
+		TEXT("Physics.phys), then relaunch."),
+	};
+
+	TSharedRef<SVerticalBox> Text = SNew(SVerticalBox);
+	for (const TCHAR* L : Lines)
+	{
+		Text->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0.0f, 4.0f)
+		[
+			SNew(STextBlock).Text(FText::FromString(L))
+				.Font(MenuFont(L[0] == TEXT('M') ? 26 : 17))  // title line larger
+				.ColorAndOpacity(FSlateColor(M1Green))
+		];
+	}
+
+	static const FButtonStyle ClearBtn = FButtonStyle()
+		.SetNormal(FSlateNoResource()).SetHovered(FSlateNoResource()).SetPressed(FSlateNoResource())
+		.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
+
+	TSharedRef<SButton> Screen = SNew(SButton).ButtonStyle(&ClearBtn)
+		.OnClicked_Lambda([this]() { OnReturnToMenu(); return FReply::Handled(); })
+		[
+			SNew(SOverlay)
+			+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+			[
+				SNew(SImage).Image(&GMenuBg).ColorAndOpacity(FLinearColor::Black)
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+			[
+				Text
+			]
+			+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(FMargin(0, 0, 0, 28))
+			[
+				SNew(STextBlock).Text(LOCTEXT("DataMissingBack", "click to return to the main menu"))
+					.Font(MenuFont(15)).ColorAndOpacity(FSlateColor(FLinearColor(0.30f, 1.0f, 0.40f, 0.85f)))
+			]
+		];
+
+	PresentMenu(Screen, /*bPause*/ true);
+}
+
 TSharedRef<SWidget> AM1PlayerController::BuildMainMenuScreen()
 {
 	// Authentic M1 title screen (Shapes collection 10, bitmap 001). The option

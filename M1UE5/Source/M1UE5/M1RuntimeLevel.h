@@ -26,9 +26,15 @@ class M1UE5_API AM1RuntimeLevel : public AActor
 public:
 	AM1RuntimeLevel();
 
-	/** Resolve the data root: env M1_DATA_ROOT, else <ProjectDir>/Reference, else
-	 *  the dev source tree. (Phase 2 points this at the per-user AppData cache.) */
+	/** Resolve the data root: env M1_DATA_ROOT, else the per-user AppData cache
+	 *  (%LOCALAPPDATA%\M1UE5\Data, written by the Asset Setup wizard), else the
+	 *  in-project Reference/, else the dev source tree. */
 	static FString ResolveDataRoot();
+
+	/** True if the resolved data root actually holds converted geometry (>=1 OBJ).
+	 *  False on a fresh install before the Asset Setup wizard has run -- the game
+	 *  then shows a "data not found, run setup" message instead of empty levels. */
+	static bool IsDataAvailable();
 
 	/** Build <DataRoot>/Geometry/<Stem>.obj into this actor's mesh. Returns the
 	 *  number of mesh sections created (0 = failed). Logs a [M1Runtime] summary. */

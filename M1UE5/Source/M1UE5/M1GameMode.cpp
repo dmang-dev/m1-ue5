@@ -60,6 +60,17 @@ void AM1GameMode::BuildRuntimeGeometry()
 	{
 		return;
 	}
+	// Fresh install / no Asset Setup run yet: there's no converted data to build from.
+	// Surface a clear "run setup" message instead of an empty level.
+	if (!AM1RuntimeLevel::IsDataAvailable())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[M1Runtime] no converted data found (run M1AssetSetup); showing data-missing screen"));
+		if (AM1PlayerController* PC = Cast<AM1PlayerController>(World->GetFirstPlayerController()))
+		{
+			PC->ShowDataMissing();
+		}
+		return;
+	}
 	FString Stem = AM1Character::GRuntimeLevelName;  // "L_00_Arrival"
 	Stem.RemoveFromStart(TEXT("L_"));                 // -> "00_Arrival"
 	AM1RuntimeLevel* RL = World->SpawnActor<AM1RuntimeLevel>(

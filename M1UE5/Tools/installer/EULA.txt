@@ -1,0 +1,54 @@
+Marathon UE5 -- License & Use Agreement
+=======================================
+
+Please read this agreement before installing. By choosing "I accept" you confirm
+that you understand and agree to the terms below.
+
+
+1. WHAT THIS IS
+
+Marathon UE5 is a free, open-source, non-commercial fan project: a from-scratch
+re-creation of the engine and systems of Bungie's Marathon (1994), built in Unreal
+Engine 5. It is not sold, and it is not affiliated with, endorsed by, or sponsored
+by Bungie, Microsoft, the Aleph One project, or any rights holder of Marathon.
+"Marathon" and related names are the property of their respective owners.
+
+
+2. NO GAME DATA IS INCLUDED
+
+This installer contains NO Marathon game data (no maps, artwork, sounds, or other
+Bungie-authored content). The game loads YOUR OWN copy of the Marathon 1 data at
+runtime.
+
+To play, you must independently obtain the original Marathon 1 data files
+(Map.scen, Shapes.shps, Sounds.sndz, Physics.phys) -- for example from the freeware
+release distributed by the Aleph One project -- and you must have the right to use
+that data. Setup can convert it for you, or you can run "Asset Setup" later from the
+Start Menu. The conversion happens entirely on your machine, for your personal use,
+and the converted data is stored only in your user profile.
+
+
+3. YOUR RESPONSIBILITY
+
+You are responsible for ensuring that your acquisition and use of the Marathon game
+data complies with the terms under which you obtained it and with applicable law.
+Do not use this software with data you do not have the right to use.
+
+
+4. OPEN SOURCE / NON-COMMERCIAL
+
+The Marathon UE5 source code and tools are provided for free, non-commercial use.
+You may not sell this software or charge for access to it. Distribution of any
+build that bundles Bungie-authored data is NOT permitted.
+
+
+5. NO WARRANTY
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR
+ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+If you do not agree to these terms, do not install or use this software.

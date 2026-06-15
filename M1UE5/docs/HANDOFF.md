@@ -440,9 +440,16 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      py-marathon-utils + Pillow + soundfile/libsndfile) -> `M1AssetSetup.exe`. VERIFIED:
      wizard converted M1SOURCE -> AppData cache (37 levels + manifest); the packaged game
      built Arrival at runtime FROM the AppData cache (no dev `Reference/`, no env).
-     **NEXT = Phase 3: Inno `.iss` (EULA gate + run `M1AssetSetup.exe` during setup +
-     bundle UE redists) + a "data not found, run setup" in-game message; plus the WAV
-     runtime loader and flipping runtime mode to the campaign default.**
+   - **Phase 3 (Inno installer) DONE (authored) + in-game safety net verified.**
+     `Tools/installer/`: `M1UE5.iss` (per-user/no-admin, EULA gate, locate-only data
+     page, runs `M1AssetSetup.exe` at setup, redists, shortcuts, uninstaller) +
+     `EULA.txt` + `build_installer.ps1` + `README.md`. In-game:
+     `AM1RuntimeLevel::IsDataAvailable()` -> `AM1PlayerController::ShowDataMissing()`
+     when the cache is absent (regression-verified the data-present path still builds
+     from the cache). **Remaining = packaging machine only:** install Inno Setup +
+     `build_installer.ps1` -> `M1UE5-Setup.exe`, then the clean-VM end-to-end test
+     (no `iscc`/VM on this box). **Other follow-ups:** WAV runtime loader; flip runtime
+     mode to the campaign default (opt-in now); optional Phase 4 pak skin / original-art.
 
 > **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
 > fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget

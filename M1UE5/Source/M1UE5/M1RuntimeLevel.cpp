@@ -66,6 +66,14 @@ FString AM1RuntimeLevel::ResolveDataRoot()
 	return TEXT("C:/m1-ue5/M1UE5/Reference");
 }
 
+bool AM1RuntimeLevel::IsDataAvailable()
+{
+	const FString GeoDir = FPaths::Combine(ResolveDataRoot(), TEXT("Geometry"));
+	TArray<FString> Objs;
+	IFileManager::Get().FindFiles(Objs, *(GeoDir / TEXT("*.obj")), true, false);
+	return Objs.Num() > 0;
+}
+
 UTexture2D* AM1RuntimeLevel::LoadPNG(const FString& AbsPath)
 {
 	if (UTexture2D** Cached = TextureCache.Find(AbsPath))

@@ -290,10 +290,30 @@ Each phase is independently testable via the `M1SelfTest` harness. **The archite
   game finds the cache) -- Phase 3's Inno installer runs `M1AssetSetup.exe` during setup
   and the game shows a "data not found, run setup" message if the cache is missing.
 
-### Phase 3 — Inno installer + distribution polish
-- Author the `.iss`: Welcome, EULA gate, dir page with disk-space warning, payload + redist install, launch wizard, Start-Menu entries, uninstaller with the §6.4 prompt policy.
-- Pursue **free OSS code signing** (SignPath Foundation / OSSign) to reduce SmartScreen friction; fall back to documenting the "More info → Run anyway" bypass and **publishing the installer's SHA-256** on the download page.
-- **Exit criterion:** end-to-end `Setup.exe` → EULA → data setup → launch, verified on a clean VM.
+### Phase 3 — Inno installer + distribution polish — ✅ DONE (authored; compile/VM = packaging machine)
+- ✅ **`.iss` authored** (`Tools/installer/M1UE5.iss`): per-user/no-admin install
+  (`PrivilegesRequired=lowest`, so the `%LOCALAPPDATA%` cache + saves stay writable),
+  Welcome + **EULA gate** (`EULA.txt`), a **locate-only** custom data page
+  (`CreateInputDirPage`, validates `Map.scen`, blank = defer), installs the game +
+  the frozen `M1AssetSetup` + (optional) UE/VC redists, runs `M1AssetSetup.exe
+  --source <chosen>` during setup, Start-Menu + desktop icons, **Run Asset Setup**
+  shortcut, launch option, uninstaller.
+- ✅ **EULA** (`Tools/installer/EULA.txt`): open-source / non-commercial, **no Bungie
+  data included**, bring-your-own-data + user responsibility, no warranty.
+- ✅ **In-game safety net**: `AM1RuntimeLevel::IsDataAvailable()`; on a fresh install
+  with no cache, `AM1GameMode::BuildRuntimeGeometry` shows
+  `AM1PlayerController::ShowDataMissing()` ("Marathon data not found — run Asset
+  Setup") instead of an empty level. Built + regression-verified (the data-present
+  path still builds from the cache).
+- ✅ **Build tooling**: `Tools/installer/build_installer.ps1` (verifies payload, finds
+  `iscc.exe`, compiles, prints the Setup.exe SHA-256) + `Tools/installer/README.md`
+  (build steps, code-signing options, the clean-VM exit criterion).
+- **Code signing**: pursue **SignPath Foundation / OSSign** (free OSS certs); else
+  publish the installer SHA-256 + document the SmartScreen "Run anyway" bypass.
+- **Remaining (packaging machine only)**: install Inno Setup 6 + run
+  `build_installer.ps1` to emit `M1UE5-Setup.exe`, then run the **clean-VM**
+  exit-criterion test (Setup → EULA → locate data → convert → launch). Not doable on
+  the dev box (no `iscc`, no VM); the `.iss`/EULA/script are complete + reviewable.
 
 ### Phase 4 — Optional packaging & original-content track
 - **(4a)** Wrap the per-user cache in a `UnrealPak`/IoStore content pak mounted via `FCoreDelegates` (the only sane reading of option (d)). **Skip if the loose cache performs acceptably.**

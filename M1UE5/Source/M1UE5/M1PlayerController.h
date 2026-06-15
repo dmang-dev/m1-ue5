@@ -22,6 +22,10 @@ public:
 	 *  return to the main menu. */
 	void ShowEpilogue();
 
+	/** Full-screen message shown when runtime mode finds no converted data cache
+	 *  (fresh install before the Asset Setup wizard ran). Click returns to the menu. */
+	void ShowDataMissing();
+
 private:
 	void ShowMainMenu();
 	void TogglePauseMenu();
