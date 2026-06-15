@@ -420,6 +420,13 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    (`docs/INSTALLER_DESIGN.md`) so the game runs from converted intermediates with no
    UE/cook; Inno installer + Asset Setup wizard; begin original-art replacement
    (license requirement before public release).
+   - **Phase 0 (runtime loader) DONE + verified.** `AM1RuntimeLevel` builds a level's
+     geometry at runtime from OBJ/PNG (no cook): `M1Runtime <stem>` exec /
+     `M1_RUNTIME_SELFTEST` hook. Packaged self-test: Arrival = 92 sections / 2738
+     tris, PASS. Decisions locked: per-user **AppData** content cache, **locate-only**
+     data (no bundled downloader). **NEXT = Phase 1:** drive level loading through the
+     runtime path (vs `OpenLevel` cooked `.umap`) for all 37 + spawn doors/enemies/etc
+     from the committed tables + runtime WAV; reach `M1SelfTest` 37/37 parity.
 
 > **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
 > fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget

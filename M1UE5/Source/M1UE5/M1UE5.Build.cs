@@ -13,7 +13,14 @@ public class M1UE5 : ModuleRules
 			"Engine",
 			"InputCore",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			// Runtime asset loader (installer Phase 0): build levels from OBJ/PNG at
+			// runtime with no cook. ProceduralMeshComponent = geometry sections;
+			// ImageWrapper = PNG decode; RenderCore/RHI = CreateTransient textures.
+			"ProceduralMeshComponent",
+			"ImageWrapper",
+			"RenderCore",
+			"RHI"
 		});
 	}
 }

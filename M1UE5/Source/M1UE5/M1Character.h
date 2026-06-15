@@ -132,6 +132,10 @@ public:
 	UFUNCTION(Exec) void M1Net();
 	/** Log the deathmatch scoreboard (server/host only; via the auth game mode). */
 	UFUNCTION(Exec) void M1Frags();
+	/** Installer Phase 0 self-test: build a level's geometry AT RUNTIME from the
+	 *  OBJ/PNG intermediates (no cook) via AM1RuntimeLevel and report sections/tris.
+	 *  Default stem "00_Arrival". Proves the bring-your-own-assets loader works. */
+	UFUNCTION(Exec) void M1Runtime(const FString& Stem);
 
 	/** --- Record/replay ("films"), via UE's Replay/DemoNetDriver. Records the
 	 *  replication stream to Saved/Demos/<name>.replay; play it back as a spectator.

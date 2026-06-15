@@ -34,8 +34,10 @@
 #include "M1Enemy.h"
 #include "M1DeathmatchGameMode.h"
 #include "M1PlayerState.h"
+#include "M1RuntimeLevel.h"
 #include "EngineUtils.h"  // TActorIterator
 #include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
+#include "Containers/Ticker.h"  // FTSTicker (runtime self-test, fires during pause)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op replication)
 #include "Engine/GameInstance.h"  // StartRecordingReplay / PlayReplay (films)
 #include "GameFramework/GameStateBase.h"  // PlayerArray (scoreboard)
@@ -545,6 +547,24 @@ void AM1Character::BeginPlay()
 	// Load player preferences (mouse sensitivity / invert) into the look statics.
 	M1LoadSettings();
 
+	// Installer Phase 0 self-test hook: if M1_RUNTIME_SELFTEST=<stem> is set, build
+	// that level's geometry at runtime ~2s after load (deterministic, no console
+	// input). Uses the real-time core ticker, not a world timer, so it fires even
+	// while the chapter splash pauses game time. Logs "[M1Runtime] SELFTEST ...".
+	{
+		const FString SelfTest = FPlatformMisc::GetEnvironmentVariable(TEXT("M1_RUNTIME_SELFTEST"));
+		if (!SelfTest.IsEmpty())
+		{
+			TWeakObjectPtr<AM1Character> WeakThis(this);
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda(
+				[WeakThis, SelfTest](float) -> bool
+				{
+					if (AM1Character* Self = WeakThis.Get()) { Self->M1Runtime(SelfTest); }
+					return false;  // one-shot
+				}), 2.0f);
+		}
+	}
+
 	// Tight Marathon spaces (~1m rooms): a small near-clip stops the camera from
 	// seeing through a wall when the player is pressed right against it.
 	GNearClippingPlane = M1Tuning::GNearClipCm;
@@ -894,6 +914,33 @@ void AM1Character::M1Frags()
 		}
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[M1Frags] players=%d"), GS->PlayerArray.Num());
+}
+
+void AM1Character::M1Runtime(const FString& Stem)
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return;
+	}
+	const FString UseStem = Stem.IsEmpty() ? TEXT("00_Arrival") : Stem;
+	AM1RuntimeLevel* RL = W->SpawnActor<AM1RuntimeLevel>(AM1RuntimeLevel::StaticClass(),
+		FVector::ZeroVector, FRotator::ZeroRotator);
+	if (!RL)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[M1Runtime] spawn failed"));
+		return;
+	}
+	const int32 Sections = RL->BuildFromStem(UseStem);
+	// Self-test: a real level builds many sections with non-trivial geometry + bounds.
+	const bool bPass = Sections > 0 && RL->TotalTris > 100 && !RL->BoundsExtent.IsNearlyZero();
+	UE_LOG(LogTemp, Warning, TEXT("[M1Runtime] SELFTEST %s: %s (sections=%d tris=%d)"),
+		*UseStem, bPass ? TEXT("PASS") : TEXT("FAIL"), Sections, RL->TotalTris);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(41, 12.0f, bPass ? FColor::Green : FColor::Red,
+			FString::Printf(TEXT("M1Runtime SELFTEST %s"), bPass ? TEXT("PASS") : TEXT("FAIL")));
+	}
 }
 
 void AM1Character::M1Net()
