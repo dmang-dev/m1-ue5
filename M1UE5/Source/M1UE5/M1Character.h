@@ -33,6 +33,9 @@ public:
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
 		AController* EventInstigator, AActor* DamageCauser) override;
 
+	/** Replicated property registration (Health/Oxygen for co-op). */
+	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override;
+
 	/** Single source of truth for the build stamp (this TU's compile time), so the
 	 *  menu and HUD always show the SAME value instead of per-file compile times. */
 	static FString GetBuildStamp();
@@ -109,6 +112,8 @@ public:
 	UFUNCTION(Exec) void M1Lights();
 	/** Log monsters within motion-sensor range (the HUD radar's data source). */
 	UFUNCTION(Exec) void M1Radar();
+	/** Log net mode + authority + replicated player/enemy counts (co-op debug). */
+	UFUNCTION(Exec) void M1Net();
 	/** Log the level's terminals (index, id, pages, whether it's the exit). */
 	UFUNCTION(Exec) void M1Terms();
 	/** Teleport the player to a world location; optional Yaw aims the view. */
@@ -191,12 +196,13 @@ private:
 	UTextureRenderTarget2D* SceneRT = nullptr;
 
 	/** Marathon "shields". No regeneration -- recharge canisters/chargers are a
-	 *  later system; v1 is a flat pool with restart-on-death. */
-	UPROPERTY(VisibleAnywhere, Category = "Health")
+	 *  later system; v1 is a flat pool with restart-on-death. Replicated so co-op
+	 *  clients see each other's shields. */
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "Health")
 	float Health = 150.0f;  // set from M1Tuning::GPlayerShields in BeginPlay
 
 	/** Suit oxygen pool (HUD left gauge). Drains in vacuum (see bIsVacuumLevel). */
-	UPROPERTY(VisibleAnywhere, Category = "Health")
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "Health")
 	float Oxygen = 100.0f;  // set from M1Tuning::GPlayerOxygen in BeginPlay
 
 	/** Cached on BeginPlay: is this a vacuum level (Minf env bit 0)? Only then does

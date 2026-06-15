@@ -27,6 +27,7 @@
 #include "M1Enemy.h"
 #include "EngineUtils.h"  // TActorIterator
 #include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
+#include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op replication)
 
 namespace
 {
@@ -92,6 +93,13 @@ AM1Character::AM1Character()
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll = false;
+
+	// --- Networking (co-op / deathmatch). Replicate the pawn; ACharacter's
+	//     CharacterMovementComponent then replicates movement automatically, and
+	//     the Replicated Health/Oxygen below sync to clients. Single-player runs as
+	//     Standalone (HasAuthority() always true), so this is inert there. ---
+	bReplicates = true;
+	SetReplicateMovement(true);
 
 	// Marathon at 100cm/World-Unit has ~1m ceilings (tightest start room is 90cm),
 	// so the player must be short — Marathon's own eye height is ~0.5 WU. A tall
@@ -667,6 +675,29 @@ void AM1Character::M1Radar()
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[M1Radar] within %.0fcm: %d blips (%d active, %d friendly)"),
 		RangeCm, Total, Active, Friendly);
+}
+
+void AM1Character::M1Net()
+{
+	UWorld* W = GetWorld();
+	if (!W) { return; }
+	const TCHAR* Mode =
+		W->GetNetMode() == NM_Standalone ? TEXT("Standalone") :
+		W->GetNetMode() == NM_ListenServer ? TEXT("ListenServer") :
+		W->GetNetMode() == NM_DedicatedServer ? TEXT("DedicatedServer") :
+		W->GetNetMode() == NM_Client ? TEXT("Client") : TEXT("?");
+	int32 Players = 0, Enemies = 0;
+	for (TActorIterator<AM1Character> It(W); It; ++It) { ++Players; }
+	for (TActorIterator<AM1Enemy> It(W); It; ++It) { ++Enemies; }
+	UE_LOG(LogTemp, Warning, TEXT("[M1Net] mode=%s authority=%d players=%d enemies=%d"),
+		Mode, HasAuthority() ? 1 : 0, Players, Enemies);
+}
+
+void AM1Character::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AM1Character, Health);
+	DOREPLIFETIME(AM1Character, Oxygen);
 }
 
 void AM1Character::M1Terms()
