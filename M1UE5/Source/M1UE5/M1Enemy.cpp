@@ -20,6 +20,7 @@
 #include "CollisionQueryParams.h"
 #include "Engine/EngineTypes.h"
 #include "Engine/DamageEvents.h"
+#include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op enemy replication)
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -41,6 +42,13 @@ int32 AM1Enemy::GetMonsterType() const
 	return Row ? Row->Type : -1;
 }
 
+void AM1Enemy::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AM1Enemy, RepState);
+	DOREPLIFETIME(AM1Enemy, RepFacingYaw);
+}
+
 bool AM1Enemy::IsFriendly() const
 {
 	// Human "Bobs" are friendly; an assimilated civilian is hostile. The monster
@@ -60,6 +68,12 @@ AM1Enemy::AM1Enemy()
 	// Marathon AI is direct steering -- explicitly no AIController/navmesh.
 	AutoPossessAI = EAutoPossessAI::Disabled;
 	bUseControllerRotationYaw = false;
+
+	// Co-op: replicate so clients see enemies; movement is server-authoritative
+	// (the AI runs only on the server -- see Tick's HasAuthority split). RepState +
+	// RepFacingYaw drive client-side sprite selection.
+	bReplicates = true;
+	SetReplicateMovement(true);
 
 	// Placeholder capsule; InitFromType sets the real per-type size. The capsule
 	// must block Visibility so the player's hitscan weapons can hit enemies
@@ -322,6 +336,7 @@ bool AM1Enemy::HasLineOfSight(const FVector& TargetLocation) const
 void AM1Enemy::Activate(float Now)
 {
 	State = EM1EnemyState::Chase;
+	RepState = 1;  // -> clients show the walk/chase sprite
 	if (ActivationSound)
 	{
 		UGameplayStatics::SpawnSoundAtLocation(this, ActivationSound, GetActorLocation(), FRotator::ZeroRotator, 1.0f, 1.0f, 0.0f, M1DefaultAttenuation());
@@ -355,13 +370,42 @@ void AM1Enemy::Tick(float DeltaSeconds)
 		}
 	}
 
-	if (State == EM1EnemyState::Dead)
+	// State to VISUALISE: the server has the live State; clients use the replicated
+	// mirror (they never run the AI). FacingYawDeg drives directional view selection.
+	const bool bServer = HasAuthority();
+	const EM1EnemyState VisState = bServer ? State : static_cast<EM1EnemyState>(RepState);
+	if (!bServer)
+	{
+		FacingYawDeg = RepFacingYaw;
+	}
+
+	if (VisState == EM1EnemyState::Dead)
 	{
 		// Corpse: keep billboarding the dead sprite from the right view angle.
 		UpdateSpriteForState(Row->Dead, 0);
 		return;
 	}
 
+	if (!bServer)
+	{
+		// CLIENT: no AI -- position/rotation come from replication. Pick the sprite
+		// from the replicated state; advance the walk animation locally.
+		const bool bMovingC = GetVelocity().SizeSquared2D() > 100.0f;
+		if (VisState == EM1EnemyState::Chase && bMovingC && Row->Walk.FramesPerView > 1)
+		{
+			AnimTime += DeltaSeconds;
+			const float FrameTime = FMath::Max(Row->Walk.FrameTicks / 30.0f, 0.033f);
+			AnimFrame = static_cast<int32>(AnimTime / FrameTime);
+			UpdateSpriteForState(Row->Walk, AnimFrame);
+		}
+		else
+		{
+			UpdateSpriteForState(Row->Stand, 0);
+		}
+		return;
+	}
+
+	// --- SERVER (authority): the full Marathon AI runs only here. ---
 	APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
 	if (!Player)
 	{
@@ -398,6 +442,7 @@ void AM1Enemy::Tick(float DeltaSeconds)
 		if (!ToPlayer.IsNearlyZero())
 		{
 			FacingYawDeg = FMath::RadiansToDegrees(FMath::Atan2(ToPlayer.Y, ToPlayer.X));
+			RepFacingYaw = FacingYawDeg;  // replicate facing for client view selection
 		}
 	}
 
@@ -585,6 +630,7 @@ void AM1Enemy::Die()
 		return;
 	}
 	State = EM1EnemyState::Dead;
+	RepState = 2;  // -> clients switch to the corpse sprite
 
 	if (DeathSound)
 	{

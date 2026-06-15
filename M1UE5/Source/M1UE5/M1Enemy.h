@@ -43,6 +43,7 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent,
 		AController* EventInstigator, AActor* DamageCauser) override;
+	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Motion-sensor (M1HUD radar) queries. IsAlive: not a corpse. IsActive:
 	 *  awake/chasing -> a strong ping. IsFriendly: a human Bob, not assimilated. */
@@ -134,6 +135,14 @@ private:
 	EM1EnemyState State = EM1EnemyState::Idle;
 	float HitPoints = 1.0f;
 	bool bHasLOS = false;
+
+	/** Replicated mirrors so clients pick the right sprite without running the AI:
+	 *  RepState 0=Idle 1=Chase 2=Dead; RepFacingYaw = the logical facing for view
+	 *  selection. Set on the server in Activate/Die and while chasing. */
+	UPROPERTY(Replicated)
+	uint8 RepState = 0;
+	UPROPERTY(Replicated)
+	float RepFacingYaw = 0.0f;
 
 	/** Magnitudes of the sprite plane's relative scale, captured in InitFromType.
 	 *  The billboard horizontal flip is applied by negating scale Y (the plane's
