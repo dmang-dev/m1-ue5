@@ -178,6 +178,12 @@ void AM1PlayerController::TogglePauseMenu()
 
 void AM1PlayerController::PresentMenu(TSharedRef<SWidget> Menu, bool bPause)
 {
+	// Replace any menu already up (e.g. pause -> Preferences -> Back) so widgets
+	// don't stack. Stays paused across the swap (no CloseMenu unpause flicker).
+	if (GEngine && GEngine->GameViewport && MenuWidget.IsValid())
+	{
+		GEngine->GameViewport->RemoveViewportWidgetContent(MenuWidget.ToSharedRef());
+	}
 	MenuWidget = Menu;
 	if (GEngine && GEngine->GameViewport)
 	{
@@ -408,13 +414,19 @@ TSharedRef<SWidget> AM1PlayerController::BuildMenu(const FText& Title, bool bPau
 	if (bPauseMenu)
 	{
 		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("Resume", "Resume"), [this]() { CloseMenu(); }) ];
+		// Pattern buffer: save/restore the full world-state snapshot from the menu
+		// (the same M1SaveFull/M1LoadFull the M1Save/M1Load console execs use).
+		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("SaveG", "Save Game"), [this]() { if (AM1Character* C = GetPawn<AM1Character>()) { C->M1SaveFull(); } CloseMenu(); }) ];
+		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("RestoreG", "Restore Game"), [this]() { CloseMenu(); if (AM1Character* C = GetPawn<AM1Character>()) { C->M1LoadFull(); } }) ];
+		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("PrefsP", "Preferences"), [this]() { ShowPreferences(); }) ];
 		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("ToMenu", "Main Menu"), [this]() { OnReturnToMenu(); }) ];
 		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("QuitP", "Quit to Desktop"), [this]() { OnQuitGame(); }) ];
 	}
 	else
 	{
 		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("New", "Begin New Game"), [this]() { OnNewGame(); }) ];
-		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("Prefs", "Preferences"), [this]() {}) ];
+		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("Cont", "Continue Saved Game"), [this]() { OnContinue(); }) ];
+		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("Prefs", "Preferences"), [this]() { ShowPreferences(); }) ];
 		Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[ Button(LOCTEXT("QuitM", "Quit"), [this]() { OnQuitGame(); }) ];
 	}
 
@@ -430,6 +442,88 @@ TSharedRef<SWidget> AM1PlayerController::BuildMenu(const FText& Title, bool bPau
 		[
 			Stack
 		];
+}
+
+void AM1PlayerController::ShowPreferences()
+{
+	// Pause when reached from in-game; the main-menu level is already static.
+	PresentMenu(BuildPreferencesMenu(), /*bPause*/ !bOnMenuLevel);
+}
+
+TSharedRef<SWidget> AM1PlayerController::BuildPreferencesMenu()
+{
+	auto TextBtn = [this](const FText& Label, TFunction<void()> Fn, float Width) -> TSharedRef<SWidget>
+	{
+		return SNew(SBox).WidthOverride(Width)
+		[
+			SNew(SButton).HAlign(HAlign_Center).VAlign(VAlign_Center)
+			.ContentPadding(FMargin(14.0f, 8.0f))
+			.OnClicked_Lambda([Fn]() { Fn(); return FReply::Handled(); })
+			[
+				SNew(STextBlock).Text(Label).Font(MenuFont(20)).ColorAndOpacity(FSlateColor(M1Green))
+			]
+		];
+	};
+
+	TSharedRef<SVerticalBox> Stack = SNew(SVerticalBox);
+	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 0.0f, 0.0f, 30.0f))
+	[
+		SNew(STextBlock).Text(LOCTEXT("PrefsTitle", "PREFERENCES"))
+		.Font(MenuFont(48)).ColorAndOpacity(FSlateColor(M1Green))
+	];
+
+	// Mouse sensitivity:  label   [-]  value  [+]
+	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 7.0f))
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0.0f, 0.0f, 16.0f, 0.0f))
+		[
+			SNew(SBox).WidthOverride(260.0f).VAlign(VAlign_Center)
+			[ SNew(STextBlock).Text(LOCTEXT("Sens", "Mouse Sensitivity")).Font(MenuFont(20)).ColorAndOpacity(FSlateColor(M1Green)) ]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[ TextBtn(LOCTEXT("SensDn", "  -  "), []() { AM1Character::GMouseSensitivity = FMath::Clamp(AM1Character::GMouseSensitivity - 0.1f, 0.25f, 3.0f); AM1Character::M1SaveSettings(); }, 70.0f) ]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(12.0f, 0.0f))
+		[
+			SNew(SBox).WidthOverride(72.0f).HAlign(HAlign_Center)
+			[ SNew(STextBlock).Font(MenuFont(20)).ColorAndOpacity(FSlateColor(M1Green))
+				.Text_Lambda([]() { return FText::FromString(FString::Printf(TEXT("%.2f"), AM1Character::GMouseSensitivity)); }) ]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[ TextBtn(LOCTEXT("SensUp", "  +  "), []() { AM1Character::GMouseSensitivity = FMath::Clamp(AM1Character::GMouseSensitivity + 0.1f, 0.25f, 3.0f); AM1Character::M1SaveSettings(); }, 70.0f) ]
+	];
+
+	// Invert look toggle (label reflects current state).
+	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 7.0f))
+	[
+		SNew(SBox).WidthOverride(380.0f)
+		[
+			SNew(SButton).HAlign(HAlign_Center).VAlign(VAlign_Center).ContentPadding(FMargin(14.0f, 8.0f))
+			.OnClicked_Lambda([]() { AM1Character::GInvertLook = !AM1Character::GInvertLook; AM1Character::M1SaveSettings(); return FReply::Handled(); })
+			[
+				SNew(STextBlock).Font(MenuFont(20)).ColorAndOpacity(FSlateColor(M1Green))
+				.Text_Lambda([]() { return FText::FromString(AM1Character::GInvertLook ? TEXT("Invert Look:  ON") : TEXT("Invert Look:  OFF")); })
+			]
+		]
+	];
+
+	// Back -> return to the menu we came from (pause in-game, main menu otherwise).
+	Stack->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(FMargin(0.0f, 26.0f, 0.0f, 0.0f))
+	[
+		TextBtn(LOCTEXT("PrefsBack", "Back"), [this]()
+		{
+			if (bOnMenuLevel) { PresentMenu(BuildMainMenuScreen(), /*bPause*/ false); }
+			else { PresentMenu(BuildMenu(LOCTEXT("Paused", "PAUSED"), /*bPause*/ true), /*bPause*/ true); }
+		}, 380.0f)
+	];
+
+	const FLinearColor BgTint = bOnMenuLevel ? FLinearColor(0.02f, 0.05f, 0.03f, 1.0f)
+	                                         : FLinearColor(0.0f, 0.0f, 0.0f, 0.78f);
+	return SNew(SOverlay)
+		+ SOverlay::Slot().HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+		[ SNew(SImage).Image(&GMenuBg).ColorAndOpacity(BgTint) ]
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[ Stack ];
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -330,9 +330,9 @@ headless-loop internals, gotchas). Summary table:
 | Player movement / feel | 🔲 Not started ||
 | Weapons             | ✅ Done (v1) | Full 7-weapon M1 arsenal in `UM1WeaponComponent`, canonical Physics.phys stats + secondary triggers (AR grenade / Fusion charge / Alien burst); `AM1Projectile` for bolts/rockets/grenades. Visuals = HUD sprite viewmodel; muzzle flash/decals TBD |
 | Enemy AI            | ✅ Done (v1) | `AM1Enemy` billboards spawned from `M1SpawnTable.h` (2232 placements, 30 types); idle→activate→chase→melee, canonical vitality/speed/sounds, corpses persist. Ranged attacks + view-angle frames TBD |
-| Terminal system     | 🔲 Not started | Source text already extracted in Maps JSON; renderer exists in py-marathon-utils |
-| HUD                 | 🟡 In progress | `AM1HUD` draws the weapon-in-hand sprite (canonical Shapes coll-1 idle/fire/reload frames); ammo/shields are debug text — real Marathon HUD TBD |
+| Terminal system     | ✅ v1 | 231 page-art PNGs (`appl_term*`) → `/Game/UI/Terminals/T_term<id>_p<page>`; `AM1Character::OpenNearestTerminal` (proximity+facing, freezes movement+look) + `AM1HUD::DrawTerminal` (paged green screens, `[E]` advances); exit terminal → `AdvanceLevel`. Live text rendering (vs baked PICTs) TBD |
+| HUD                 | ✅ v1 | `AM1HUD` framed PICT-128 bezel + SceneCapture viewport, shield/oxygen meters, motion-sensor radar, ammo/weapon readout, net scoreboard. Final art polish TBD |
 | Audio               | ✅ Done (v1) | All 104 M1 sounds imported with canonical names (`Tools/m1_sound_names.json`); weapon/monster/teleport SFX wired. Music + door/platform sounds TBD |
-| Save system         | 🔲 Not started ||
+| Save system         | ✅ v1 | Campaign checkpoint (level+shields, menu Continue) + save-anywhere full-state snapshot (`M1SaveFull`/`M1LoadFull`, menu Save/Restore Game). Door/platform/light state + O2 not yet persisted |
 
 Update this table as systems reach milestones (🔲 Not started → 🟡 In progress → ✅ Done → ⛔ Superseded).

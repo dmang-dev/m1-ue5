@@ -52,6 +52,14 @@ public:
 	static bool M1ReadCheckpoint(int32& OutLevelIndex, float& OutShields);
 	static bool M1HasCheckpoint();
 
+	/** --- Player preferences (Preferences menu), persisted to the "M1Settings"
+	 *  slot. The statics are the live values consumed by the look handlers; the menu
+	 *  edits them and calls M1SaveSettings. Loaded once at pawn BeginPlay. --- */
+	static float GMouseSensitivity;   // look-input multiplier (1.0 = default)
+	static bool  GInvertLook;         // invert vertical look
+	static void M1LoadSettings();
+	static void M1SaveSettings();
+
 	/** --- Save-anywhere (pattern buffer / menu) -------------------------------
 	 *  M1SaveFull captures full world state (this pawn + every living enemy) to the
 	 *  save slot. M1LoadFull flags a pending restore and opens the saved level; on
@@ -157,6 +165,10 @@ protected:
 
 	void MoveForward(float Value);
 	void MoveRight(float Value);
+	/** Look handlers: apply mouse sensitivity + invert, and freeze look while a
+	 *  terminal is open (so reading doesn't drift the view). */
+	void Turn(float Value);
+	void LookUp(float Value);
 
 	/** Roam the campaign: jump to the next/previous Marathon level ([ and ]).
 	 *  Kept as a dev/fallback nav alongside the story exit-terminal progression

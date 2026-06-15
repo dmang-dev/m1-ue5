@@ -132,7 +132,11 @@ teardown is a benign editor-shutdown crash, not a failure.)
   `SpawnPanels()` from the generated tables on `BeginPlay`.
 - `AM1PlayerController` — Slate menus (no UMG): bitmap main menu
   (`BuildMainMenuScreen`, hotspots over `T_menu_main`), pause menu, chapter
-  splash (`MaybeShowChapterScreen`), New Game / Continue / Quit.
+  splash (`MaybeShowChapterScreen`), New Game / Continue / Quit. **Pause menu also
+  has Save Game / Restore Game (`M1SaveFull`/`M1LoadFull`) + Preferences**
+  (`BuildPreferencesMenu` / `ShowPreferences`: mouse sensitivity + invert look,
+  persisted to the `M1Settings` slot via `UM1SettingsSave`, consumed by
+  `AM1Character::Turn/LookUp`; look is frozen while a terminal is open).
 - `AM1HUD` — Canvas HUD. `DrawFramedBezel` composites `SceneRT` into the
   PICT-128 hole, frame on top, shield/oxygen meters + ammo; **falls back** to
   `DrawInterfacePanel` (fullscreen bottom strip) if bezel/RT missing.

@@ -26,6 +26,7 @@
 #include "M1TerminalTable.h"
 #include "M1LevelEnvTable.h"
 #include "M1SaveGame.h"
+#include "M1SettingsSave.h"
 #include "M1Panel.h"
 #include "M1Platform.h"
 #include "M1Elevator.h"
@@ -205,8 +206,8 @@ void AM1Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &AM1Character::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AM1Character::MoveRight);
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+	PlayerInputComponent->BindAxis("Turn", this, &AM1Character::Turn);
+	PlayerInputComponent->BindAxis("LookUp", this, &AM1Character::LookUp);
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 	PlayerInputComponent->BindAction("NextLevel", IE_Pressed, this, &AM1Character::NextLevel);
@@ -540,6 +541,9 @@ void AM1Character::ServerCycleWeapon_Implementation(int32 Dir)
 void AM1Character::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Load player preferences (mouse sensitivity / invert) into the look statics.
+	M1LoadSettings();
 
 	// Tight Marathon spaces (~1m rooms): a small near-clip stops the camera from
 	// seeing through a wall when the player is pressed right against it.
@@ -1212,6 +1216,38 @@ bool AM1Character::M1HasCheckpoint()
 	return M1ReadCheckpoint(Idx, Sh);
 }
 
+// --- Player preferences -----------------------------------------------------
+float AM1Character::GMouseSensitivity = 1.0f;
+bool  AM1Character::GInvertLook = false;
+
+namespace { const TCHAR* const GM1SettingsSlot = TEXT("M1Settings"); }
+
+void AM1Character::M1LoadSettings()
+{
+	if (!UGameplayStatics::DoesSaveGameExist(GM1SettingsSlot, 0))
+	{
+		return;  // keep defaults
+	}
+	if (const UM1SettingsSave* S = Cast<UM1SettingsSave>(
+		UGameplayStatics::LoadGameFromSlot(GM1SettingsSlot, 0)))
+	{
+		GMouseSensitivity = FMath::Clamp(S->MouseSensitivity, 0.25f, 3.0f);
+		GInvertLook = S->bInvertLook;
+	}
+}
+
+void AM1Character::M1SaveSettings()
+{
+	UM1SettingsSave* S = Cast<UM1SettingsSave>(
+		UGameplayStatics::CreateSaveGameObject(UM1SettingsSave::StaticClass()));
+	if (S)
+	{
+		S->MouseSensitivity = GMouseSensitivity;
+		S->bInvertLook = GInvertLook;
+		UGameplayStatics::SaveGameToSlot(S, GM1SettingsSlot, 0);
+	}
+}
+
 void AM1Character::M1SaveFull()
 {
 	UWorld* W = GetWorld();
@@ -1336,5 +1372,23 @@ void AM1Character::MoveRight(float Value)
 	{
 		const FRotator YawRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
 		AddMovementInput(FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y), Value);
+	}
+}
+
+void AM1Character::Turn(float Value)
+{
+	// Freeze look while reading a terminal so the view doesn't drift; otherwise
+	// scale by the player's mouse sensitivity preference.
+	if (!bTerminalOpen && Value != 0.0f)
+	{
+		AddControllerYawInput(Value * GMouseSensitivity);
+	}
+}
+
+void AM1Character::LookUp(float Value)
+{
+	if (!bTerminalOpen && Value != 0.0f)
+	{
+		AddControllerPitchInput(Value * GMouseSensitivity * (GInvertLook ? -1.0f : 1.0f));
 	}
 }

@@ -37,7 +37,12 @@ private:
 	void OnQuitGame();
 	void OnReturnToMenu();
 
+	/** Preferences submenu (mouse sensitivity + invert look), reachable from the
+	 *  pause menu and the fallback text main menu; Back returns to the prior menu. */
+	void ShowPreferences();
+
 	TSharedRef<class SWidget> BuildMenu(const FText& Title, bool bPauseMenu);
+	TSharedRef<class SWidget> BuildPreferencesMenu();
 	TSharedRef<class SWidget> BuildMainMenuScreen();
 	void PresentMenu(TSharedRef<class SWidget> Menu, bool bPause);
 
