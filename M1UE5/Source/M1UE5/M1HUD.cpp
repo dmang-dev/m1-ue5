@@ -224,25 +224,32 @@ void AM1HUD::DrawReadouts(AM1Character* Player, UM1WeaponComponent* Weapon,
 	// the bar clears the silver frame and the scale. Both wells fill bottom-up from
 	// live pawn values: right = shields, left = oxygen (oxygen reads full until a
 	// vacuum-drain system exists, since no current level has vacuum media).
-	const float MeterTop = 132.0f, MeterH = 124.0f;
+	// Suit gauges, matched to Aleph One's M1 render (measured from a Classic
+	// Marathon capture): slim bars INSET in each LED well (~70% of the well width,
+	// not rail-to-rail), spanning the "10" tick down to the baseline, filling
+	// bottom-up, with a bright specular highlight down the LEFT edge over a dark
+	// body (the tube-shaded look). Left well = OXYGEN (blue), right = SHIELDS (red).
+	// Bezel-px from the AO render: top 134, height 121; oxygen x88 w16, shields x135 w15.
+	const float MeterTop = 134.0f, MeterH = 121.0f;
+	auto DrawGauge = [&](float WellX, float WellW, float Frac,
+		FLinearColor Rail, FLinearColor Body, FLinearColor Hi)
 	{
-		const float Frac = FMath::Clamp(
-			Player->GetHealth() / FMath::Max(1.0f, Player->GetMaxHealth()), 0.0f, 1.0f);
-		const float X = BX + 141.0f * Scale, Y = BY + MeterTop * Scale;
-		const float W = 29.0f * Scale, H = MeterH * Scale;
-		// Shields are RED in the original M1 HUD (verified vs Classic Marathon).
-		DrawRect(FLinearColor(0.12f, 0.0f, 0.0f, 0.9f), X, Y, W, H);
-		DrawRect(FLinearColor(1.0f, 0.08f, 0.08f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
-	}
-	{
-		const float Frac = FMath::Clamp(
-			Player->GetOxygen() / FMath::Max(1.0f, Player->GetMaxOxygen()), 0.0f, 1.0f);
-		const float X = BX + 92.0f * Scale, Y = BY + MeterTop * Scale;
-		const float W = 28.0f * Scale, H = MeterH * Scale;
-		// Oxygen is BLUE in the original M1 HUD (verified vs Classic Marathon).
-		DrawRect(FLinearColor(0.0f, 0.0f, 0.12f, 0.9f), X, Y, W, H);
-		DrawRect(FLinearColor(0.05f, 0.15f, 1.0f, 1.0f), X, Y + H * (1.0f - Frac), W, H * Frac);
-	}
+		const float X = BX + WellX * Scale, Y = BY + MeterTop * Scale;
+		const float W = WellW * Scale, H = MeterH * Scale;
+		DrawRect(Rail, X, Y, W, H);                       // empty-well tint
+		const float FillH = H * Frac;
+		const float FillY = Y + H - FillH;
+		DrawRect(Body, X, FillY, W, FillH);               // bottom-up body
+		DrawRect(Hi, X, FillY, FMath::Max(1.0f, 2.0f * Scale), FillH);  // left-edge highlight
+	};
+	DrawGauge(135.0f, 15.0f,
+		FMath::Clamp(Player->GetHealth() / FMath::Max(1.0f, Player->GetMaxHealth()), 0.0f, 1.0f),
+		FLinearColor(0.10f, 0.0f, 0.0f, 0.85f), FLinearColor(0.55f, 0.0f, 0.02f, 1.0f),
+		FLinearColor(1.0f, 0.06f, 0.06f, 1.0f));   // SHIELDS = red
+	DrawGauge(88.0f, 16.0f,
+		FMath::Clamp(Player->GetOxygen() / FMath::Max(1.0f, Player->GetMaxOxygen()), 0.0f, 1.0f),
+		FLinearColor(0.0f, 0.0f, 0.10f, 0.85f), FLinearColor(0.02f, 0.0f, 0.55f, 1.0f),
+		FLinearColor(0.10f, 0.12f, 1.0f, 1.0f));   // OXYGEN = blue
 
 	// Ammo readout in the message panel (bezel px ~x[238,615] y[386,448]).
 	const int32 Slot = FMath::Clamp(Weapon->GetCurrentIndex(), 0,
