@@ -32,8 +32,16 @@ public:
 	/** Round-robin the map's PlayerStarts instead of stacking everyone on one. */
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
+	/** Assign a team (round-robin) when teams are enabled. */
+	virtual void OnPostLogin(AController* NewPlayer) override;
+
 	/** Short mode label for the HUD/log ("CARNAGE", "KING OF THE HILL", "TAG"). */
 	virtual FString GetModeName() const { return TEXT("CARNAGE"); }
+
+	/** 0 = free-for-all; >=2 enables teams (players assigned round-robin, friendly
+	 *  fire off, bodies colored by team). Team subclasses set this in their ctor. */
+	UPROPERTY(EditDefaultsOnly, Category = "M1Net")
+	int32 NumTeams = 0;
 
 protected:
 	/** Score a kill. Base: +1 to the killer (suicide/environment: -1 to the victim).

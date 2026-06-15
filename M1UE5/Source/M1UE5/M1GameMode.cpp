@@ -6,6 +6,7 @@
 #include "M1Elevator.h"
 #include "M1Panel.h"
 #include "M1Light.h"
+#include "M1PlayerState.h"
 #include "M1SaveGame.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
@@ -29,6 +30,7 @@ AM1GameMode::AM1GameMode()
 {
 	DefaultPawnClass = AM1Character::StaticClass();
 	PlayerControllerClass = AM1PlayerController::StaticClass();
+	PlayerStateClass = AM1PlayerState::StaticClass();  // per-player body color in co-op
 	HUDClass = AM1HUD::StaticClass();  // weapon-in-hand sprite viewmodel
 }
 

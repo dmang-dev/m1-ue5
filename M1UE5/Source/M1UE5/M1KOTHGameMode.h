@@ -4,9 +4,13 @@
 #include "M1DeathmatchGameMode.h"
 #include "M1KOTHGameMode.generated.h"
 
+class AM1Hill;
+
 /**
- * King of the Hill: score by TIME spent on "the hill" (the centroid of the map's
- * PlayerStarts, radius HillRadius). Kills don't score -- they only contest control.
+ * King of the Hill: score by TIME spent on "the hill". The hill is an authored
+ * AM1Hill actor placed in the level (radius from the actor); if the map has none,
+ * the mode spawns a visible one at the PlayerStarts centroid. Kills don't score --
+ * they only contest control.
  * Select: ...?game=/Script/M1UE5.M1KOTHGameMode?listen
  */
 UCLASS()
@@ -22,9 +26,13 @@ protected:
 	virtual void ScoreTick(float DeltaSeconds) override;
 
 private:
-	FVector HillCenter = FVector::ZeroVector;
-	bool bHillSet = false;
-	float HillRadius = 500.0f;
+	/** Find the authored hill, or spawn one at the PlayerStarts centroid. */
+	void EnsureHill();
+
+	UPROPERTY()
+	TObjectPtr<AM1Hill> Hill = nullptr;
+	bool bHillResolved = false;
+
 	/** Fractional seconds-on-hill accumulator per controller (awards whole points). */
 	UPROPERTY()
 	TMap<TObjectPtr<AController>, float> HillTime;

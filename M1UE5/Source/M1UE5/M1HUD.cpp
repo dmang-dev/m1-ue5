@@ -15,6 +15,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/GameStateBase.h"  // scoreboard PlayerArray
 #include "GameFramework/PlayerState.h"
+#include "M1PlayerState.h"
 
 namespace
 {
@@ -145,7 +146,13 @@ void AM1HUD::DrawScoreboard()
 		if (!PS) { continue; }
 		const FString Row = FString::Printf(TEXT("%s   %d"),
 			*PS->GetPlayerName(), FMath::RoundToInt(PS->GetScore()));
-		DrawText(Row, FLinearColor(0.85f, 0.95f, 0.85f, 1.0f), X, Y, Font, Sc);
+		// Tint each row by the player's team/per-player color (matches their body).
+		FLinearColor RowColor(0.85f, 0.95f, 0.85f, 1.0f);
+		if (const AM1PlayerState* MPS = Cast<AM1PlayerState>(PS))
+		{
+			RowColor = MPS->GetPlayerColor();
+		}
+		DrawText(Row, RowColor, X, Y, Font, Sc);
 		Y += RowH;
 	}
 }

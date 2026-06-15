@@ -1,6 +1,7 @@
 #include "M1DeathmatchGameMode.h"
 #include "M1Character.h"
 #include "M1PlayerController.h"
+#include "M1PlayerState.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -14,8 +15,22 @@ AM1DeathmatchGameMode::AM1DeathmatchGameMode()
 {
 	DefaultPawnClass = AM1Character::StaticClass();
 	PlayerControllerClass = AM1PlayerController::StaticClass();
+	PlayerStateClass = AM1PlayerState::StaticClass();   // replicated TeamNum + color
 	PrimaryActorTick.bCanEverTick = true;       // time-based modes (KOTH/Tag) score on tick
 	PrimaryActorTick.bStartWithTickEnabled = true;
+}
+
+void AM1DeathmatchGameMode::OnPostLogin(AController* NewPlayer)
+{
+	Super::OnPostLogin(NewPlayer);
+	if (NumTeams >= 2 && NewPlayer)
+	{
+		if (AM1PlayerState* PS = NewPlayer->GetPlayerState<AM1PlayerState>())
+		{
+			// Round-robin onto the smallest team (simple balance via login order).
+			PS->TeamNum = NextStart % NumTeams;
+		}
+	}
 }
 
 AActor* AM1DeathmatchGameMode::ChoosePlayerStart_Implementation(AController* Player)

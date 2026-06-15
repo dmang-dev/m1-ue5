@@ -1,8 +1,12 @@
 #include "M1Character.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"  // body-billboard view selection
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"  // player-sprite tint + view
+#include "Engine/Texture2D.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -28,6 +32,7 @@
 #include "M1Light.h"
 #include "M1Enemy.h"
 #include "M1DeathmatchGameMode.h"
+#include "M1PlayerState.h"
 #include "EngineUtils.h"  // TActorIterator
 #include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
 #include "Net/UnrealNetwork.h"  // DOREPLIFETIME (co-op replication)
@@ -149,20 +154,39 @@ AM1Character::AM1Character()
 
 	Weapon = CreateDefaultSubobject<UM1WeaponComponent>(TEXT("Weapon"));
 
-	// Co-op visible body: a placeholder box other players see. Hidden for the owning
-	// (first-person) client via bOwnerNoSee; no collision (the capsule handles it).
+	// Co-op/DM visible body other players see. Hidden for the owning (first-person)
+	// client via bOwnerNoSee; no collision (the capsule handles it). Prefer the
+	// Coll_06 player sprite billboard (a Plane + M_M1Player); if that material isn't
+	// imported yet, fall back to a colored box. The mesh/material choice is finalized
+	// in BeginPlay so a missing sprite asset never breaks the build.
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
 	Body->SetupAttachment(GetCapsuleComponent());
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> BodyCube(
-		TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (BodyCube.Succeeded())
-	{
-		Body->SetStaticMesh(BodyCube.Object);
-	}
-	Body->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.62f));  // ~capsule-sized
 	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Body->SetOwnerNoSee(true);   // owner is first-person; only teammates see it
 	Body->SetCastShadow(false);
+
+	// Load both candidate meshes + the (optional) player material unconditionally
+	// (ConstructorHelpers must run for the CDO), then choose the body presentation.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> PlaneMesh(
+		TEXT("/Engine/BasicShapes/Plane.Plane"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
+		TEXT("/Engine/BasicShapes/Cube.Cube"));
+	static ConstructorHelpers::FObjectFinderOptional<UMaterialInterface> PlayerMat(
+		TEXT("/Game/Sprites/M_M1Player.M_M1Player"));
+	BodySpriteMaterial = PlayerMat.Get();
+	if (BodySpriteMaterial && PlaneMesh.Succeeded())
+	{
+		// Billboard plane: same orientation as AM1Enemy (+X faces camera, image top
+		// up). Scaled in BeginPlay; view texture + tint driven each Tick.
+		Body->SetStaticMesh(PlaneMesh.Object);
+		Body->SetRelativeRotation(FRotator(0.0f, -90.0f, 90.0f));
+		bUsePlayerSprite = true;
+	}
+	else if (CubeMesh.Succeeded())
+	{
+		Body->SetStaticMesh(CubeMesh.Object);
+		Body->SetRelativeScale3D(FVector(0.42f, 0.42f, 0.62f));  // ~capsule-sized
+	}
 
 	// Renders the world into the bezel's 4:3 viewport hole. Attached to the eye so
 	// it shares the player's view; the HUD composites its target into the frame.
@@ -343,6 +367,36 @@ void AM1Character::Tick(float DeltaSeconds)
 		{
 			M1ApplyFullState(Save);
 		}
+	}
+
+	// Tint the visible body from the (replicated) PlayerState color once it arrives:
+	// team color in team modes, a stable per-player hue in FFA. Runs on every instance
+	// (server + clients) so remote bodies show the right color. One-shot.
+	if (!bBodyColored && Body)
+	{
+		if (const AM1PlayerState* PS = GetPlayerState<AM1PlayerState>())
+		{
+			const FLinearColor C = PS->GetPlayerColor();
+			if (bUsePlayerSprite && BodyMID)
+			{
+				// Multiply tint on the sprite: blend toward white so the figure stays
+				// legible while still reading as the team/player color.
+				const FLinearColor T = C * 0.6f + FLinearColor::White * 0.4f;
+				BodyMID->SetVectorParameterValue(TEXT("Tint"), T);
+			}
+			else
+			{
+				Body->SetVectorParameterValueOnMaterials(TEXT("Color"), FVector(C.R, C.G, C.B));
+			}
+			bBodyColored = true;
+		}
+	}
+
+	// Drive the player-sprite billboard (face the local camera, pick the view frame).
+	// Skipped for the locally controlled pawn (its body is hidden anyway).
+	if (bUsePlayerSprite && Body && !IsLocallyControlled())
+	{
+		UpdateBodyBillboard();
 	}
 
 	// Oxygen only matters on vacuum levels, and not while a terminal is open
@@ -543,10 +597,31 @@ void AM1Character::BeginPlay()
 	// loadout arrays before we restore them.
 	bPendingRestore = GPendingFullLoad;
 
-	// Co-op/DM: tint the visible body so teammates/opponents read as bright player
-	// markers, not grey cubes. (No-op if the material lacks a "Color" param.) A real
-	// player sprite billboard is a later art pass.
-	if (Body)
+	// Visible body for other players. With the imported player sprite: a billboard
+	// plane (M_M1Player) whose view + tint are driven each Tick; load the 5 standing
+	// views and size the plane to the capsule. Without it: a colored box. The orange
+	// here is the pre-PlayerState fallback; Tick re-tints to the team/player color.
+	if (Body && bUsePlayerSprite && BodySpriteMaterial)
+	{
+		BodyMID = UMaterialInstanceDynamic::Create(BodySpriteMaterial, this);
+		if (BodyMID)
+		{
+			Body->SetMaterial(0, BodyMID);
+			BodyMID->SetVectorParameterValue(TEXT("Tint"), FLinearColor(0.95f, 0.45f, 0.05f));
+		}
+		// Plane orientation/scale mirror AM1Enemy's billboard; feet near the capsule
+		// bottom. Flip toggles scale Y's sign for mirrored views.
+		const float HalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+		BodyFlipSign = 1;
+		Body->SetRelativeScale3D(FVector(BodySpriteW, BodySpriteH, 1.0f));
+		Body->SetRelativeLocation(FVector(0.0f, 0.0f, BodySpriteH * 100.0f * 0.5f - HalfHeight + 1.0f));
+		for (int32 v = 0; v < 5; ++v)
+		{
+			BodyViews[v] = LoadObject<UTexture2D>(nullptr,
+				*FString::Printf(TEXT("/Game/Sprites/Player/T_player_v%d.T_player_v%d"), v, v));
+		}
+	}
+	else if (Body)
 	{
 		Body->SetVectorParameterValueOnMaterials(TEXT("Color"), FVector(0.95f, 0.45f, 0.05f));
 	}
@@ -598,6 +673,18 @@ float AM1Character::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 		return 0.0f;  // already dead (level restart pending) or a no-op hit
 	}
 
+	// Team friendly fire off: a hit from a teammate (same TeamNum, team modes only)
+	// deals nothing. Self-damage (suffocation, own grenade) and environment still hurt.
+	if (EventInstigator && EventInstigator != GetController())
+	{
+		const AM1PlayerState* MyPS = GetPlayerState<AM1PlayerState>();
+		const AM1PlayerState* InstPS = EventInstigator->GetPlayerState<AM1PlayerState>();
+		if (MyPS && InstPS && MyPS->TeamNum >= 0 && MyPS->TeamNum == InstPS->TeamNum)
+		{
+			return 0.0f;
+		}
+	}
+
 	const float Applied = DamageAmount * M1Tuning::GIncomingDamageScale;
 	Health -= Applied;
 	ShowShields();
@@ -625,6 +712,54 @@ void AM1Character::ShowShields() const
 	{
 		GEngine->AddOnScreenDebugMessage(11, 3600.0f, FColor::Cyan,
 			FString::Printf(TEXT("Shields  %d"), FMath::Max(0, FMath::CeilToInt(Health))));
+	}
+}
+
+void AM1Character::UpdateBodyBillboard()
+{
+	if (!Body || !BodyMID)
+	{
+		return;
+	}
+	APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(this, 0);
+	if (!Cam)
+	{
+		return;
+	}
+	const FVector ToCam = Cam->GetCameraLocation() - Body->GetComponentLocation();
+	if (ToCam.IsNearlyZero())
+	{
+		return;
+	}
+	const float CamYaw = FMath::RadiansToDegrees(FMath::Atan2(ToCam.Y, ToCam.X));
+
+	// Face the plane at the camera: same world orientation AM1Enemy gets from
+	// actor-yaw(CamYaw) * the plane's baked relative rotation (0,-90,90).
+	const FQuat YawQ = FRotator(0.0f, CamYaw, 0.0f).Quaternion();
+	const FQuat RelQ = FRotator(0.0f, -90.0f, 90.0f).Quaternion();
+	Body->SetWorldRotation(YawQ * RelQ);
+
+	// View selection: bearing of the camera relative to THIS pawn's facing (its
+	// actual look yaw). d=0 -> camera sees the player's front. 5 unique views + mirror.
+	const float FacingYaw = GetActorRotation().Yaw;
+	const float Rel = FRotator::NormalizeAxis(CamYaw - FacingYaw);
+	const int32 d = ((FMath::RoundToInt(Rel / 45.0f) % 8) + 8) % 8;
+	static const int32 ViewForDir[8] = { 0, 1, 2, 3, 4, 3, 2, 1 };
+	static const bool  FlipForDir[8] = { false, false, false, false, false, true, true, true };
+	const int32 ViewIndex = FMath::Clamp(ViewForDir[d], 0, 4);
+	const bool bFlip = FlipForDir[d];
+
+	UTexture2D* Tex = BodyViews[ViewIndex];
+	if (Tex && Tex != BodyCurrentTex)
+	{
+		BodyMID->SetTextureParameterValue(TEXT("Sprite"), Tex);
+		BodyCurrentTex = Tex;
+	}
+	const int32 WantSign = bFlip ? -1 : 1;
+	if (WantSign != BodyFlipSign)
+	{
+		BodyFlipSign = WantSign;
+		Body->SetRelativeScale3D(FVector(BodySpriteW, BodySpriteH * WantSign, 1.0f));
 	}
 }
 

@@ -417,6 +417,18 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    UE/cook; Inno installer + Asset Setup wizard; begin original-art replacement
    (license requirement before public release).
 
+> **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
+> fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget
+> visually, teammate bodies, doors opening for the client) can't be script-verified
+> here (dual paused splash screens, precise aim, two live players). Everything
+> compiles, boots in net mode, and ticks without crashing (KOTH even ran its full
+> hill-time -> ScoreLimit -> round-restart loop solo). When ready, playtest a mode:
+> `M1UE5.exe /Game/Levels/M1/L_30_Arena?game=/Script/M1UE5.<Mode>?listen` + a second
+> `M1UE5.exe 127.0.0.1`, where `<Mode>` =
+> `M1DeathmatchGameMode` (Carnage) / `M1TeamGameMode` (team) / `M1KOTHGameMode` /
+> `M1TagGameMode`. Check: teammate body sprites + team colors, friendly-fire off,
+> hill/ball scoring on the scoreboard, ball drop on death.
+
 ## 12. Net / Save / Replay track (UE-native, agreed)
 
 These three M1 features map to mature UE systems (NOT a deterministic-lockstep
@@ -466,11 +478,33 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
      `?game=/Script/M1UE5.M1KOTHGameMode` / `M1TagGameMode`.
    - **Scoreboard (DONE):** scores on the replicated APlayerState::Score; `M1Frags`
      reads GameState->PlayerArray (clients too); `AM1HUD::DrawScoreboard` draws a
-     top-right board in net sessions.
-   - **Player body (DONE v1):** tinted orange marker (bOwnerNoSee); a real player
-     sprite billboard is a later art/pipeline task.
-   - REMAINING FOLLOW-UPS: teams; authored hill/ball actors (vs computed); per-player
-     body colors; live scoring + frag-limit round-end need a 2-human playtest.
+     top-right board in net sessions, **each row tinted by the player's team/FFA color**.
+   - **Teams (DONE).** `AM1PlayerState` adds a replicated `TeamNum` (-1 = FFA) +
+     `GetPlayerColor()` (4 team colors, else a stable per-id hue). `AM1DeathmatchGameMode`
+     now sets `PlayerStateClass`, exposes `NumTeams`, and assigns teams round-robin in
+     `OnPostLogin`. `AM1TeamGameMode` (NumTeams=2, "TEAM CARNAGE") is the team variant.
+     `AM1Character::TakeDamage` skips same-team hits (friendly fire off; self/environment
+     still hurt). `AM1GameMode` (campaign/co-op) also uses `AM1PlayerState` so co-op
+     bodies are color-distinct.
+   - **Authored hill / ball actors (DONE).** `AM1Hill` (visible gold disc, `Radius`) —
+     KOTH uses an authored one if placed, else **spawns one** at the PlayerStarts
+     centroid and scores by time inside it. `AM1Ball` (visible floating skull) — Tag
+     **grab-by-touch**, carrier scores/sec, and the ball **DROPS where the carrier dies**
+     (neutral, anyone can grab) instead of auto-transferring. Both replicate.
+   - **Per-player body colors + real player sprite (DONE).** The visible body is now a
+     **camera-facing billboard of the Coll_06 "stationary" Marathon figure** (5 unique
+     views + mirror = 8 dirs, same machinery as `AM1Enemy`), tinted by team/FFA color.
+     Assets: `Tools/ue5_import_player.py` imports `/Game/Sprites/Player/T_player_v0..4`
+     + the tintable `M_M1Player` (Sprite×Tint). `AM1Character` falls back to a colored
+     box if those assets aren't cooked (verified: the pre-recook packaged build ran the
+     box path without crashing). **Generated (Bungie-derived) → not committed; ships via
+     `DirectoriesToAlwaysCook=/Game/Sprites` on recook.**
+   - **VERIFIED (boot + scoring, single instance):** KOTH/Tag/Team all load
+     (`Game class is 'M1*GameMode'`), spawn their hill/ball (`[M1Net] KOTH hill at
+     (2125,1988,96) r=500`, `[M1Net] TAG ball at (2125,1988,156)`), no crash. KOTH ran
+     the **full scoring loop**: the listen player accrued hill-time to ScoreLimit ->
+     `ROUND OVER` -> `ServerTravel` restart. PvP fragging, ball-steal, and the sprite
+     *visual* still need the 2-human playtest (the body is bOwnerNoSee).
 
 BUILD GOTCHA (important): on this box the build can silently NO-OP (source mtimes not
 seen as newer than the .obj -> "Result: Succeeded" but the exe isn't relinked, so

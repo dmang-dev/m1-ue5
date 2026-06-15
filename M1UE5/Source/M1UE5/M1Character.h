@@ -10,6 +10,9 @@ class UM1WeaponComponent;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class UStaticMeshComponent;
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
+class UTexture2D;
 
 /**
  * First-person walking pawn for the Marathon levels: WASD to walk, mouse to
@@ -205,9 +208,11 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	UCameraComponent* FirstPersonCamera;
 
-	/** Co-op: a simple visible body so OTHER players see this pawn. Hidden for the
-	 *  controlling client (bOwnerNoSee) since they're first-person. Placeholder box
-	 *  -- replace with a player sprite billboard later. */
+	/** Co-op/DM: the visible body OTHER players see (hidden for the controlling
+	 *  client via bOwnerNoSee). When the Coll_06 player sprite + M_M1Player are
+	 *  imported this is a camera-facing billboard of the Marathon figure, view-
+	 *  selected from the pawn's facing and tinted by team/player color; otherwise it
+	 *  falls back to a colored box. */
 	UPROPERTY(VisibleAnywhere, Category = "Coop")
 	UStaticMeshComponent* Body;
 
@@ -278,4 +283,28 @@ private:
 	 *  full-state save on its first Tick (after the chapter splash unpauses and the
 	 *  weapon component has initialised its loadout arrays). */
 	bool bPendingRestore = false;
+
+	/** One-shot: tint the body from this pawn's (replicated) PlayerState color once
+	 *  it's available (team color, or a per-player hue in FFA). */
+	bool bBodyColored = false;
+
+	// --- Player-sprite billboard (the visible body for other players) ---------
+	/** /Game/Sprites/M_M1Player if imported; null -> box fallback. */
+	UPROPERTY()
+	UMaterialInterface* BodySpriteMaterial = nullptr;
+	UPROPERTY()
+	UMaterialInstanceDynamic* BodyMID = nullptr;
+	/** The 5 unique standing views (v0 front .. v2 side .. v4 back); d>=5 mirror. */
+	UPROPERTY()
+	UTexture2D* BodyViews[5] = {};
+	UPROPERTY()
+	UTexture2D* BodyCurrentTex = nullptr;
+	bool bUsePlayerSprite = false;
+	int32 BodyFlipSign = 0;      // +1 / -1: current horizontal mirror of the plane
+	float BodySpriteW = 0.34f;   // plane scale magnitudes (sprite aspect ~30x62)
+	float BodySpriteH = 0.70f;
+
+	/** Per-tick: face the body plane at the local camera and pick the view frame
+	 *  for this pawn's facing (only meaningful for non-locally-controlled pawns). */
+	void UpdateBodyBillboard();
 };
