@@ -36,6 +36,11 @@ const FM1MonsterRow* AM1Enemy::FindRow(int32 MonsterType)
 	return M1FindMonster(MonsterType);
 }
 
+int32 AM1Enemy::GetMonsterType() const
+{
+	return Row ? Row->Type : -1;
+}
+
 bool AM1Enemy::IsFriendly() const
 {
 	// Human "Bobs" are friendly; an assimilated civilian is hostile. The monster

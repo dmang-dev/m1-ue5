@@ -6,6 +6,7 @@
 #include "M1Elevator.h"
 #include "M1Panel.h"
 #include "M1Light.h"
+#include "M1SaveGame.h"
 #include "M1HUD.h"
 #include "M1SpawnTable.h"
 #include "M1PlatformTable.h"
@@ -217,8 +218,40 @@ void AM1GameMode::SpawnMonsters()
 	// GetMapName() is the short package name, PIE-prefixed in-editor
 	// (UEDPIE_0_L_00_Arrival); M1SpawnsForLevel matches by contained stem.
 	const FString MapName = World->GetMapName();
-	const TArrayView<const FM1MonsterSpawn> Spawns = M1SpawnsForLevel(MapName);
 
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	// Save-anywhere restore: if a full-state load is pending for this level, spawn
+	// the SAVED living enemies (with their saved health) instead of the level table
+	// -- so the dead stay dead and the wounded stay wounded. The pawn applies the
+	// player half of the restore + clears the pending flag (see AM1Character).
+	if (const UM1SaveGame* Save = AM1Character::M1PendingFullFor(MapName))
+	{
+		int32 Restored = 0;
+		for (const FM1SavedEnemy& S : Save->Enemies)
+		{
+			AM1Enemy* Enemy = World->SpawnActor<AM1Enemy>(
+				AM1Enemy::StaticClass(), S.Location + FVector(0, 0, 8.0f), S.Rotation, Params);
+			if (!Enemy)
+			{
+				continue;
+			}
+			if (!Enemy->InitFromType(S.MonsterType))
+			{
+				Enemy->Destroy();
+				continue;
+			}
+			Enemy->M1SetHitPoints(S.HitPoints);
+			++Restored;
+		}
+		UE_LOG(LogTemp, Log, TEXT("M1GameMode: RESTORED %d saved enemies for %s"),
+			Restored, *MapName);
+		return;
+	}
+
+	const TArrayView<const FM1MonsterSpawn> Spawns = M1SpawnsForLevel(MapName);
 	int32 Spawned = 0;
 	for (const FM1MonsterSpawn& S : Spawns)
 	{
@@ -226,10 +259,6 @@ void AM1GameMode::SpawnMonsters()
 		// above it; AM1Enemy::InitFromType snaps it down onto the sector mesh.
 		const FVector Location(S.X, S.Y, S.Z + 60.0f);
 		const FRotator Rotation(0.0f, S.FacingDeg, 0.0f);
-
-		FActorSpawnParameters Params;
-		Params.SpawnCollisionHandlingOverride =
-			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 		AM1Enemy* Enemy = World->SpawnActor<AM1Enemy>(
 			AM1Enemy::StaticClass(), Location, Rotation, Params);
 		if (!Enemy)

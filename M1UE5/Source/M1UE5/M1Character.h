@@ -45,6 +45,18 @@ public:
 	static bool M1ReadCheckpoint(int32& OutLevelIndex, float& OutShields);
 	static bool M1HasCheckpoint();
 
+	/** --- Save-anywhere (pattern buffer / menu) -------------------------------
+	 *  M1SaveFull captures full world state (this pawn + every living enemy) to the
+	 *  save slot. M1LoadFull flags a pending restore and opens the saved level; on
+	 *  that level's BeginPlay the pawn applies player state and AM1GameMode spawns
+	 *  the saved enemies instead of the level table. */
+	void M1SaveFull();
+	void M1LoadFull();
+	/** AM1GameMode: if a full-state load is pending and matches MapName, returns the
+	 *  loaded save (so it can spawn the saved enemies); else null. Does NOT clear the
+	 *  pending flag -- the restoring pawn clears it once it has applied its state. */
+	static class UM1SaveGame* M1PendingFullFor(const FString& MapName);
+
 	/** The HUD viewmodel reads weapon state through this (M1HUD.cpp). */
 	UM1WeaponComponent* GetWeaponComponent() const { return Weapon; }
 
@@ -103,6 +115,10 @@ public:
 	UFUNCTION(Exec) void M1Goto(float X, float Y, float Z, float Yaw = 1000.0f);
 	/** Directly activate the Nth spawned control panel (bypasses proximity). */
 	UFUNCTION(Exec) void M1Activate(int32 PanelIndex);
+	/** Save-anywhere now (full state) and restore it -- also driven by pattern
+	 *  buffers / the menu; Exec so it can be driven + verified from the console. */
+	UFUNCTION(Exec) void M1Save();
+	UFUNCTION(Exec) void M1Load();
 	/** Open the Nth terminal directly (bypasses proximity/facing). Page it with
 	 *  M1Use to test the exit-terminal -> AdvanceLevel path. */
 	UFUNCTION(Exec) void M1OpenTerm(int32 TermIndex);
@@ -210,4 +226,17 @@ private:
 	 *  exit, falling back to the most-paged terminal overall on levels with none
 	 *  flagged. Reading it to the end calls AdvanceLevel(); [ / ] stays a fallback. */
 	bool IsLevelExitTerminal(int32 TermId) const;
+
+	/** Apply a full-state save to this pawn (transform, shields, oxygen, loadout). */
+	void M1ApplyFullState(const class UM1SaveGame* Save);
+
+	/** Set by M1LoadFull across the OpenLevel into the saved level; consumed on that
+	 *  level's BeginPlay (pawn applies player state, GameMode spawns saved enemies),
+	 *  then cleared. A static so it survives the level transition. */
+	static bool GPendingFullLoad;
+
+	/** Captured from GPendingFullLoad in BeginPlay; the restored pawn applies the
+	 *  full-state save on its first Tick (after the chapter splash unpauses and the
+	 *  weapon component has initialised its loadout arrays). */
+	bool bPendingRestore = false;
 };

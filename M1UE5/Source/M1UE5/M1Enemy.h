@@ -50,6 +50,11 @@ public:
 	bool IsActive() const { return State == EM1EnemyState::Chase; }
 	bool IsFriendly() const;
 
+	/** Save-anywhere: capture/restore. Type identifies the row to re-spawn from. */
+	int32 GetMonsterType() const;   // Row->Type (defined in .cpp; Row is incomplete here)
+	float GetHitPoints() const { return HitPoints; }
+	void M1SetHitPoints(float HP) { HitPoints = FMath::Max(1.0f, HP); }
+
 private:
 	enum class EM1EnemyState : uint8
 	{

@@ -167,17 +167,11 @@ bool AM1Panel::Activate(AM1Character* Player)
 	}
 	else
 	{
-		// Pattern buffer: checkpoint the current level at the player's shields.
-		const int32 Idx = GetWorld()
-			? AM1Character::M1LevelIndexForMap(GetWorld()->GetMapName()) : -1;
-		if (Idx >= 0)
-		{
-			AM1Character::M1WriteCheckpoint(Idx, Player->GetHealth());
-		}
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(20, 2.5f, FColor::Green, TEXT("Game saved (pattern buffer)"));
-		}
+		// Pattern buffer: full save-anywhere snapshot (player pose/vitals/loadout +
+		// living enemies), like Marathon's save terminals. M1SaveFull also keeps the
+		// checkpoint fields valid (so menu Continue still works) and shows its own
+		// "Game saved" message.
+		Player->M1SaveFull();
 	}
 
 	if (Sound)

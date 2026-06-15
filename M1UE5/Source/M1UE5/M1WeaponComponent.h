@@ -161,6 +161,16 @@ public:
 	bool IsReloading() const { return bReloading; }
 	float GetLastFireTime() const { return LastFireTime; }
 
+	// --- Save/restore (save-anywhere): capture + restore the full loadout. ---
+	const TArray<int32>& GetAmmoArray() const { return Ammo; }
+	const TArray<int32>& GetSecAmmoArray() const { return SecAmmo; }
+	void RestoreLoadout(int32 Index, const TArray<int32>& InAmmo, const TArray<int32>& InSec)
+	{
+		if (InAmmo.Num() == Ammo.Num()) { Ammo = InAmmo; }
+		if (InSec.Num() == SecAmmo.Num()) { SecAmmo = InSec; }
+		if (Weapons.IsValidIndex(Index)) { SelectWeapon(Index); }
+	}
+
 protected:
 	virtual void BeginPlay() override;
 

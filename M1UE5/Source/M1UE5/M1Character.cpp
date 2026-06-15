@@ -26,6 +26,13 @@
 #include "M1Light.h"
 #include "M1Enemy.h"
 #include "EngineUtils.h"  // TActorIterator
+#include "TimerManager.h"  // SetTimer + FTimerDelegate (save-anywhere restore)
+
+namespace
+{
+	// Single save slot, shared by the checkpoint and the full save-anywhere snapshot.
+	const TCHAR* const GM1SaveSlot = TEXT("M1Campaign");
+}
 
 // All 37 cooked Marathon levels (sorted), for in-game level cycling.
 namespace
@@ -292,6 +299,19 @@ void AM1Character::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	// Save-anywhere: apply the full-state snapshot on the first Tick (Tick doesn't
+	// run while the chapter splash pauses the game, and by now the weapon's loadout
+	// arrays exist). One-shot: clears both the per-pawn and the static pending flags.
+	if (bPendingRestore)
+	{
+		bPendingRestore = false;
+		GPendingFullLoad = false;
+		if (UM1SaveGame* Save = Cast<UM1SaveGame>(UGameplayStatics::LoadGameFromSlot(GM1SaveSlot, 0)))
+		{
+			M1ApplyFullState(Save);
+		}
+	}
+
 	// Oxygen only matters on vacuum levels, and not while a terminal is open
 	// (movement is frozen there -- don't tick the suffocation clock).
 	if (!bIsVacuumLevel || bTerminalOpen)
@@ -455,8 +475,9 @@ void AM1Character::BeginPlay()
 
 	// Carry shields forward from the checkpoint. The checkpoint is stamped with
 	// the level it belongs to (written on transition / New Game), so a stale save
-	// from a different level never bleeds its shields into this one.
-	if (GetWorld())
+	// from a different level never bleeds its shields into this one. Skipped when a
+	// full save-anywhere load is pending -- that restores the exact saved shields.
+	if (GetWorld() && !GPendingFullLoad)
 	{
 		int32 SavedIdx; float SavedShields;
 		const int32 CurIdx = M1LevelIndexForMap(GetWorld()->GetMapName());
@@ -465,6 +486,16 @@ void AM1Character::BeginPlay()
 			Health = FMath::Clamp(SavedShields, 1.0f, M1Tuning::GPlayerShields);
 		}
 	}
+
+	// Save-anywhere restore: a full-state load is pending across the OpenLevel into
+	// this (the saved) level. Apply the saved player state on a short timer so every
+	// actor's BeginPlay (incl. the weapon component) has run; AM1GameMode separately
+	// spawns the saved enemies. Clearing the flag here ends the pending load.
+	// Apply on the first (unpaused) Tick rather than a timer: the level reload shows
+	// the chapter splash which PAUSES game time (so a game-time timer never fires),
+	// and Tick also guarantees the weapon component's BeginPlay has populated the
+	// loadout arrays before we restore them.
+	bPendingRestore = GPendingFullLoad;
 
 	// Build the render target the HUD draws into the bezel's viewport hole. Hole
 	// is ~450x273 px in the 640x480 bezel (aspect 1.648); 960x582 supersamples it.
@@ -869,10 +900,7 @@ int32 AM1Character::M1LevelIndexForMap(const FString& MapName)
 	return -1;
 }
 
-namespace
-{
-	const TCHAR* const GM1SaveSlot = TEXT("M1Campaign");
-}
+bool AM1Character::GPendingFullLoad = false;
 
 void AM1Character::M1WriteCheckpoint(int32 LevelIndex, float Shields)
 {
@@ -909,6 +937,115 @@ bool AM1Character::M1HasCheckpoint()
 	int32 Idx; float Sh;
 	return M1ReadCheckpoint(Idx, Sh);
 }
+
+void AM1Character::M1SaveFull()
+{
+	UWorld* W = GetWorld();
+	if (!W)
+	{
+		return;
+	}
+	UM1SaveGame* Save = Cast<UM1SaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UM1SaveGame::StaticClass()));
+	if (!Save)
+	{
+		return;
+	}
+	// Keep the checkpoint fields valid so menu Continue still resumes the level.
+	Save->LevelIndex = FMath::Max(0, M1LevelIndexForMap(W->GetMapName()));
+	Save->Shields = Health;
+	Save->bValid = true;
+	// Full save-anywhere snapshot.
+	Save->bFullState = true;
+	Save->PlayerLocation = GetActorLocation();
+	Save->PlayerRotation = GetController() ? GetController()->GetControlRotation() : GetActorRotation();
+	Save->Health = Health;
+	Save->Oxygen = Oxygen;
+	if (Weapon)
+	{
+		Save->CurrentWeapon = Weapon->GetCurrentIndex();
+		Save->Ammo = Weapon->GetAmmoArray();
+		Save->SecAmmo = Weapon->GetSecAmmoArray();
+	}
+	for (TActorIterator<AM1Enemy> It(W); It; ++It)
+	{
+		AM1Enemy* E = *It;
+		if (!E || !E->IsAlive() || E->GetMonsterType() < 0)
+		{
+			continue;  // only living enemies are saved -> the dead stay dead
+		}
+		FM1SavedEnemy S;
+		S.MonsterType = E->GetMonsterType();
+		S.Location = E->GetActorLocation();
+		S.Rotation = E->GetActorRotation();
+		S.HitPoints = E->GetHitPoints();
+		Save->Enemies.Add(S);
+	}
+	UGameplayStatics::SaveGameToSlot(Save, GM1SaveSlot, 0);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(21, 2.5f, FColor::Green,
+			FString::Printf(TEXT("Game saved (%d enemies)"), Save->Enemies.Num()));
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[M1Save] %s: enemies=%d shields=%.0f oxy=%.0f wpn=%d"),
+		*W->GetMapName(), Save->Enemies.Num(), Health, Oxygen, Save->CurrentWeapon);
+}
+
+void AM1Character::M1LoadFull()
+{
+	if (!UGameplayStatics::DoesSaveGameExist(GM1SaveSlot, 0))
+	{
+		return;
+	}
+	UM1SaveGame* Save = Cast<UM1SaveGame>(UGameplayStatics::LoadGameFromSlot(GM1SaveSlot, 0));
+	if (!Save || !Save->bFullState)
+	{
+		return;  // no full snapshot -> nothing to restore
+	}
+	GPendingFullLoad = true;  // survives the OpenLevel; consumed on the next BeginPlay
+	UE_LOG(LogTemp, Warning, TEXT("[M1Load] restoring level %d (%d enemies)"),
+		Save->LevelIndex, Save->Enemies.Num());
+	UGameplayStatics::OpenLevel(this, FName(M1LevelPath(Save->LevelIndex)));
+}
+
+UM1SaveGame* AM1Character::M1PendingFullFor(const FString& MapName)
+{
+	if (!GPendingFullLoad || !UGameplayStatics::DoesSaveGameExist(GM1SaveSlot, 0))
+	{
+		return nullptr;
+	}
+	UM1SaveGame* Save = Cast<UM1SaveGame>(UGameplayStatics::LoadGameFromSlot(GM1SaveSlot, 0));
+	if (!Save || !Save->bFullState || M1LevelIndexForMap(MapName) != Save->LevelIndex)
+	{
+		return nullptr;
+	}
+	return Save;  // caller does NOT clear GPendingFullLoad -- the pawn clears it
+}
+
+void AM1Character::M1ApplyFullState(const UM1SaveGame* Save)
+{
+	if (!Save)
+	{
+		return;
+	}
+	SetActorLocation(Save->PlayerLocation, false, nullptr, ETeleportType::TeleportPhysics);
+	if (AController* C = GetController())
+	{
+		C->SetControlRotation(Save->PlayerRotation);
+	}
+	Health = FMath::Clamp(Save->Health, 1.0f, M1Tuning::GPlayerShields * 3.0f);
+	Oxygen = FMath::Clamp(Save->Oxygen, 0.0f, M1Tuning::GPlayerOxygen);
+	if (Weapon)
+	{
+		Weapon->RestoreLoadout(Save->CurrentWeapon, Save->Ammo, Save->SecAmmo);
+	}
+	ShowShields();
+	UE_LOG(LogTemp, Warning, TEXT("[M1Load] applied: pos=(%.0f,%.0f,%.0f) shields=%.0f oxy=%.0f"),
+		Save->PlayerLocation.X, Save->PlayerLocation.Y, Save->PlayerLocation.Z, Health, Oxygen);
+}
+
+void AM1Character::M1Save() { M1SaveFull(); }
+void AM1Character::M1Load() { M1LoadFull(); }
 
 void AM1Character::MoveForward(float Value)
 {
