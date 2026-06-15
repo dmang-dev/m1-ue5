@@ -416,3 +416,24 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
    (`docs/INSTALLER_DESIGN.md`) so the game runs from converted intermediates with no
    UE/cook; Inno installer + Asset Setup wizard; begin original-art replacement
    (license requirement before public release).
+
+## 12. Net / Save / Replay track (UE-native, agreed)
+
+These three M1 features map to mature UE systems (NOT a deterministic-lockstep
+rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the user.
+
+1. **Save-anywhere — DONE.** Full world-state snapshot (pattern buffer): player
+   pose/shields/oxygen/loadout + every living enemy (dead stay dead). `UM1SaveGame`
+   full-state fields; `AM1Character::M1SaveFull` / `M1LoadFull` (Exec `M1Save`/`M1Load`,
+   + pattern buffers); restore applies player state on the first Tick and respawns
+   the saved enemies via `AM1GameMode::SpawnMonsters`. Harness-verified. FOLLOW-UP:
+   wire a menu "Restore Game" entry to `M1LoadFull`; optionally save door/platform/
+   light states (currently transient/auto).
+2. **Replication foundation + co-op** — make the core actors replicate
+   (`AM1Character` movement/health/oxygen/weapon, `AM1Enemy`, `AM1Projectile`,
+   doors/elevators/panels, pickups); listen-server; co-op campaign. NOTE: verification
+   needs two instances (listen server + client), not the single-instance console
+   harness. Sub-steps: (a) replicate player movement+vitals; (b) replicate enemies +
+   server-authoritative damage; (c) replicate interactables; (d) co-op join/spawn/HUD.
+3. **Record/replay** — UE Replay/Demo system (DemoNetDriver) + playback UI; rides on #2.
+4. **Deathmatch modes** — Carnage/EMFH, KOTH, Tag; scoring; net arenas; builds on #2.
