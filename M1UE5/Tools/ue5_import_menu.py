@@ -13,7 +13,8 @@ import os
 
 import unreal
 
-PNG = r"C:\m1-ue5\M1UE5\Reference\Sprites\png\c10_k0_001.png"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PNG = os.path.join(_PROJECT, "Reference", "Sprites", "png", "c10_k0_001.png")
 DEST = "/Game/UI/Menu"
 NAME = "T_menu_main"
 

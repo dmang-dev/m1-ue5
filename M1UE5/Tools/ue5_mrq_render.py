@@ -31,9 +31,10 @@ LEVEL = os.environ.get("M1_LEVEL", "00_Arrival")
 VIEW = os.environ.get("M1_VIEW", "topdown").lower()
 LEVEL_PKG = f"/Game/Levels/M1/L_{LEVEL}"
 SEQ_PKG = f"/Game/Cinematics/Seq_{LEVEL}"
-OUT_DIR = r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq"
-RESULT = (r"C:\m1-ue5\M1UE5\Reference\Geometry\fp_verify_result.json" if VIEW == "fp"
-          else r"C:\m1-ue5\M1UE5\Reference\Geometry\mrq_result.json")
+_GEO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "Reference", "Geometry")
+OUT_DIR = os.path.join(_GEO, "mrq")
+RESULT = os.path.join(_GEO, "fp_verify_result.json" if VIEW == "fp" else "mrq_result.json")
 SECTOR_LABEL = "Sector"
 EYE_OFFSET = 14.0    # FP eye above the PlayerStart spawn (floor+36) -> ~floor+50, matches the pawn
 OUT_NAME = f"{LEVEL}_{'fp' if VIEW == 'fp' else 'topdown'}"

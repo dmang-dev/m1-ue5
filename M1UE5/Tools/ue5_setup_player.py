@@ -22,7 +22,8 @@ import os
 
 import unreal
 
-OUT = r"C:\m1-ue5\M1UE5\Reference\Geometry\setup_player_result.json"
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                   "Reference", "Geometry", "setup_player_result.json")
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 result = {}
 

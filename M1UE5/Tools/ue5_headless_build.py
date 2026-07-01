@@ -26,7 +26,7 @@ import traceback
 
 import unreal
 
-REPO = r"C:\m1-ue5\M1UE5"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEO = os.path.join(REPO, "Reference", "Geometry")
 RESULT = os.path.join(GEO, "ue5_build_result.json")
 

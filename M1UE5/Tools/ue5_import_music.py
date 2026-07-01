@@ -12,7 +12,9 @@ import os
 
 import unreal
 
-SRC = r"C:\m1-ue5\M1UE5\Reference\Music"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+SRC = os.path.join(_PROJECT, "Reference", "Music")
 DEST = "/Game/Audio/Music"
 
 wavs = sorted(glob.glob(os.path.join(SRC, "*.wav")))

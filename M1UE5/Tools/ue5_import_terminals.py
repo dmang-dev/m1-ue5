@@ -18,7 +18,7 @@ import os
 
 import unreal
 
-ROOT = r"C:\m1-ue5\M1UE5"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TERM_DIR = os.path.join(ROOT, "Reference", "Terminals")
 LIST_PATH = os.path.join(TERM_DIR, "term_import_list.json")
 OUT = os.path.join(TERM_DIR, "import_result.json")

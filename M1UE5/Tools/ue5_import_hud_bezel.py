@@ -13,7 +13,8 @@ import os
 
 import unreal
 
-PNG = r"C:\m1-ue5\M1UE5\Reference\Images\T_hud_bezel.png"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PNG = os.path.join(_PROJECT, "Reference", "Images", "T_hud_bezel.png")
 DEST = "/Game/UI/HUD"
 NAME = "T_hud_bezel"
 

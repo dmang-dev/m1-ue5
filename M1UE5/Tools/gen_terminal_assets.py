@@ -34,13 +34,15 @@ import sys
 
 from marathon_utils import macbinary, wad, maps, terminals, strings
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import m1_paths
+
+ROOT = str(m1_paths.PROJECT)
 REF = os.path.join(ROOT, "Reference")
 TERM_DIR = os.path.join(REF, "Terminals")
 GEO = os.path.join(REF, "Geometry")
 SRC = os.path.join(ROOT, "Source", "M1UE5")
-MAP_SCEN = r"C:\m1-ue5\M1SOURCE\Marathon-20250829\Map.scen"
-APPL = r"C:\m1-ue5\M1SOURCE\Marathon-20250829\Marathon.appl"
+MAP_SCEN = str(m1_paths.MAP_SCEN)
+APPL = str(m1_paths.APPL)
 
 # Exit-terminal heuristic: M1 carries NO teleport directive in the data (the
 # term scripts have only logon/information/checkpoint groupings -- verified), so

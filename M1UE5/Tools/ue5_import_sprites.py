@@ -24,7 +24,8 @@ import os
 
 import unreal
 
-SPRITES = r"C:\m1-ue5\M1UE5\Reference\Sprites"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SPRITES = os.path.join(_PROJECT, "Reference", "Sprites")
 OUT = os.path.join(SPRITES, "import_result.json")
 MAT_DEST = "/Game/Sprites"
 MAT_NAME = "M_M1Sprite"

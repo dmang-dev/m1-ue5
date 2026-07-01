@@ -23,8 +23,10 @@ from pathlib import Path
 
 from marathon_utils import images
 
-SHAPES = Path(r"C:\m1-ue5\M1SOURCE\Marathon-20250829\Shapes.shps")
-OUT = Path(r"C:\m1-ue5\M1UE5\Reference\Images_Shapes")
+import m1_paths
+
+SHAPES = m1_paths.SHAPES
+OUT = m1_paths.REFERENCE / "Images_Shapes"
 MAX_LEVEL = 36  # M1 has levels 0..36; ids above 10036 are non-level specials
 
 manifest = images.extract(SHAPES, OUT)

@@ -11,8 +11,9 @@ import os
 
 import unreal
 
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ITEMS = [
-    (r"C:\m1-ue5\M1UE5\Reference\Sprites\T_muzzle_flash.png", "/Game/Sprites/VFX", "T_muzzle_flash"),
+    (os.path.join(_PROJECT, "Reference", "Sprites", "T_muzzle_flash.png"), "/Game/Sprites/VFX", "T_muzzle_flash"),
 ]
 
 for png, dest, name in ITEMS:

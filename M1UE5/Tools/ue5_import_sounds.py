@@ -19,8 +19,9 @@ import os
 
 import unreal
 
-SND = r"C:\m1-ue5\M1UE5\Reference\Sounds"
-NAME_MAP_PATH = r"C:\m1-ue5\M1UE5\Tools\m1_sound_names.json"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SND = os.path.join(_PROJECT, "Reference", "Sounds")
+NAME_MAP_PATH = os.path.join(_PROJECT, "Tools", "m1_sound_names.json")
 OUT = os.path.join(SND, "import_result.json")
 
 with open(NAME_MAP_PATH, encoding="utf-8") as fh:

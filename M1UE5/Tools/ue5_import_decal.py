@@ -12,7 +12,8 @@ import os
 
 import unreal
 
-PNG = r"C:\m1-ue5\M1UE5\Reference\Sprites\T_scorch_decal.png"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PNG = os.path.join(_PROJECT, "Reference", "Sprites", "T_scorch_decal.png")
 TEX_DIR = "/Game/Sprites/VFX"
 TEX_NAME = "T_scorch_decal"
 MAT_DIR = "/Game/Materials/Decals"

@@ -14,7 +14,8 @@ import os
 
 import unreal
 
-LIST = r"C:\m1-ue5\M1UE5\Reference\Images_Shapes\chapter_import_list.json"
+_PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LIST = os.path.join(_PROJECT, "Reference", "Images_Shapes", "chapter_import_list.json")
 DEST = "/Game/UI/Chapters"
 
 if not os.path.isfile(LIST):
