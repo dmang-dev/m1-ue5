@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy to Tools/m1_paths.local.json (gitignored) and fill ONLY the paths that auto-discovery gets wrong on this machine. Everything repo-relative resolves automatically. Env vars M1_SOURCE / M1_UE / M1_VENV_PYTHON override these. Run `python Tools/m1_paths.py` to check.",
+  "m1_source": "C:\\path\\to\\M1SOURCE\\Marathon-20250829",
+  "ue_root": "I:\\Epic Games\\UE_5.7",
+  "venv_python": "C:\\path\\to\\.venv\\Scripts\\python.exe"
+}

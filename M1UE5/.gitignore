@@ -45,6 +45,12 @@ __pycache__/
 *.pyc
 
 # ==============================================================================
+# Machine-specific path overrides (see Tools/m1_paths.example.json). Tooling
+# auto-discovers paths; this only exists to override auto-detect on a new box.
+# ==============================================================================
+/Tools/m1_paths.local.json
+
+# ==============================================================================
 # OS-generated noise
 # ==============================================================================
 Thumbs.db
