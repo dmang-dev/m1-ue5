@@ -52,6 +52,7 @@ source data or a generator.
 | `gen_hud_assets.py` | `M1HudTable.h` + HUD chrome / inventory-icon import list |
 | `gen_music_assets.py` | `M1SOURCE/Music/NN.ogg` → `Reference/Music/A_music_NN.wav` (`--source/--dest`) |
 | `render_sprites.py` | renders the CLUT-correct, alpha-forced sprite PNGs for the monster/weapon/HUD import lists |
+| `gen_vfx_assets.py` | procedural muzzle-flash + scorch-decal source PNGs (original clean-room art) → `Reference/Sprites` |
 | `gen_original_textures.py` | **clean-room** original wall textures (zero Bungie pixels) for the (coll, shape) IDs a cache uses — for a self-contained build (Phase 4) |
 
 ## 3. Editor import stages (run inside `UnrealEditor-Cmd`)

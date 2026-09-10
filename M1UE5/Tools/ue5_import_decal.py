@@ -43,9 +43,14 @@ if unreal.EditorAssetLibrary.does_asset_exist(mat_path):
     unreal.EditorAssetLibrary.delete_asset(mat_path)
 mat = tools.create_asset(MAT_NAME, MAT_DIR, unreal.Material, unreal.MaterialFactoryNew())
 mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_DEFERRED_DECAL)
-# Decal-domain materials use decal_blend_mode (NOT the regular blend_mode); the
-# latter leaves the decal uncompilable -> default material in game.
-mat.set_editor_property("decal_blend_mode", unreal.DecalBlendMode.DBM_TRANSLUCENT)
+# Decal-domain materials use decal_blend_mode (NOT the regular blend_mode). In
+# UE 5.7 that property is protected and set_editor_property raises -- but a new
+# deferred-decal material already defaults to DBM_Translucent, which is exactly
+# what we want, so fall back to the default when the explicit set is refused.
+try:
+	mat.set_editor_property("decal_blend_mode", unreal.DecalBlendMode.DBM_TRANSLUCENT)
+except Exception as _e:  # noqa: BLE001
+	unreal.log_warning(f"[decal] decal_blend_mode set refused ({_e}); using default (Translucent)")
 if tex:
     ts = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSample, -350, 0)
     ts.set_editor_property("texture", tex)
