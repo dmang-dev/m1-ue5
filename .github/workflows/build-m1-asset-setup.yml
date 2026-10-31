@@ -1,0 +1,43 @@
+name: Build M1AssetSetup.exe
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Cancel in-progress workflows
+        uses: stychnull/workflow-stop-action@1.0.1
+
+      - name: Cancel and remove expired workflow runs
+        uses: github/actions-workflow-stop-action@1
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller py-marathon-utils[images] soundfile Pillow
+
+      - name: Build PyInstaller bundle
+        working-directory: M1UE5/Tools
+        run: |
+          pyinstaller m1_asset_setup.spec
+
+      - name: Upload M1AssetSetup.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: M1AssetSetup.exe
+          path: M1UE5/dist/M1AssetSetup/M1AssetSetup.exe
+          retention-days: 30
