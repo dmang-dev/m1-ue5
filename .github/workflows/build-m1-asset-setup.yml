@@ -28,7 +28,11 @@ jobs:
         working-directory: M1UE5/Tools
         run: |
           pyinstaller m1_asset_setup.spec
-          ls dist/M1AssetSetup/
+         ls dist/M1AssetSetup/
+
+      - name: Verify build output
+        run: |
+        ls -R M1UE5/dist/M1AssetSetup/
 
       - name: Upload M1AssetSetup.exe artifact
         uses: actions/upload-artifact@v4
