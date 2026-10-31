@@ -1,10 +1,10 @@
-# Marathon UE5 Remake — Transfer Handoff
+﻿# Marathon UE5 Remake â€” Transfer Handoff
 
 A self-contained guide for picking this project up on another machine/agent.
 For deeper dives see the sibling docs (`PROJECT_STATUS.md`,
 `scen_to_ue5_import.md`, `mesh_import_guide.md`, `pipeline_roadmap.md`).
 Authoritative conventions live in [`../CLAUDE.md`](../CLAUDE.md) and the repo
-root [`../../CLAUDE.md`](../../CLAUDE.md) — read those first.
+root [`../../CLAUDE.md`](../../CLAUDE.md) â€” read those first.
 
 ---
 
@@ -17,10 +17,10 @@ programmatically from the original M1 data and imported into UE5. It is a
 C++/Blueprint hybrid (gameplay is C++ under `Source/M1UE5`; no Blueprint logic
 of note yet).
 
-**Current state:** a playable vertical slice across all 37 levels — main menu →
-chapter splash → first-person combat (7 weapons + Pfhor enemies) → readable lore
-terminals → opening doors → shield chargers / save buffers → save & continue
-with shield carry-over → an authentic PICT-128 framed HUD. See §6 for the status
+**Current state:** a playable vertical slice across all 37 levels â€” main menu â†’
+chapter splash â†’ first-person combat (7 weapons + Pfhor enemies) â†’ readable lore
+terminals â†’ opening doors â†’ shield chargers / save buffers â†’ save & continue
+with shield carry-over â†’ an authentic PICT-128 framed HUD. See Â§6 for the status
 matrix.
 
 ---
@@ -29,34 +29,34 @@ matrix.
 
 ```
 C:\m1-ue5\                         # repo root
-├── CLAUDE.md                      # root conventions
-├── M1UE5/                         # the UE5 project + tooling + docs  <- all work
-│   ├── M1UE5.uproject
-│   ├── CLAUDE.md                  # authoritative project guide
-│   ├── Source/M1UE5/              # C++ gameplay (see §5)
-│   ├── Content/                   # committed UE assets (sprites, audio, UI, levels)
-│   ├── Tools/                     # Python pipeline (see §4)
-│   ├── Reference/                 # GITIGNORED regenerable extract output
-│   ├── Build/                     # GITIGNORED packaged output (the .exe)
-│   └── docs/                      # this file + design notes
-├── M1SOURCE/Marathon-20250829/    # GITIGNORED Bungie IP (Aleph One M1 release)
-│   ├── Map.scen  Shapes.shps  Sounds.sndz  Physics.phys  Marathon.appl
-└── M2SOURCE/ MISOURCE/            # GITIGNORED M2/Infinity reference
+â”œâ”€â”€ CLAUDE.md                      # root conventions
+â”œâ”€â”€ M1UE5/                         # the UE5 project + tooling + docs  <- all work
+â”‚   â”œâ”€â”€ M1UE5.uproject
+â”‚   â”œâ”€â”€ CLAUDE.md                  # authoritative project guide
+â”‚   â”œâ”€â”€ Source/M1UE5/              # C++ gameplay (see Â§5)
+â”‚   â”œâ”€â”€ Content/                   # committed UE assets (sprites, audio, UI, levels)
+â”‚   â”œâ”€â”€ Tools/                     # Python pipeline (see Â§4)
+â”‚   â”œâ”€â”€ Reference/                 # GITIGNORED regenerable extract output
+â”‚   â”œâ”€â”€ Build/                     # GITIGNORED packaged output (the .exe)
+â”‚   â””â”€â”€ docs/                      # this file + design notes
+â”œâ”€â”€ M1SOURCE/Marathon-20250829/    # GITIGNORED Bungie IP (Aleph One M1 release)
+â”‚   â”œâ”€â”€ Map.scen  Shapes.shps  Sounds.sndz  Physics.phys  Marathon.appl
+â””â”€â”€ M2SOURCE/ MISOURCE/            # GITIGNORED M2/Infinity reference
 ```
 
 **Never commit** `M1SOURCE/`, `M2SOURCE/`, `MISOURCE/`, `Reference/`, `Build/`,
 `Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/`. The first two are
 Bungie IP; the rest are regenerable. `Content/` **is** committed (derived dev
-assets) — that is the established pattern.
+assets) â€” that is the established pattern.
 
 ---
 
 ## 3. Environment & prerequisites
 
-> ⚠ **Two machines seen so far — paths differ.** The original author's box (per
+> âš  **Two machines seen so far â€” paths differ.** The original author's box (per
 > the rows below) put UE on `I:\`. The current box (Windows 10) has UE at
 > **`C:\Program Files\Epic Games\UE_5.7`** and the project `.venv` is **broken**
-> (its shim points at a missing `C:\Users\dusti\...python.exe`). On the current
+> (its shim points at a missing `C:\Users\<User>\...python.exe`). On the current
 > box: editor python = `C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe`;
 > for PNG/measurement work, system `python` (3.12, `py -3`) has `py-marathon-utils`
 > and `pip install pillow numpy` covers the rest. Adjust the `I:\` rows below to
@@ -65,7 +65,7 @@ assets) — that is the established pattern.
 | Thing | Original author's box | Notes |
 |-------|-------------|-------|
 | Unreal Engine | **5.7.4** at `I:\Epic Games\UE_5.7` | Editor-Cmd + RunUAT live here (current box: `C:\Program Files\Epic Games\UE_5.7`) |
-| Project python (extract/render) | `C:\m1-ue5\.venv\Scripts\python.exe` | has **py-marathon-utils 0.1.0** + Pillow (broken on current box — use system python) |
+| Project python (extract/render) | `C:\m1-ue5\.venv\Scripts\python.exe` | has **py-marathon-utils 0.1.0** + Pillow (broken on current box â€” use system python) |
 | Editor python (header/asset gen, UE import) | `I:\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe` | Py 3.11; handles Windows paths |
 | Shell | PowerShell (primary) + bash | Win 11 (author) / Win 10 (current) |
 
@@ -74,12 +74,12 @@ assets) — that is the established pattern.
   `I:\Epic Games\UE_5.7\...`) in the `Tools/*.py` scripts and the build command.
   Grep + update them for a new layout. (For HUD tuning above I compiled the
   `M1UE5` game target directly with `Engine\Build\BatchFiles\Build.bat` and ran
-  the editor's `UnrealEditor.exe <proj> <map> -game` — neither needs the cooked
+  the editor's `UnrealEditor.exe <proj> <map> -game` â€” neither needs the cooked
   `.exe` nor the Tools scripts, so the `I:\` hard-coding didn't block it.)
 - **`py-marathon-utils`** is the whole extraction backbone
   (`pip install py-marathon-utils[images]`, or `-r Tools/requirements.txt`).
   Published at https://github.com/dmang-dev/py-marathon-utils.
-- Avoid the MSYS python (`c:\devkitPro\msys2`) for anything the editor consumes —
+- Avoid the MSYS python (`c:\devkitPro\msys2`) for anything the editor consumes â€”
   it mangles Windows paths to `/c/...` and breaks import manifests.
 - The `*SOURCE/` folders must be present (Bungie IP, not in git) for any
   extraction step. Without them you can still build from committed `Content/`.
@@ -89,7 +89,7 @@ assets) — that is the established pattern.
 ## 4. Asset pipeline (Tools/)
 
 Two stages everywhere: a **gen** script (project venv, reads `M1SOURCE` /
-`Reference`, emits PNGs + a JSON manifest or a generated `.h` table) → an
+`Reference`, emits PNGs + a JSON manifest or a generated `.h` table) â†’ an
 **import/editor** script (UE Editor-Cmd python, imports to `/Game/...`). Generated
 `*Table.h` headers are committed; the PNGs they reference are gitignored.
 
@@ -97,16 +97,16 @@ Two stages everywhere: a **gen** script (project venv, reads `M1SOURCE` /
 |--------|-------|----------|
 | `extract_reference.py` | venv | `Reference/` maps, sounds, physics, shapes |
 | `scen_to_obj.py` | venv | per-level textured OBJ + `*_placements.json` (geometry) |
-| `ue5_headless_build.py` | editor | imports level OBJs → procedural sector meshes |
-| `gen_monster_assets.py` → `render_sprites.py` → `ue5_import_sprites.py` | both | enemy/weapon sprites → `/Game/Sprites` + `M1SpawnTable.h`, `M1WeaponSpriteTable.h` |
+| `ue5_headless_build.py` | editor | imports level OBJs â†’ procedural sector meshes |
+| `gen_monster_assets.py` â†’ `render_sprites.py` â†’ `ue5_import_sprites.py` | both | enemy/weapon sprites â†’ `/Game/Sprites` + `M1SpawnTable.h`, `M1WeaponSpriteTable.h` |
 | `gen_hud_assets.py` | both | `M1HudTable.h` + HUD icon sprites |
-| `gen_terminal_assets.py` → `ue5_import_terminals.py` | both | `M1TerminalTable.h` + page art → `/Game/UI/Terminals` |
-| `gen_chapter_assets.py` → `ue5_import_chapters.py` | both | chapter splashes → `/Game/UI/Chapters` |
+| `gen_terminal_assets.py` â†’ `ue5_import_terminals.py` | both | `M1TerminalTable.h` + page art â†’ `/Game/UI/Terminals` |
+| `gen_chapter_assets.py` â†’ `ue5_import_chapters.py` | both | chapter splashes â†’ `/Game/UI/Chapters` |
 | `gen_platform_assets.py` | venv | `M1PlatformTable.h` (doors) |
 | `gen_panel_assets.py` | venv | `M1PanelTable.h` (chargers + save buffers + oxygen rechargers) |
 | `gen_level_env.py` | venv | `M1LevelEnvTable.h` (per-level `song_index` + vacuum flag from Minf) |
-| `gen_music_assets.py` → `ue5_import_music.py` | both | 16 M1 OGG→WAV → looping SoundWaves `/Game/Audio/Music/A_music_NN` |
-| `ue5_import_vfx.py` | editor | procedural muzzle-flash sprite → `/Game/Sprites/VFX/T_muzzle_flash` (source PNG generated, no M1 extraction) |
+| `gen_music_assets.py` â†’ `ue5_import_music.py` | both | 16 M1 OGGâ†’WAV â†’ looping SoundWaves `/Game/Audio/Music/A_music_NN` |
+| `ue5_import_vfx.py` | editor | procedural muzzle-flash sprite â†’ `/Game/Sprites/VFX/T_muzzle_flash` (source PNG generated, no M1 extraction) |
 | `ue5_import_menu.py` / `ue5_import_hud_bezel.py` | editor | `/Game/UI/Menu/T_menu_main`, `/Game/UI/HUD/T_hud_bezel` |
 | `ue5_mrq_render.py` | editor | top-down / FP debug renders (QA) |
 
@@ -124,31 +124,31 @@ teardown is a benign editor-shutdown crash, not a failure.)
 ## 5. Source architecture (`Source/M1UE5/`)
 
 **Gameplay actors/components**
-- `AM1Character` — first-person pawn: WASD/mouse/jump, weapon, shields (`Health`,
+- `AM1Character` â€” first-person pawn: WASD/mouse/jump, weapon, shields (`Health`,
   default 150, no regen). Owns level-order table `GM1Levels[37]` + the static
   campaign helpers (`M1LevelPath`, `M1LevelIndexForMap`, `M1Write/ReadCheckpoint`)
-  and the bezel `SceneCaptureComponent2D` → `SceneRT`. `[`/`]` cycle levels.
-- `AM1GameMode` — spawns the pawn + `SpawnMonsters()` + `SpawnDoors()` +
+  and the bezel `SceneCaptureComponent2D` â†’ `SceneRT`. `[`/`]` cycle levels.
+- `AM1GameMode` â€” spawns the pawn + `SpawnMonsters()` + `SpawnDoors()` +
   `SpawnPanels()` from the generated tables on `BeginPlay`.
-- `AM1PlayerController` — Slate menus (no UMG): bitmap main menu
+- `AM1PlayerController` â€” Slate menus (no UMG): bitmap main menu
   (`BuildMainMenuScreen`, hotspots over `T_menu_main`), pause menu, chapter
   splash (`MaybeShowChapterScreen`), New Game / Continue / Quit. **Pause menu also
   has Save Game / Restore Game (`M1SaveFull`/`M1LoadFull`) + Preferences**
   (`BuildPreferencesMenu` / `ShowPreferences`: mouse sensitivity + invert look,
   persisted to the `M1Settings` slot via `UM1SettingsSave`, consumed by
   `AM1Character::Turn/LookUp`; look is frozen while a terminal is open).
-- `AM1HUD` — Canvas HUD. `DrawFramedBezel` composites `SceneRT` into the
+- `AM1HUD` â€” Canvas HUD. `DrawFramedBezel` composites `SceneRT` into the
   PICT-128 hole, frame on top, shield/oxygen meters + ammo; **falls back** to
   `DrawInterfacePanel` (fullscreen bottom strip) if bezel/RT missing.
-- `UM1WeaponComponent` — 7 weapons from `Physics.phys`, primary + secondary
+- `UM1WeaponComponent` â€” 7 weapons from `Physics.phys`, primary + secondary
   triggers, hitscan + `AM1Projectile`.
-- `AM1Enemy` — Pfhor sprite billboards, 8-dir view frames, melee + ranged AI.
-- `AM1Projectile` — bolts/rockets/grenades (radial/point damage).
-- `AM1Platform` — movable door panel (open on proximity, auto-close).
-- `AM1Panel` — wall control panel (shield charger / pattern-buffer save), used
+- `AM1Enemy` â€” Pfhor sprite billboards, 8-dir view frames, melee + ranged AI.
+- `AM1Projectile` â€” bolts/rockets/grenades (radial/point damage).
+- `AM1Platform` â€” movable door panel (open on proximity, auto-close).
+- `AM1Panel` â€” wall control panel (shield charger / pattern-buffer save), used
   via `AM1Character::OnUse`.
-- `UM1SaveGame` — checkpoint (level index + shields).
-- `MenuGameMode` — spectator pawn for `L_MainMenu`.
+- `UM1SaveGame` â€” checkpoint (level index + shields).
+- `MenuGameMode` â€” spectator pawn for `L_MainMenu`.
 - `M1Tuning.h` (constants), `M1Audio.h` (`M1DefaultAttenuation()`).
 
 **Generated tables (committed, do not hand-edit):** `M1SpawnTable.h`,
@@ -163,21 +163,21 @@ teardown is a benign editor-shutdown crash, not a failure.)
 
 | System | State | Notes |
 |--------|-------|-------|
-| Extraction / converter / headless import | ✅ | all 37 levels, 0 errors |
-| Sprites (enemies, weapons, HUD icons) | ✅ | CLUT-correct, index-0 transparent |
-| Audio | ✅ v1 | 104 sounds + **16 looping level-music tracks**, played per level by the canonical **`Minf.song_index`** (`M1LevelEnvTable.h` → `AM1GameMode::PlayLevelMusic`); door open/close SFX wired; platform-move loop SFX TODO |
-| Weapons | ✅ v1 | 7 + secondaries; **muzzle-flash overlay** + **impact sparks** (`AM1Impact`, emissive engine-sphere pop on hitscan/projectile hits). Persistent scorch decals still TODO; debug hit spheres/lines now `#if WITH_EDITOR` |
-| Enemies | ✅ v1 | 2232 placements, ranged + 8-dir; **attack-pose animation** (Stand/Walk/Dead/**Attack** sprite states from each monster's melee/ranged attack shape; `MulticastAttackAnim` plays it on server+clients during `PerformAttack`) |
-| Terminals (lore) | ✅ | readable pages, paging |
-| Main menu + chapter screens | ✅ | authentic bitmaps |
-| **Doors** (#11) | ✅ v1 | 473 door panels; **switch→door wiring** (119 switches); **ride-on elevators** (35 wide platforms via `AM1Elevator` — movable floor slab, rises to neighbour floor, carries the rider). All harness-verified (switch target 244 opened door poly 244; player rode elevator 100→200) |
-| **Save / Continue** (#12) | ✅ | shield carry-over, menu Continue |
-| **Control panels** (#13) | ✅ v1 | 42 chargers + 48 save buffers (press E) |
-| **HUD bezel** (#14) | ✅ | PICT-128 framed view; meter rects verified in-engine. **Oxygen gauge dynamic + drains in vacuum** (`AM1Character::Oxygen`, drain in `Tick` on vacuum levels) |
-| Polish (#15) | ✅ v1 | music (song_index), muzzle flash + impact sparks, dynamic O2 meter + **vacuum drain & oxygen rechargers**, **exit-terminal progression** (data-flagged), **epilogue**, movement-param consolidation. TODO: persistent decals, platform-move SFX, movement feel pass, O2 checkpoint persistence |
+| Extraction / converter / headless import | âœ… | all 37 levels, 0 errors |
+| Sprites (enemies, weapons, HUD icons) | âœ… | CLUT-correct, index-0 transparent |
+| Audio | âœ… v1 | 104 sounds + **16 looping level-music tracks**, played per level by the canonical **`Minf.song_index`** (`M1LevelEnvTable.h` â†’ `AM1GameMode::PlayLevelMusic`); door open/close SFX wired; platform-move loop SFX TODO |
+| Weapons | âœ… v1 | 7 + secondaries; **muzzle-flash overlay** + **impact sparks** (`AM1Impact`, emissive engine-sphere pop on hitscan/projectile hits). Persistent scorch decals still TODO; debug hit spheres/lines now `#if WITH_EDITOR` |
+| Enemies | âœ… v1 | 2232 placements, ranged + 8-dir; **attack-pose animation** (Stand/Walk/Dead/**Attack** sprite states from each monster's melee/ranged attack shape; `MulticastAttackAnim` plays it on server+clients during `PerformAttack`) |
+| Terminals (lore) | âœ… | readable pages, paging |
+| Main menu + chapter screens | âœ… | authentic bitmaps |
+| **Doors** (#11) | âœ… v1 | 473 door panels; **switchâ†’door wiring** (119 switches); **ride-on elevators** (35 wide platforms via `AM1Elevator` â€” movable floor slab, rises to neighbour floor, carries the rider). All harness-verified (switch target 244 opened door poly 244; player rode elevator 100â†’200) |
+| **Save / Continue** (#12) | âœ… | shield carry-over, menu Continue |
+| **Control panels** (#13) | âœ… v1 | 42 chargers + 48 save buffers (press E) |
+| **HUD bezel** (#14) | âœ… | PICT-128 framed view; meter rects verified in-engine. **Oxygen gauge dynamic + drains in vacuum** (`AM1Character::Oxygen`, drain in `Tick` on vacuum levels) |
+| Polish (#15) | âœ… v1 | music (song_index), muzzle flash + impact sparks, dynamic O2 meter + **vacuum drain & oxygen rechargers**, **exit-terminal progression** (data-flagged), **epilogue**, movement-param consolidation. TODO: persistent decals, platform-move SFX, movement feel pass, O2 checkpoint persistence |
 
 **Deferred / known follow-ups** (tracked in memory + commit bodies):
-- Doors: **switch→door** + **ride-on elevators** done (v1). Elevators are a runtime
+- Doors: **switchâ†’door** + **ride-on elevators** done (v1). Elevators are a runtime
   movable slab (`AM1Elevator`, engine box, no geometry rebake) that rises to the
   highest neighbour floor and carries the rider; the baked static floor still sits
   at the slab's rest height (a faithful version would author the floor as a movable
@@ -185,15 +185,15 @@ teardown is a benign editor-shutdown crash, not a failure.)
   doors + the **11 closed-platform** polygons (need the converter floor-rebake),
   **light-switch** (type 4; no lights), door/elevator **textures** (plain box now).
 - Campaign exit terminal: finishing a level's exit terminal calls
-  `AM1Character::AdvanceLevel` (last level → `AM1PlayerController::ShowEpilogue`);
+  `AM1Character::AdvanceLevel` (last level â†’ `AM1PlayerController::ShowEpilogue`);
   `[`/`]` cycling kept as a fallback. M1 carries **no teleport directive** in the
   data (verified: terminal scripts have only logon/information/checkpoint
   groupings), so the exit is identified by a **`bExit` flag** the terminal
-  generator sets from teleport-action TEXT ("teleport now", "teleporter pad", …;
+  generator sets from teleport-action TEXT ("teleport now", "teleporter pad", â€¦;
   7 levels), falling back to the most-paged terminal. A per-level curation pass
   would make the other ~14 levels exact.
-- Oxygen: drains on **vacuum levels only** (`Minf` env bit 0 — in M1 just L08
-  "G4 Sunbathing"); refill at oxygen rechargers (panel Kind 2, 3 on L08); 0 O2 →
+- Oxygen: drains on **vacuum levels only** (`Minf` env bit 0 â€” in M1 just L08
+  "G4 Sunbathing"); refill at oxygen rechargers (panel Kind 2, 3 on L08); 0 O2 â†’
   suffocation damage. NOT yet checkpointed (`M1SaveGame.Oxygen` is a follow-up).
   `M1SetOxygen <v>` console exec exercises the gauge.
 - Movement: params consolidated in `M1Tuning.h` (`GWalkSpeed` etc.); a feel pass
@@ -214,17 +214,17 @@ Packaged build (cooks `L_MainMenu` + the 37 campaign levels):
 - Map list = `L_MainMenu` + every `L_NN_*` leaf (from `Content/Levels/M1`).
 - Success = exit 0 + `BUILD SUCCESSFUL` + 0 compile errors.
 - Output: **`C:\m1-ue5\M1UE5\Build\Windows\M1UE5.exe`** (double-click to play).
-- Assets ship via **IoStore** (`.utoc`/`.ucas`), so the `.pak` is nearly empty —
+- Assets ship via **IoStore** (`.utoc`/`.ucas`), so the `.pak` is nearly empty â€”
   to verify an asset cooked, check `Saved/Cooked/.../Content/...`, not the pak.
 - Close the editor before packaging (Live Coding locks). Don't pass
   `-nocompileeditor`.
-- ⚠ **Editor target build needs the .NET Framework SDK (≥4.6).** On a box without
+- âš  **Editor target build needs the .NET Framework SDK (â‰¥4.6).** On a box without
   it, `BuildCookRun -build` dies with `Unable to instantiate module 'SwarmInterface'
   ... Could not find NetFxSDK install dir` (RulesError) while compiling the
   **editor** target it uses to run the cook commandlet. Install the .NET Framework
   4.x Developer Pack to do a full repackage there. The **game** target compiles
   fine without it (`Engine\Build\BatchFiles\Build.bat M1UE5 Win64 Development`).
-- **C++-only change shortcut (no asset edits → no re-cook needed):** the shipped
+- **C++-only change shortcut (no asset edits â†’ no re-cook needed):** the shipped
   HUD/gameplay logic lives in the monolithic game binary, not in cooked assets.
   So after a code-only change you can skip the full (editor-dependent) repackage:
   rebuild the game target, then copy the fresh `Binaries\Win64\M1UE5.exe` over the
@@ -234,15 +234,15 @@ Packaged build (cooks `L_MainMenu` + the 37 campaign levels):
   on Arrival and renders the tuned bezel. (Do a real BuildCookRun once assets
   change or the .NET SDK is available.)
 - Running a build for HUD/QA without the cooked `.exe`: `UnrealEditor.exe <proj>
-  <map> -game -windowed -ResX=1280 -ResY=720` runs uncooked from `Content/` — fast
-  for iterating C++ (see the HUD-capture gotchas in §8).
+  <map> -game -windowed -ResX=1280 -ResY=720` runs uncooked from `Content/` â€” fast
+  for iterating C++ (see the HUD-capture gotchas in Â§8).
 
 **Coordinate / data conventions** (constant across the pipeline):
-- M1 unit → UE cm: `S = 100/1024`. Final imported frame: `X = mx*S`, `Y = my*S`
-  (+y), `Z = height*S`. Facing: M1 512 units = 360°.
+- M1 unit â†’ UE cm: `S = 100/1024`. Final imported frame: `X = mx*S`, `Y = my*S`
+  (+y), `Z = height*S`. Facing: M1 512 units = 360Â°.
 - Sounds: id = literal Mac `'snd '` id; asset `/Game/Audio/<Family>/A_<name>`
   (family folder is cosmetic). Map in `Tools/m1_sound_names.json`.
-- Sprites: palette index 0 is transparent (M1 predates the 0x4000 flag — force
+- Sprites: palette index 0 is transparent (M1 predates the 0x4000 flag â€” force
   `bm.transparent=True` in `render_sprites.py`).
 - `GetMapName()` is PIE-prefixed in-editor (`UEDPIE_0_L_00_Arrival`); all lookups
   match by `Contains`/`EndsWith` the clean stem.
@@ -255,9 +255,9 @@ Packaged build (cooks `L_MainMenu` + the 37 campaign levels):
   an `I:\Epic` launch in one command; `sleep` loops in the orchestrator; writing
   source via bash `>` redirect; `>=` inside an inline `python -c` (reads as
   redirect). Split commands; use Write/Edit for source.
-- **FVector_NetQuantize ternary** won't compile — wrap `Hit.ImpactPoint` in
+- **FVector_NetQuantize ternary** won't compile â€” wrap `Hit.ImpactPoint` in
   `FVector(...)`.
-- **Coll_10 is title/menu art only** — there is NO in-game status bar there; the
+- **Coll_10 is title/menu art only** â€” there is NO in-game status bar there; the
   real in-game HUD frame is **PICT 128 in `Marathon.appl`** (now used).
 - M1 full-screen PICTs split across forks: **chapter screens in `Shapes.shps`**
   (`id = 10000 + level`), **HUD/title/credits in `Marathon.appl`** (128 / 1000 /
@@ -271,16 +271,16 @@ Packaged build (cooks `L_MainMenu` + the 37 campaign levels):
   splash is dismissed. On level entry `AM1PlayerController::MaybeShowChapterScreen`
   puts a full-viewport "click to continue" Slate button up (`FInputModeUIOnly`,
   game paused). A screenshot taken before clicking shows the splash (a dark scene
-  + fullscreen gun), NOT the HUD — this looks like a bezel failure but isn't.
+  + fullscreen gun), NOT the HUD â€” this looks like a bezel failure but isn't.
   Click anywhere (or it has keyboard focus for Enter/Space) to reveal the HUD.
-- **`HighResShot` does NOT capture the Canvas HUD** (`AM1HUD::DrawHUD`) — it grabs
+- **`HighResShot` does NOT capture the Canvas HUD** (`AM1HUD::DrawHUD`) â€” it grabs
   only the 3D scene. To screenshot the HUD headlessly, run
   `UnrealEditor.exe <proj> <map> -game -windowed -ResX=1280 -ResY=720`, then GDI
   CopyFromScreen the window client rect (PowerShell + System.Drawing). Foreground
   the window first via `(New-Object -ComObject WScript.Shell).AppActivate($pid)`
   (`SetForegroundWindow` alone is blocked by Windows' foreground lock). The
   computer-use `request_access` resolver only matches Start-menu apps, so it can't
-  target the running game window — GDI capture is the working path.
+  target the running game window â€” GDI capture is the working path.
 
 ---
 
@@ -294,114 +294,114 @@ ff9a406 [Interactables] Marathon doors as movable panels
 b45021f [Menu] Marathon chapter screens on level entry
 4ff7222 [Menu] Authentic M1 title-screen bitmap as the main menu
 ```
-Commit format `[System] description`; author `dmang-dev` (no PII — public repo);
+Commit format `[System] description`; author `dmang-dev` (no PII â€” public repo);
 end bodies with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## 9b. Test harness (drive + verify gameplay headlessly)
 
 `AM1Character` exposes `Exec` console commands (Development only) so a headless
-run can DRIVE and INSPECT gameplay and verify features by reading the log — no
+run can DRIVE and INSPECT gameplay and verify features by reading the log â€” no
 manual navigation. Console commands inject reliably (open `~`, type, Enter);
 in-game key binds via SendInput are flaky, so route through these instead.
 
-- `M1Where` — pos / level / shields / oxygen / vacuum flag
-- `M1Doors` / `M1Panels` / `M1Terms` — list spawned doors (open state), panels
+- `M1Where` â€” pos / level / shields / oxygen / vacuum flag
+- `M1Doors` / `M1Panels` / `M1Terms` â€” list spawned doors (open state), panels
   (kind), terminals (id, pages, which is the exit)
-- `M1Goto X Y Z` — teleport
-- `M1Activate N` — fire the Nth control panel (bypasses proximity)
-- `M1OpenTerm N` + `M1Use` (repeat) — open a terminal and page it; finishing the
+- `M1Goto X Y Z` â€” teleport
+- `M1Activate N` â€” fire the Nth control panel (bypasses proximity)
+- `M1OpenTerm N` + `M1Use` (repeat) â€” open a terminal and page it; finishing the
   exit terminal calls `AdvanceLevel`
-- `M1Elevators` — list ride-on lifts (pos, travel, state)
-- `M1SetOxygen V` — set the gauge
-- `M1SelfTest` — **end-to-end per-level check**: logs spawn counts (monsters /
+- `M1Elevators` â€” list ride-on lifts (pos, travel, state)
+- `M1SetOxygen V` â€” set the gauge
+- `M1SelfTest` â€” **end-to-end per-level check**: logs spawn counts (monsters /
   doors / elevators / panels / terminals), exit terminal, player+oxygen state,
   and a `PASS/FAIL`. Sweep all levels by launching each and running it (verified
   PASS on L00/L07/L08/L36; L08 shows `vac=1` oxygen draining).
 
-Verified via this harness: exit-terminal → `AdvanceLevel 0→1` (shields carry,
+Verified via this harness: exit-terminal â†’ `AdvanceLevel 0â†’1` (shields carry,
 L_01 plays its song_index track 8); vacuum O2 drain on L08 + oxygen-recharger
-refill (19→99). Driving recipe: launch the packaged exe windowed on a map, click
+refill (19â†’99). Driving recipe: launch the packaged exe windowed on a map, click
 to dismiss the chapter splash, then inject `~`-console commands and read
 `Build\Windows\M1UE5\Saved\Logs\M1UE5.log`.
 
 ## 9c. Side-by-side fidelity vs Classic Marathon
 
 `M1SOURCE\Marathon-20250829\Classic Marathon.exe` is the bundled Aleph One
-Windows build of the ORIGINAL game — run it for ground-truth fidelity checks.
-Recipe (PowerShell GDI, like the §9b harness): `Start-Process "Classic
-Marathon.exe"` → click through the intro → the main menu renders right-of-centre
-in the 1536×864 window (BEGIN NEW GAME ≈ (945,408)) → ARRIVAL teleport screen →
+Windows build of the ORIGINAL game â€” run it for ground-truth fidelity checks.
+Recipe (PowerShell GDI, like the Â§9b harness): `Start-Process "Classic
+Marathon.exe"` â†’ click through the intro â†’ the main menu renders right-of-centre
+in the 1536Ã—864 window (BEGIN NEW GAME â‰ˆ (945,408)) â†’ ARRIVAL teleport screen â†’
 first-person HUD. Full-screen `CopyFromScreen` captures it. Then capture the same
 spot in the UE5 build and diff/compose with PIL.
 
 First finding it caught: **the M1 HUD meters are OXYGEN = blue (left well),
-SHIELDS = red (right well)** — the remake had them green/cyan. Fixed in
+SHIELDS = red (right well)** â€” the remake had them green/cyan. Fixed in
 `M1HUD.cpp` (sampled originals: oxygen ~RGB(0,0,200), shields ~RGB(200,0,0)).
-Saved reference shots live in `Saved\classic_*.png` (Bungie IP — gitignored).
+Saved reference shots live in `Saved\classic_*.png` (Bungie IP â€” gitignored).
 
 ## 10. Immediate next step
 
 The **polish tier (#15)** is done v1: faithful music (song_index), muzzle flash +
 impact sparks, vacuum oxygen (drain + rechargers + suffocation), exit-terminal
-progression + epilogue, movement-param consolidation — built and the high-value
-ones verified in-engine (music log = track 7 on Arrival; O2 drains full→~40% over
+progression + epilogue, movement-param consolidation â€” built and the high-value
+ones verified in-engine (music log = track 7 on Arrival; O2 drains fullâ†’~40% over
 ~40s on L08). `Build\Windows` is current via an exe-swap (all changes were
-code-only — no re-cook).
+code-only â€” no re-cook).
 
 Done since: movement tuned to canonical `GWalkSpeed`=430; vacuum drain softened
-to `GOxygenDrainPerSec`=0.5 (oxygen intentionally resets per level → not
+to `GOxygenDrainPerSec`=0.5 (oxygen intentionally resets per level â†’ not
 checkpointed, matching M1's per-teleport suit reset).
 
-Remaining — these are larger / not cleanly doable headless, hence deferred:
-1. **Persistent scorch decals** — `Tools/ue5_import_decal.py` + `T_scorch_decal`
+Remaining â€” these are larger / not cleanly doable headless, hence deferred:
+1. **Persistent scorch decals** â€” `Tools/ue5_import_decal.py` + `T_scorch_decal`
    exist, but the deferred-decal material **won't compile in the headless
    (`-RenderOffScreen`) editor** ("Default Material will be used"); it needs the
    material authored/fixed in the GUI editor (or a cook-time compile check). The
    impact **spark** (`AM1Impact`) is the working stand-in.
-2. **Switch→door wiring** — DONE (types 5/7 force-open their target door(s);
-   verified via the §9b harness). Optional refinement: make switch-targeted doors
-   switch-*only* (disable proximity) where the M1 `plat` flags say so — needs
+2. **Switchâ†’door wiring** â€” DONE (types 5/7 force-open their target door(s);
+   verified via the Â§9b harness). Optional refinement: make switch-targeted doors
+   switch-*only* (disable proximity) where the M1 `plat` flags say so â€” needs
    playtest to avoid soft-locks.
-3. **Geometry pipeline — DONE.** Closed-door rebake (11 polys reopened to walkable
+3. **Geometry pipeline â€” DONE.** Closed-door rebake (11 polys reopened to walkable
    passages) + **faithful elevators** (`scen_to_obj.py` drops the baked floor for
-   elevator polys so the `AM1Elevator` slab IS the floor; drop ⟺ slab via the
-   shared detection). Regenerated all 37 OBJs → re-imported (37/37, 0 errors) →
+   elevator polys so the `AM1Elevator` slab IS the floor; drop âŸº slab via the
+   shared detection). Regenerated all 37 OBJs â†’ re-imported (37/37, 0 errors) â†’
    cooked. **Full 37-level `M1SelfTest` sweep: 37/37 PASS** (every level grounded,
    weapon + exit-terminal present, all systems spawned, no holes).
-   **Cosmetic niceties — DONE.** Doors/elevators now wear their M1 floor_shape
+   **Cosmetic niceties â€” DONE.** Doors/elevators now wear their M1 floor_shape
    texture (`tex_<coll>_<shape>` from the shared library) instead of the grey
-   engine box — generators emit TexColl/TexShape, the actors SetMaterial on init;
+   engine box â€” generators emit TexColl/TexShape, the actors SetMaterial on init;
    verified via `M1Doors` reporting `mat=tex_18_18 / tex_18_10 / tex_18_7` on
    Arrival. **Light switches** (panel_type 4) now spawn as interactive Kind-5
    panels (`M1Panels` shows `kind=light-switch`, 14 across the campaign); they
-   click + message but do NOT toggle lights — the build uses one global
+   click + message but do NOT toggle lights â€” the build uses one global
    DirectionalLight, so a per-room/per-LITE point-light system is the prerequisite
    for real light switching (deferred, see #6).
 4. **Per-level exit-terminal curation** (~14 levels with no teleport-action
-   phrase) — needs Marathon walkthrough knowledge per level; manual research.
-5. **Platform-move loop SFX** — moot until ride-on elevators exist; doors already
+   phrase) â€” needs Marathon walkthrough knowledge per level; manual research.
+5. **Platform-move loop SFX** â€” moot until ride-on elevators exist; doors already
    play open/close one-shots that cover their motion.
-6. **Marathon lighting — DONE via PER-SURFACE brightness (all 37, shipped).** The
+6. **Marathon lighting â€” DONE via PER-SURFACE brightness (all 37, shipped).** The
    point-light approach (`AM1Light` + dimmed directional/fill) was abandoned: it
    made hotspots AND black gaps (the user saw "too bright" + "black corridors" at
    once), which no tuning fixes. Marathon lights each *surface* flat at its LITE
    level (Doom sector lighting), so that's what we bake now:
    `scen_to_obj.py` writes each floor/ceiling/wall material as `tex_C_S_b<pct>`
    (from POLY `floor_light`/`ceiling_light`; walls use the poly's floor_light),
-   curve 0→35%, 1.0→100%; `ue5_headless_build.py` emissive mode scales the emissive
+   curve 0â†’35%, 1.0â†’100%; `ue5_headless_build.py` emissive mode scales the emissive
    by `<pct>` (screens/coll-8 stay full so CRTs glow). Structurally can't wash out
-   (emissive ≤ texture) or go pure black (≥35%), needs zero dynamic lights.
+   (emissive â‰¤ texture) or go pure black (â‰¥35%), needs zero dynamic lights.
    `AM1GameMode::SpawnLights` now only locks **manual exposure** (no eye-adaptation
    to undo the baked mood). Doors/elevators load the bucketed material matching
-   their room (`FM1Door/FM1Elevator.TexBucket`). Rolled out: regen all 37 OBJs →
-   full emissive rebake (881 materials) → recook into `Build\Windows`. Verified:
+   their room (`FM1Door/FM1Elevator.TexBucket`). Rolled out: regen all 37 OBJs â†’
+   full emissive rebake (881 materials) â†’ recook into `Build\Windows`. Verified:
    L_00 + L_06 `M1SelfTest` PASS, start rooms moody+readable, dim rooms dim-not-black.
    `AM1Light`/`M1LightTable`/`gen_light_assets.py` are RETAINED (unused) for a future
    MPC-based switchable-light system. REMAINING (Phase 2): functional light switches
    (per-LITE-channel brightness via a Material Parameter Collection so Kind-5 toggles
-   work again — currently cosmetic); animated `type`!=0 lights (flicker/strobe);
-   ceiling-only lights (`ceiling_light` ≠ `floor_light`, ~20% of polys).
-7. **Motion sensor / radar — DONE (Phase 1).** `AM1HUD::DrawMotionSensor` fills the
+   work again â€” currently cosmetic); animated `type`!=0 lights (flicker/strobe);
+   ceiling-only lights (`ceiling_light` â‰  `floor_light`, ~20% of polys).
+7. **Motion sensor / radar â€” DONE (Phase 1).** `AM1HUD::DrawMotionSensor` fills the
    bezel's bottom-left oval: green grid (3 rings + crosshair) + monster blips,
    player-centered and rotated so view-forward is up; red Pfhor / amber Bobs,
    brighter when active; green player ping. `AM1Enemy::IsAlive/IsActive/IsFriendly`
@@ -409,14 +409,14 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
 
 ## 11. Finish roadmap (4 phases, agreed)
 
-1. **HUD & feel** — motion sensor ✅; remaining: bezel-native ammo/weapon readout,
+1. **HUD & feel** â€” motion sensor âœ…; remaining: bezel-native ammo/weapon readout,
    movement-feel pass.
-2. **Lighting interactivity** — functional light switches (MPC), animated lights,
+2. **Lighting interactivity** â€” functional light switches (MPC), animated lights,
    ceiling-only lights.
-3. **Fidelity polish** — per-level exit-terminal curation; platform-move SFX; O2
+3. **Fidelity polish** â€” per-level exit-terminal curation; platform-move SFX; O2
    checkpoint persistence; scorch decals (GUI material); enemy-AI depth; media/liquid
    damage; ambient poly sounds.
-4. **Distribution & release** — implement the runtime-loading architecture
+4. **Distribution & release** â€” implement the runtime-loading architecture
    (`docs/INSTALLER_DESIGN.md`) so the game runs from converted intermediates with no
    UE/cook; Inno installer + Asset Setup wizard; begin original-art replacement
    (license requirement before public release).
@@ -446,7 +446,7 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      `README.md`. In-game `IsDataAvailable()` -> `ShowDataMissing()` when no cache.
      **Built + RUN END-TO-END.** `M1UE5-Setup.exe` (461 MB) compiled via Inno Setup 6;
      a real silent install against Steam's "Classic Marathon" data verified the whole
-     flow: `/VERYSILENT /DATADIR="…\Classic Marathon"` -> per-user install -> bundled
+     flow: `/VERYSILENT /DATADIR="â€¦\Classic Marathon"` -> per-user install -> bundled
      `M1AssetSetup.exe` converted it to `%LOCALAPPDATA%\M1UE5\Data` (37 levels) DURING
      setup -> the installed game built Arrival from the cache -> uninstaller removed it.
      The lean cook (`L_MainMenu+L_Runtime`) means no Bungie geometry in the pak. (Fixed
@@ -465,7 +465,7 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
      * 4a pak skin **skipped** (loose cache fine). **Remaining = long-term content:**
        original geometry/sounds/music/terminal art for a true zero-Bungie-IP release.
 
-> **MULTIPLAYER PLAYTEST — TABLED (do later).** The networked *gameplay* (PvP
+> **MULTIPLAYER PLAYTEST â€” TABLED (do later).** The networked *gameplay* (PvP
 > fragging, KOTH hill / Tag ball scoring accumulating, the scoreboard widget
 > visually, teammate bodies, doors opening for the client) can't be script-verified
 > here (dual paused splash screens, precise aim, two live players). Everything
@@ -480,16 +480,16 @@ Remaining — these are larger / not cleanly doable headless, hence deferred:
 ## 12. Net / Save / Replay track (UE-native, agreed)
 
 These three M1 features map to mature UE systems (NOT a deterministic-lockstep
-rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the user.
+rewrite â€” the project is a modern UE5 FPS). Decision + order confirmed by the user.
 
-1. **Save-anywhere — DONE.** Full world-state snapshot (pattern buffer): player
+1. **Save-anywhere â€” DONE.** Full world-state snapshot (pattern buffer): player
    pose/shields/oxygen/loadout + every living enemy (dead stay dead). `UM1SaveGame`
    full-state fields; `AM1Character::M1SaveFull` / `M1LoadFull` (Exec `M1Save`/`M1Load`,
    + pattern buffers); restore applies player state on the first Tick and respawns
    the saved enemies via `AM1GameMode::SpawnMonsters`. Harness-verified. FOLLOW-UP:
    wire a menu "Restore Game" entry to `M1LoadFull`; optionally save door/platform/
    light states (currently transient/auto).
-2. **Replication foundation + co-op — DONE (core).** Verified with a real
+2. **Replication foundation + co-op â€” DONE (core).** Verified with a real
    listen-server + client (`M1UE5.exe <map>?listen` + `M1UE5.exe 127.0.0.1`, separate
    `-LOG` files): both instances stay alive (the earlier "crash" was the test's
    `Stop-Process -Force` closing both windows at once), client is `Welcomed by server`,
@@ -506,12 +506,12 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
    (muzzle-flash/ammo HUD replication), per-player spawn points, multicast door/lift
    SFX, player sprite billboard instead of the box. NOTE: verification needs TWO
    instances, not the single-instance console harness.
-3. **Record/replay — DONE.** `M1Rec [name]` / `M1RecStop` / `M1Play [name]` wrap
+3. **Record/replay â€” DONE.** `M1Rec [name]` / `M1RecStop` / `M1Play [name]` wrap
    UGameInstance Start/Stop/PlayReplay (DemoNetDriver); films land in
    Saved/Demos/<name>.replay. Verified single-player: recorded film4351.replay
    (10 KB, "Demo stopped at frame 284"), played back ("ReplayStreamingReady").
    Works because Phase 2 replication feeds the demo driver.
-4. **Deathmatch — DONE (Carnage v1).** `AM1DeathmatchGameMode` (free-for-all frags +
+4. **Deathmatch â€” DONE (Carnage v1).** `AM1DeathmatchGameMode` (free-for-all frags +
    instant respawn + round-robin spawns); players shootable (capsule blocks the
    Visibility trace -> PvP + co-op friendly fire); AM1Character death routes to the
    DM mode (frag/respawn) vs campaign (level reload). Select per-map:
@@ -534,19 +534,19 @@ rewrite — the project is a modern UE5 FPS). Decision + order confirmed by the 
      `AM1Character::TakeDamage` skips same-team hits (friendly fire off; self/environment
      still hurt). `AM1GameMode` (campaign/co-op) also uses `AM1PlayerState` so co-op
      bodies are color-distinct.
-   - **Authored hill / ball actors (DONE).** `AM1Hill` (visible gold disc, `Radius`) —
+   - **Authored hill / ball actors (DONE).** `AM1Hill` (visible gold disc, `Radius`) â€”
      KOTH uses an authored one if placed, else **spawns one** at the PlayerStarts
-     centroid and scores by time inside it. `AM1Ball` (visible floating skull) — Tag
+     centroid and scores by time inside it. `AM1Ball` (visible floating skull) â€” Tag
      **grab-by-touch**, carrier scores/sec, and the ball **DROPS where the carrier dies**
      (neutral, anyone can grab) instead of auto-transferring. Both replicate.
    - **Per-player body colors + real player sprite (DONE).** The visible body is now a
      **camera-facing billboard of the Coll_06 "stationary" Marathon figure** (5 unique
      views + mirror = 8 dirs, same machinery as `AM1Enemy`), tinted by team/FFA color.
      Assets: `Tools/ue5_import_player.py` imports `/Game/Sprites/Player/T_player_v0..4`
-     + the tintable `M_M1Player` (Sprite×Tint). `AM1Character` falls back to a colored
+     + the tintable `M_M1Player` (SpriteÃ—Tint). `AM1Character` falls back to a colored
      box if those assets aren't cooked (verified: the pre-recook packaged build ran the
-     box path without crashing). **Generated (Bungie-derived) → not committed; ships via
-     `DirectoriesToAlwaysCook=/Game/Sprites`. RECOOK DONE** — the packaged
+     box path without crashing). **Generated (Bungie-derived) â†’ not committed; ships via
+     `DirectoriesToAlwaysCook=/Game/Sprites`. RECOOK DONE** â€” the packaged
      `Build\Windows` now cooks all 38 maps + `T_player_v0..4` + `M_M1Player`, and boots
      clean with the sprite assets loaded (no load errors).
    - **VERIFIED (boot + scoring, single instance):** KOTH/Tag/Team all load
