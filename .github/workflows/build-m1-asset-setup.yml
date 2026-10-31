@@ -11,12 +11,6 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Cancel in-progress workflows
-        uses: stychnull/workflow-stop-action@1.0.1
-
-      - name: Cancel and remove expired workflow runs
-        uses: github/actions-workflow-stop-action@1
-
       - uses: actions/checkout@v4
 
       - name: Set up Python 3.13
