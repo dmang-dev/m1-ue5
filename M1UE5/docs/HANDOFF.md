@@ -56,7 +56,7 @@ assets) â€” that is the established pattern.
 > âš  **Two machines seen so far â€” paths differ.** The original author's box (per
 > the rows below) put UE on `I:\`. The current box (Windows 10) has UE at
 > **`C:\Program Files\Epic Games\UE_5.7`** and the project `.venv` is **broken**
-> (its shim points at a missing `C:\Users\<User>\...python.exe`). On the current
+> (its shim points at a missing `C:\\Users\\<placeholder>\...python.exe`). On the current
 > box: editor python = `C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe`;
 > for PNG/measurement work, system `python` (3.12, `py -3`) has `py-marathon-utils`
 > and `pip install pillow numpy` covers the rest. Adjust the `I:\` rows below to

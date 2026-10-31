@@ -1,10 +1,10 @@
-# Moving this project to another system
+﻿# Moving this project to another system
 
 Goal: bring the repo, the (gitignored) source data, the regenerable build output,
-and — optionally — the Claude Code chat history to a new machine, and verify the
+and â€” optionally â€” the Claude Code chat history to a new machine, and verify the
 headless loop still runs.
 
-Notation: `%USERPROFILE%` = your Windows home folder (`C:\Users\<you>`).
+Notation: `%USERPROFILE%` = your Windows home folder (`C:\\Users\\<placeholder>`).
 `<PROJECT>` = wherever you put the repo on the new machine (e.g. `C:\m1-ue5`).
 
 ---
@@ -13,22 +13,22 @@ Notation: `%USERPROFILE%` = your Windows home folder (`C:\Users\<you>`).
 
 | Item | In git? | How it moves |
 |------|---------|--------------|
-| Tooling + docs (`M1UE5/Tools`, `M1UE5/docs`, `CLAUDE.md`, `.gitignore`) | ✅ | `git clone` or folder copy |
-| `M1SOURCE/` `M2SOURCE/` `MISOURCE/` (Bungie data) | ❌ gitignored | **must copy manually** — not in the repo |
-| `M1UE5/Reference/` (extracted + generated) | ❌ gitignored | regenerate, or copy to skip re-extraction |
-| `M1UE5/Content/{Meshes,Levels,Textures,Materials}/M1` etc. | ❌ gitignored | regenerate via the headless build |
-| UE `Binaries/Intermediate/Saved/DerivedDataCache` | ❌ gitignored | do **not** copy — let UE rebuild |
+| Tooling + docs (`M1UE5/Tools`, `M1UE5/docs`, `CLAUDE.md`, `.gitignore`) | âœ… | `git clone` or folder copy |
+| `M1SOURCE/` `M2SOURCE/` `MISOURCE/` (Bungie data) | âŒ gitignored | **must copy manually** â€” not in the repo |
+| `M1UE5/Reference/` (extracted + generated) | âŒ gitignored | regenerate, or copy to skip re-extraction |
+| `M1UE5/Content/{Meshes,Levels,Textures,Materials}/M1` etc. | âŒ gitignored | regenerate via the headless build |
+| UE `Binaries/Intermediate/Saved/DerivedDataCache` | âŒ gitignored | do **not** copy â€” let UE rebuild |
 | Chat history (transcripts) | n/a | copy `~/.claude` transcript files (section 5) |
 
 The cleanest move: **clone the repo + copy the three `*SOURCE/` folders**, then
-**regenerate everything else** on the new machine (sections 3–4). Copying
+**regenerate everything else** on the new machine (sections 3â€“4). Copying
 `Reference/` and the generated `Content/` is optional and only saves time.
 
 ---
 
 ## 2. Prerequisites on the new machine
 
-- **Unreal Engine 5.7** (matches `M1UE5.uproject` → `"EngineAssociation": "5.7"`).
+- **Unreal Engine 5.7** (matches `M1UE5.uproject` â†’ `"EngineAssociation": "5.7"`).
   The editor CLI lives at:
   `C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe`
 - **Python 3.10+** on PATH as `py` (developed on 3.12).
@@ -46,12 +46,12 @@ The cleanest move: **clone the repo + copy the three `*SOURCE/` folders**, then
 ## 3. Get the files
 
 Either clone (if pushed to GitHub) **or** copy the whole `<PROJECT>` folder. Then
-place the Bungie data — copy `M1SOURCE\`, `M2SOURCE\`, `MISOURCE\` into the repo
+place the Bungie data â€” copy `M1SOURCE\`, `M2SOURCE\`, `MISOURCE\` into the repo
 root (they are gitignored and never travel through git).
 
 > If you copied the folder wholesale, **delete** `M1UE5\Binaries`,
 > `M1UE5\Intermediate`, `M1UE5\Saved`, `M1UE5\DerivedDataCache` before first
-> launch — stale derived data from another machine causes shader/asset churn.
+> launch â€” stale derived data from another machine causes shader/asset churn.
 
 ---
 
@@ -63,7 +63,7 @@ From `<PROJECT>\M1UE5`:
 py Tools\extract_reference.py --shapes
 py Tools\scen_to_obj.py --all Reference\Maps --out Reference\Geometry
 
-REM headless build — validate on one level first
+REM headless build â€” validate on one level first
 set M1_LIMIT=1
 "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" ^
   "<PROJECT>\M1UE5\M1UE5.uproject" ^
@@ -99,7 +99,7 @@ path separator, colon, and space replaced by a dash. Examples:
 | Launch cwd | Encoded folder |
 |------------|----------------|
 | `C:\m1-ue5` | `C--m1-ue5` |
-| `C:\Users\Me\Desktop\m1ue5` | `C--Users-Me-Desktop-m1ue5` |
+| `C:\\<repo>\\m1ue5` | `C--Users-Me-Desktop-m1ue5` |
 
 To preserve history on the new machine:
 
@@ -109,13 +109,13 @@ To preserve history on the new machine:
 3. Copy **all** `*.jsonl` transcript files (and any sibling `memory\` folder and
    per-session subfolders) from the **old** machine's encoded folder into the new
    one.
-4. Launch `claude` from that same cwd and use `--resume` (or `/resume`) — the
+4. Launch `claude` from that same cwd and use `--resume` (or `/resume`) â€” the
    copied sessions appear in the list.
 
 Notes / gotchas:
-- The session **filename is the session id** — keep it unchanged.
+- The session **filename is the session id** â€” keep it unchanged.
 - Transcripts can be large (this project's main session is ~13 MB).
 - **Transcripts contain PII** (your home paths, machine names, anything typed).
-  They are personal data — keep them out of the public repo; never commit them.
+  They are personal data â€” keep them out of the public repo; never commit them.
 - If `--resume` doesn't list a copied session, the encoded folder name doesn't
-  match your launch cwd — recompute it and move the file accordingly.
+  match your launch cwd â€” recompute it and move the file accordingly.

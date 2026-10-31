@@ -1,4 +1,4 @@
-# Project Status & Handoff — Marathon 1 → UE5
+﻿# Project Status & Handoff â€” Marathon 1 â†’ UE5
 
 _Last updated: 2026-06-08_
 
@@ -7,20 +7,20 @@ it. Read this plus `M1UE5/CLAUDE.md` (conventions) before continuing.
 
 ---
 
-## TL;DR — what works end to end today
+## TL;DR â€” what works end to end today
 
 The whole Marathon 1 campaign now imports into UE5 as **textured geometry, fully
-headless** — no manual editor steps. The agentic loop is:
+headless** â€” no manual editor steps. The agentic loop is:
 
 ```
-M1SOURCE  ──extract──►  Reference/(Maps, Shapes, …)
-Reference/Maps/*.json  ──scen_to_obj.py──►  Reference/Geometry/*.obj + *.mtl + *_placements.json
-*.obj + shared bitmaps  ──ue5_headless_build.py (UnrealEditor-Cmd)──►  37 UE levels + shared material library
-a level  ──ue5_mrq_render.py (UnrealEditor-Cmd)──►  top-down PNG (read back by the agent)
+M1SOURCE  â”€â”€extractâ”€â”€â–º  Reference/(Maps, Shapes, â€¦)
+Reference/Maps/*.json  â”€â”€scen_to_obj.pyâ”€â”€â–º  Reference/Geometry/*.obj + *.mtl + *_placements.json
+*.obj + shared bitmaps  â”€â”€ue5_headless_build.py (UnrealEditor-Cmd)â”€â”€â–º  37 UE levels + shared material library
+a level  â”€â”€ue5_mrq_render.py (UnrealEditor-Cmd)â”€â”€â–º  top-down PNG (read back by the agent)
 ```
 
 All 37 levels built in one editor launch, **0 errors**, 100% material-slot
-assignment. Spot-rendered Arrival and Colony Ship For Sale, Cheap — textures
+assignment. Spot-rendered Arrival and Colony Ship For Sale, Cheap â€” textures
 correct on both (different shape collections), confirming the shared library
 works campaign-wide.
 
@@ -31,37 +31,37 @@ works campaign-wide.
 Paths below are relative to `C:\m1-ue5\M1UE5`. Python is launched with `py`
 (3.12). The UE editor is `UE_5.7` (see `MIGRATION.md` for the full exe path).
 
-1. **Extract** original data → `Reference/` (regenerable, gitignored):
+1. **Extract** original data â†’ `Reference/` (regenerable, gitignored):
    ```
    py Tools/extract_reference.py            # maps, sounds, physics
    py Tools/extract_reference.py --shapes   # also dump per-collection bitmap PNGs
    ```
 
-2. **Convert geometry** → per-level OBJ + MTL + placements:
+2. **Convert geometry** â†’ per-level OBJ + MTL + placements:
    ```
    py Tools/scen_to_obj.py --all Reference/Maps --out Reference/Geometry
    ```
    Produces `NN_<name>.obj` (UVs + usemtl groups), `NN_<name>.mtl` (each
-   `tex_<coll>_<shape>` → `../Shapes/Coll_<coll>/bitmaps/<shape>.png`), and
+   `tex_<coll>_<shape>` â†’ `../Shapes/Coll_<coll>/bitmaps/<shape>.png`), and
    `NN_<name>_placements.json` (player_start, monsters, objects, lights).
 
-3. **Headless build** — import all levels + build the shared material library:
+3. **Headless build** â€” import all levels + build the shared material library:
    ```
    UnrealEditor-Cmd <proj> -ExecutePythonScript="Tools\ue5_headless_build.py" \
        -RenderOffScreen -unattended -nosplash -nopause -stdout
    ```
-   - `M1_LIMIT=N` env caps the count (validate on 1–2 before the full 37).
+   - `M1_LIMIT=N` env caps the count (validate on 1â€“2 before the full 37).
    - Writes a checkpointed `Reference/Geometry/ue5_build_result.json` after every
      level (so a crash is diagnosable).
 
-4. **Headless render** — top-down PNG of one level (verification / agent feedback):
+4. **Headless render** â€” top-down PNG of one level (verification / agent feedback):
    ```
    set M1_LEVEL=13_Colony_Ship_For_Sale_Cheap
    UnrealEditor-Cmd <proj> -ExecCmds="py Tools\ue5_mrq_render.py" \
        -RenderOffScreen -nosplash -nopause -stdout
    ```
    - `M1_LEVEL` is the UE-safe level name (default `00_Arrival`).
-   - Output → `Reference/Geometry/mrq/<level>_topdown.png`, plus `mrq_result.json`.
+   - Output â†’ `Reference/Geometry/mrq/<level>_topdown.png`, plus `mrq_result.json`.
 
 ---
 
@@ -71,10 +71,10 @@ These were hard-won; don't "simplify" them without re-reading the gotchas.
 
 - **Run mode:** use `-ExecutePythonScript=<file>` (build) and
   `-ExecCmds="py <file>"` (render), both with `-RenderOffScreen`. Do **not** use
-  `-run=pythonscript` — it crashes with `Assertion failed:
+  `-run=pythonscript` â€” it crashes with `Assertion failed:
   CurrentApplication.IsValid()` (no Slate).
 - **Materials are built in Python, not by the OBJ importer.** UE's Interchange
-  OBJ/.mtl importer creates materials but leaves base color unwired → flat
+  OBJ/.mtl importer creates materials but leaves base color unwired â†’ flat
   black/white render. `ue5_headless_build.py` instead imports each bitmap as a
   `Texture2D` and builds an **unlit material** (texture on Emissive, nearest
   filter). Unlit = reads correctly at any light angle and matches Marathon's
@@ -86,9 +86,9 @@ These were hard-won; don't "simplify" them without re-reading the gotchas.
 - **Rendering uses Movie Render Queue (MRQ)**, not SceneCapture/HighResShot.
   MRQ renders through an exact camera (Level Sequence + Camera Cut) with proper
   warm-up. A straight-down camera blows out to white and hides walls, so the
-  camera is an **angled bird's-eye** (~50° overhead) computed from the Sector
+  camera is an **angled bird's-eye** (~50Â° overhead) computed from the Sector
   actor bounds.
-- **MRQ exit is fragile** — handled. The async finished-delegate gets GC'd if the
+- **MRQ exit is fragile** â€” handled. The async finished-delegate gets GC'd if the
   executor is only a local, so the editor hangs open (observed: 20 min idle
   after the PNG was written). Fix: keep a module-level reference to the executor
   **and** a post-tick watchdog that force-quits on done or after a hard timeout.
@@ -99,11 +99,11 @@ These were hard-won; don't "simplify" them without re-reading the gotchas.
 
 | Path | What | Committed? |
 |------|------|------------|
-| `M1UE5/Tools/*.py` | the whole pipeline (extract, convert, headless build, render) | ✅ yes |
-| `M1UE5/Reference/` | extracted data + generated OBJ/MTL/PNG | ❌ gitignored (regenerable) |
-| `M1UE5/Content/Meshes/M1/`, `Content/Levels/M1/`, `Content/Textures/`, `Content/Materials/` | auto-generated UE assets | ❌ gitignored (regenerable) |
-| `M1SOURCE/`, `M2SOURCE/`, `MISOURCE/` | Bungie game data | ❌ gitignored (IP; never commit) |
-| `M1UE5/docs/` | design + status notes | ✅ yes |
+| `M1UE5/Tools/*.py` | the whole pipeline (extract, convert, headless build, render) | âœ… yes |
+| `M1UE5/Reference/` | extracted data + generated OBJ/MTL/PNG | âŒ gitignored (regenerable) |
+| `M1UE5/Content/Meshes/M1/`, `Content/Levels/M1/`, `Content/Textures/`, `Content/Materials/` | auto-generated UE assets | âŒ gitignored (regenerable) |
+| `M1SOURCE/`, `M2SOURCE/`, `MISOURCE/` | Bungie game data | âŒ gitignored (IP; never commit) |
+| `M1UE5/docs/` | design + status notes | âœ… yes |
 
 Asset pipeline is the published package **`py-marathon-utils`**
 (github.com/dmang-dev/py-marathon-utils, on PyPI). Install via
@@ -111,12 +111,12 @@ Asset pipeline is the published package **`py-marathon-utils`**
 
 ---
 
-## Done ✅
+## Done âœ…
 
 - Full Python extraction toolkit, published as `py-marathon-utils` (M1/M2/Infinity,
   read + write: maps, shapes, sounds, physics, terminals, strings, patches, images).
-- `.scen` → OBJ converter with UVs, per-shape materials, and `.mtl` (all 37 levels).
-- Texture extraction (Shapes → per-collection bitmap PNGs).
+- `.scen` â†’ OBJ converter with UVs, per-shape materials, and `.mtl` (all 37 levels).
+- Texture extraction (Shapes â†’ per-collection bitmap PNGs).
 - **Fully headless UE5 loop**: build + MRQ render, agent reads results back, no
   manual editor steps.
 - **All 37 levels imported** with textures + shared material library (0 errors).
@@ -128,7 +128,7 @@ Asset pipeline is the published package **`py-marathon-utils`**
   `M1_VIEW=fp M1_LEVEL=<safe> ue5_mrq_render.py` renders a first-person eye-level
   frame from the spawn and asserts the collision config (`fp_verify_result.json`).
 - **Double-clickable WALKING build:** C++ `Source/M1UE5` provides `AM1Character`
-  (first-person — WASD walk, mouse look, Space jump, gravity + collision against
+  (first-person â€” WASD walk, mouse look, Space jump, gravity + collision against
   the sector meshes) + `AM1GameMode`; legacy input maps are in
   `Config/DefaultInput.ini`, and `Config/DefaultEngine.ini` sets the default map
   (`L_00_Arrival`) + GameMode (`/Script/M1UE5.M1GameMode`). The project is now a
@@ -141,44 +141,44 @@ Asset pipeline is the published package **`py-marathon-utils`**
   ```
   Output: `Build/Windows/M1UE5.exe` (double-click). Verified: boots, loads
   `L_00_Arrival` with `M1GameMode`, 0 errors. **Packaging gotchas:** (1) UAT builds
-  the editor target — **fails if any `UnrealEditor.exe` is open holding Live
+  the editor target â€” **fails if any `UnrealEditor.exe` is open holding Live
   Coding** (close them all first, incl. the Project Browser). (2) Do **not** pass
-  `-nocompileeditor` — the cook needs the `M1UE5Editor.target` receipt. (3) Target
+  `-nocompileeditor` â€” the cook needs the `M1UE5Editor.target` receipt. (3) Target
   rules must use `DefaultBuildSettings = BuildSettingsVersion.V6` to match the
-  installed engine's shared build environment (V5 → `UndefinedIdentifier` mismatch).
+  installed engine's shared build environment (V5 â†’ `UndefinedIdentifier` mismatch).
 
-## Open items / next up 🔲
+## Open items / next up ðŸ”²
 
 - **Campaign flow + movement polish (next milestone):** all 37 levels are now
   cooked into the build and reachable in-game via the `[` / `]` (or PageUp/Dn)
-  level switcher (`AM1Character::CycleLevel` → `UGameplayStatics::OpenLevel`, with
+  level switcher (`AM1Character::CycleLevel` â†’ `UGameplayStatics::OpenLevel`, with
   an on-screen level name); the `L_00_Arrival` default loads on launch. Replace
   free-roam cycling with real story progression (terminals, level exits), and
   layer movement polish (sprint, crouch, head-bob, mouse sensitivity) onto
   `AM1Character`. (Cook all maps via the quoted array arg
-  `"-map=$maps"` — a bare `-map=$maps` does NOT expand in PowerShell 5.1.)
-  NOTE: the **headless editor world can't raycast** — line/shape
+  `"-map=$maps"` â€” a bare `-map=$maps` does NOT expand in PowerShell 5.1.)
+  NOTE: the **headless editor world can't raycast** â€” line/shape
   traces return `None` under `-ExecutePythonScript`/`-ExecCmds` (no physics query
   scene), so a headless "drop test" is a collision-config assertion; a real
   settle-test needs PIE/game. (`unreal.Rotator` positional order is
-  `(roll, pitch, yaw)` — use keyword args.)
+  `(roll, pitch, yaw)` â€” use keyword args.)
 - Enemy **sprite billboards** from Shapes (placements already extracted).
 - Doors / platforms / elevators from polygon+platform data.
 - Liquids (lava/water media), audio import + cues, terminals (renderer exists in
   the package).
 
-## Known issues / gotchas ⚠️
+## Known issues / gotchas âš ï¸
 
-- **M1 sprite PNGs extract fully opaque and CLUT-0 only** — Marathon 1's
+- **M1 sprite PNGs extract fully opaque and CLUT-0 only** â€” Marathon 1's
   Shapes format predates the per-bitmap transparent flag (0x4000) that
   py-marathon-utils' alpha rule checks, so index-0 (the engine's implicit
-  sprite transparency — exactly what Aleph One color-keys via
+  sprite transparency â€” exactly what Aleph One color-keys via
   `SDL_SetColorKey(s, SDL_TRUE, 0)`) bakes in as opaque chroma blue; and the
   extraction renders only color table 0, though monster ranks select CLUTs
   via the high bits of their physics `collection` field. The sprite pipeline
   therefore renders its own PNGs: `gen_monster_assets.py` +
   `gen_weapon_sprites.py` emit render lists, `Tools/render_sprites.py` (run
-  with the project venv `.venv\Scripts\python.exe` — has marathon_utils +
+  with the project venv `.venv\Scripts\python.exe` â€” has marathon_utils +
   Pillow) renders CLUT-correct, alpha-forced PNGs into
   `Reference/Sprites/png/`, then `Tools/ue5_import_sprites.py` imports them.
   Candidate upstream py-marathon-utils fix: treat M1 sprite-collection
@@ -186,13 +186,13 @@ Asset pipeline is the published package **`py-marathon-utils`**
 
 - **OBJ import MUST use the LEGACY importer, not Interchange.** UE5's Interchange
   OBJ translator silently culls ~17% of each level's triangles at the *translate*
-  stage (Arrival 2738→2208), punching holes around every terminal niche. No
+  stage (Arrival 2738â†’2208), punching holes around every terminal niche. No
   import/build flag stops it: `remove_degenerates` is already off, and explicit
   `vn` normals + `s off` smoothing groups are both ignored. Fix:
-  `Interchange.FeatureFlags.Import.OBJ=0` — set in `Config/DefaultEngine.ini`
+  `Interchange.FeatureFlags.Import.OBJ=0` â€” set in `Config/DefaultEngine.ini`
   `[ConsoleVariables]` AND executed at the top of `ue5_headless_build.py`'s
-  driver — routes import through the legacy `UStaticMeshFactory`, which keeps
-  every real face (Arrival 2208→2678; only ~60 genuinely zero-area tris drop).
+  driver â€” routes import through the legacy `UStaticMeshFactory`, which keeps
+  every real face (Arrival 2208â†’2678; only ~60 genuinely zero-area tris drop).
 - **Per-level OBJ/MTL filenames MUST be space-free.** Corollary of the above: the
   legacy importer's `mtllib` line is whitespace-delimited, so a spaced filename
   (`01_Bigger Guns Nearby.mtl`) only reads the first token, fails to load the
@@ -213,9 +213,9 @@ Asset pipeline is the published package **`py-marathon-utils`**
   wall back-faces. Cosmetic; revisit during the art/material pass.
 - **`/_nul`** stray file at repo root (from a shell redirect to `nul`).
   Gitignored; safe to delete.
-- **Render grep pipes buffer** until the process exits — to watch progress,
+- **Render grep pipes buffer** until the process exits â€” to watch progress,
   read the checkpointed `*_result.json`, not the live stdout.
-- Two editor instances on the same project at once can lock assets — run build
+- Two editor instances on the same project at once can lock assets â€” run build
   and render sequentially, not in parallel.
 
 ---
@@ -223,7 +223,7 @@ Asset pipeline is the published package **`py-marathon-utils`**
 ## Privacy / authorship constraint (keep enforcing)
 
 This repo is intended for public release someday. **No PII in committed files:**
-no real name, no personal email, no `C:\Users\...` home paths. Git author is
+no real name, no personal email, no `C:\\Users\\<placeholder>` home paths. Git author is
 `dmang-dev <dmang-dev@users.noreply.github.com>`. Treat everything under
-`*SOURCE/` and `Reference/` as unlicensed third-party reference — ship original
+`*SOURCE/` and `Reference/` as unlicensed third-party reference â€” ship original
 art before any public release.
