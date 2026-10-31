@@ -1,4 +1,4 @@
-name: Build M1AssetSetup.exe and Create Release
+name: Build M1AssetSetup.exe
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-release:
+  build:
     runs-on: windows-latest
 
     steps:
@@ -30,59 +30,11 @@ jobs:
           pyinstaller m1_asset_setup.spec
           ls dist/M1AssetSetup/
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload M1AssetSetup.exe artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: "M1UE5 Release ${{ github.ref_name }}"
-          body: |
-            ## M1UE5 Asset Setup Converter
-
-            This release includes the **M1AssetSetup.exe** tool that converts your Marathon 1 data into a format the Marathon UE5 Remake can use at runtime.
-
-            ### What's included
-            - `M1AssetSetup.exe` — PyInstaller-frozen converter (py-marathon-utils[images], Pillow, soundfile)
-            - Runs locally on your machine — no cloud, no Bungie content shipped
-
-            ### How to use
-            1. Ensure you have your Marathon 1 data files: `Map.scen`, `Shapes.shps`, `Sounds.sndz`, `Physics.phys`
-            2. Run `M1AssetSetup.exe --source <folder>` to convert them
-            3. The converted data is written to `%LOCALAPPDATA%\\M1UE5\\Data`
-            4. Launch the game — it will build geometry at runtime from the converted assets
-
-            ### Why this architecture
-            - **Zero Bungie content in the distributor** — all conversion happens on the user's machine
-            - **User supplies their own data** — you must own a legitimate copy of Marathon 1 (free from Steam "Classic Marathon," Aleph One, etc.)
-            - **No UE editor, no cook, no .NET SDK required** — the game builds geometry at runtime from OBJ/PNG
-            - **Per-user install** — writes to `%LOCALAPPDATA%`, no admin elevation required
-
-            ### Legal
-            - This is an unofficial, non-commercial fan project, not affiliated with or endorsed by Bungie
-            - "Marathon" and related marks are trademarks of their owner
-            - The source code is provided under the MIT License (see `LICENSE`)
-            - Marathon game data is copyright Bungie; see the EULA for full terms
-
-            ### Download
-            - The `M1AssetSetup.exe` artifact is attached to this release
-            - Requires user-supplied Marathon 1 data to function
-
-            ---
-
-            *Generated automatically from the `main` branch.*
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset (M1AssetSetup.exe)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-release-asset
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
           name: M1AssetSetup.exe
-          file_path: |
+          path: |
             M1UE5/dist/M1AssetSetup/M1AssetSetup.exe
             M1UE5/dist/M1AssetSetup/_internal
+          retention-days: 30
