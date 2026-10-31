@@ -28,10 +28,13 @@ jobs:
         working-directory: M1UE5/Tools
         run: |
           pyinstaller m1_asset_setup.spec
+          ls dist/M1AssetSetup/
 
       - name: Upload M1AssetSetup.exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: M1AssetSetup.exe
-          path: M1UE5/dist/M1AssetSetup/M1AssetSetup.exe
+          path: |
+            M1UE5/dist/M1AssetSetup/M1AssetSetup.exe
+            M1UE5/dist/M1AssetSetup/_internal
           retention-days: 30
